@@ -23,9 +23,9 @@ This matrix is the fast-reference truth for architectural status.
 | fortress.core.document-domain | core | v1 | ACTIVE | Yes | — |
 | fortress.core.financial-classification | core | v1 | ACTIVE | Yes | — |
 | fortress.core.task-domain | core | v1 | ACTIVE | Yes | — |
-| fortress.ingestion.pipeline-architecture | ingestion | v1 | ACTIVE | Yes | — |
-| fortress.ingestion.bank-connectors | ingestion | v1 | ACTIVE | Yes | — |
-| fortress.ingestion.document-extraction | ingestion | v1 | ACTIVE | Yes | — |
+| fortress.ingestion.pipeline-architecture | ingestion | v3 | ACTIVE | Yes | v2 |
+| fortress.ingestion.bank-connectors | ingestion | v2 | ACTIVE | Yes | v1 |
+| fortress.ingestion.document-extraction | ingestion | v2 | ACTIVE | Yes | v1 |
 | fortress.ai.annotation-strategy | ai | v1 | ACTIVE | Yes | — |
 | fortress.ai.feature-engineering | ai | v1 | ACTIVE | Yes | — |
 | fortress.ai.embedding-architecture | ai | v1 | ACTIVE | Yes | — |
@@ -63,6 +63,10 @@ This matrix is the fast-reference truth for architectural status.
 
 | Document ID | Layer | Version | Status | Superseded By |
 |-------------|-------|---------|--------|---------------|
+| fortress.ingestion.pipeline-architecture | ingestion | v1 | ARCHIVED | v2 |
+| fortress.ingestion.pipeline-architecture | ingestion | v2 | ARCHIVED | v3 |
+| fortress.ingestion.bank-connectors | ingestion | v1 | ARCHIVED | v2 |
+| fortress.ingestion.document-extraction | ingestion | v1 | ARCHIVED | v2 |
 | fortress.security.zone-model | security | v1 | ARCHIVED | v2 |
 | fortress.security.access-control | security | v1 | ARCHIVED | v2 |
 | fortress.ai.query-interface | ai | v1 | ARCHIVED | v2 |
