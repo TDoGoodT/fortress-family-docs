@@ -35,7 +35,7 @@ This matrix is the fast-reference truth for architectural status.
 | fortress.openclaw.reasoning-model | openclaw | v1 | ACTIVE | Yes | — |
 | fortress.openclaw.task-orchestration | openclaw | v1 | ACTIVE | Yes | — |
 | fortress.openclaw.household-orchestrator | openclaw | v1 | ACTIVE | Yes | — |
-| fortress.security.zone-model | security | v1 | ACTIVE | Yes | — |
+| fortress.security.zone-model | security | v2 | ACTIVE | Yes | v1 |
 | fortress.security.access-control | security | v2 | ACTIVE | Yes | v1 |
 | fortress.security.audit-model | security | v1 | ACTIVE | Yes | — |
 | fortress.infra.storage-layout | infra | v1 | ACTIVE | Yes | — |
@@ -63,6 +63,7 @@ This matrix is the fast-reference truth for architectural status.
 
 | Document ID | Layer | Version | Status | Superseded By |
 |-------------|-------|---------|--------|---------------|
+| fortress.security.zone-model | security | v1 | ARCHIVED | v2 |
 | fortress.security.access-control | security | v1 | ARCHIVED | v2 |
 | fortress.ai.query-interface | ai | v1 | ARCHIVED | v2 |
 | fortress.project.implementation-roadmap | project | v1 | ARCHIVED | v2 |

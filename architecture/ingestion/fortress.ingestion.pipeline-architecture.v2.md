@@ -135,7 +135,7 @@ Allowed flows (single DB, strict discipline):
 - Depends On:
   - fortress.core.database-blueprint.v1
   - fortress.core.event-ledger.v1
-  - fortress.security.zone-model.v1
+  - fortress.security.zone-model.v2
   - fortress.project.implementation-roadmap.v2
   - fortress.project.dependency-model.v1
   - fortress.project.version-governance.v1

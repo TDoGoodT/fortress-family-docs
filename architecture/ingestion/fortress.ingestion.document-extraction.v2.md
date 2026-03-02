@@ -21,7 +21,7 @@
   - fortress.ingestion.pipeline-architecture.v2
   - fortress.core.document-domain.v1
   - fortress.core.event-ledger.v1
-  - fortress.security.zone-model.v1
+  - fortress.security.zone-model.v2
   - fortress.project.implementation-roadmap.v2
   - fortress.project.dependency-model.v1
   - fortress.project.version-governance.v1

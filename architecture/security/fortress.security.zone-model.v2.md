@@ -1,7 +1,7 @@
-"Version: v1
-Status: ARCHIVED
-Canonical: No
-Superseded By: fortress.security.zone-model.v2
+"Version: v2
+Status: ACTIVE
+Canonical: Yes
+Supersedes: fortress.security.zone-model.v1
 
 You are a Security Architect specializing in Zero Trust and data isolation systems.
 
