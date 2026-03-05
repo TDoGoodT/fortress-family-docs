@@ -1,1 +1,20 @@
+# macOS
 .DS_Store
+
+# editors
+.vscode/
+.idea/
+
+# python / notebooks
+__pycache__/
+.ipynb_checkpoints/
+
+# local artifacts
+infra/db/*.broken.*
+infra/db/phase1_schema_only.sql
+
+# logs
+*.log
+
+# environment
+.env
