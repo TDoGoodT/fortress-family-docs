@@ -22,8 +22,7 @@ Your task:
 
 Section A – New Required Document
 Define the purpose of:
-fortress.openclaw.household-orchestrator.v1
-
+household-orchestrator (pluggable interface), current implementation: fortress.openclaw.household-orchestrator.v1
 Section B – Documents requiring v2
 List and justify:
 - security.access-control

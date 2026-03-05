@@ -2,16 +2,20 @@
 
 ## Version Metadata
 - Document ID: fortress.project.dependency-model
-- Version: v1
+- Version: v2
 - Layer: project
-- Status: ARCHIVED
-- Canonical: No
-- Superseded By: fortress.project.dependency-model.v2
+- Status: ACTIVE
+- Canonical: Yes
+- Supersedes: fortress.project.dependency-model.v1
+
 
 This document defines the official Dependency Model of Fortress 2.0.
 
 Context:
-All architectural layers are defined and versioned (v1).
+All architectural layers are defined and versioned.
+
+Version note:
+- This is v2 to reflect official layer order change and OpenClaw pluggability.
 Strict separation of concerns is a foundational invariant.
 
 Mission:
@@ -36,13 +40,14 @@ Output Structure:
 - Runtime vs Governance separation
 - No circular dependencies under any condition
 
+
 2. Official Layer Order (Bottom → Top)
 
 Layer 1: Core
 Layer 2: Ingestion
 Layer 3: AI
-Layer 4: OpenClaw
-Layer 5: Security
+Layer 4: Security
+Layer 5: OpenClaw (Pluggable Interface)
 Layer 6: Infra
 Layer 7: Project / Governance
 
@@ -62,10 +67,11 @@ AI:
 - May depend on: Core
 - May depend on: Ingestion (normalized outputs only)
 
-OpenClaw:
-- May depend on: AI
+OpenClaw (Pluggable Interface):
 - May depend on: Core
+- May depend on: AI (via Query Interface only)
 - May depend on: Security interfaces only
+- Must remain replaceable without changing Core/Ingestion/AI/Security invariants
 
 Security:
 - May depend on: Core
