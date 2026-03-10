@@ -158,6 +158,31 @@ BEGIN
     INTO v_event_id;
 
     /*
+      Second canonical write:
+      materialize core.document from the inserted event via projection rule
+    */
+    INSERT INTO core.document (
+        document_id,
+        household_id,
+        document_type,
+        title,
+        source_uri
+    )
+    SELECT
+        p.document_id,
+        p.household_id,
+        p.document_type,
+        p.title,
+        p.source_uri
+    FROM core.ledger_projection_document_created p
+    WHERE p.event_id = v_event_id
+      AND NOT EXISTS (
+          SELECT 1
+          FROM core.document d
+          WHERE d.document_id = p.document_id
+      );
+
+    /*
       Final canonical write:
       receipt row = acceptance
       applied_event_id must be the exact inserted event_id
