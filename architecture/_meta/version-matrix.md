@@ -18,7 +18,7 @@ This matrix is the fast-reference truth for architectural status.
 |-------------|-------|----------------|--------|-----------|------------|
 | fortress.core.system-overview | core | v1 | ACTIVE | Yes | — |
 | fortress.core.database-blueprint | core | v1 | ACTIVE | Yes | — |
-| fortress.core.event-ledger | core | v1 | DRAFT | No | — |
+| fortress.core.event-ledger | core | v1 | ACTIVE | Yes | — |
 | fortress.core.domain-model | core | v1 | DRAFT | No | — |
 | fortress.core.document-domain | core | v1 | ACTIVE | Yes | — |
 | fortress.core.financial-classification | core | v1 | ACTIVE | Yes | — |
@@ -52,7 +52,7 @@ This matrix is the fast-reference truth for architectural status.
 | fortress.project.build-buy-matrix | project | v1 | ACTIVE | Yes | — |
 | fortress.project.ai-development-protocol | project | v1 | ACTIVE | Yes | — |
 | fortress.project.qa-governance | project | v1 | ACTIVE | Yes | — |
-| fortress.project.dependency-model | project | v1 | ACTIVE | Yes | — |
+| fortress.project.dependency-model | project | v2 | ACTIVE | Yes | v1 |
 | fortress.project.version-governance | project | v1 | ACTIVE | Yes | — |
 | fortress.project.knowledge-update.household-layer | project | v1 | ACTIVE | Yes | — |
 | fortress.project.ceo-pitch | project | v1 | ACTIVE | Yes | — |
@@ -71,6 +71,7 @@ This matrix is the fast-reference truth for architectural status.
 | fortress.security.access-control | security | v1 | ARCHIVED | v2 |
 | fortress.ai.query-interface | ai | v1 | ARCHIVED | v2 |
 | fortress.project.implementation-roadmap | project | v1 | ARCHIVED | v2 |
+| fortress.project.dependency-model | project | v1 | ARCHIVED | v2 |
 
 ---
 
@@ -81,7 +82,6 @@ They may be refined without version bump until marked ACTIVE.
 
 | Document ID | Layer | Version | Status |
 |-------------|-------|---------|--------|
-| fortress.core.event-ledger | core | v1 | DRAFT |
 | fortress.core.domain-model | core | v1 | DRAFT |
 
 ---

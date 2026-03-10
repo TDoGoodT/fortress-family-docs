@@ -18,10 +18,10 @@
 - Canonical: Yes
 - Supersedes: fortress.ingestion.document-extraction.v1
 - Depends On:
-  - fortress.ingestion.pipeline-architecture.v2
+  - fortress.ingestion.pipeline-architecture.v3
   - fortress.core.document-domain.v1
   - fortress.core.event-ledger.v1
   - fortress.security.zone-model.v2
   - fortress.project.implementation-roadmap.v2
-  - fortress.project.dependency-model.v1
+  - fortress.project.dependency-model.v2
   - fortress.project.version-governance.v1
