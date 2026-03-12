@@ -1,7 +1,10 @@
 # fortress.core.account-domain.v1
 
 ## Status
-DRAFT
+ACTIVE
+
+## Canonical
+Yes
 
 ## Purpose
 Define the MVP operational domain specification for `core.account` as a pure identity aggregate.
@@ -86,7 +89,6 @@ For the minimal validation fixture and normal MVP path, preferred trigger is:
 
 The event payload for `core.account.created` contains only:
 
-- `account_id`
 - `handoff_request_id`
 - `normalized_record_id`
 - `run_id`
@@ -96,6 +98,10 @@ The event payload for `core.account.created` contains only:
 - `account_kind`
 - `canonical_record_type`
 - `schema_version`
+
+Canonical identity is carried in the event envelope:
+
+- `aggregate_id -> account_id`
 
 ## 6. MVP Account Kind Boundary
 
