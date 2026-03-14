@@ -3,6 +3,8 @@
 This document defines the official version authority state of all
 Fortress 2.0 architectural documents.
 
+This matrix identifies the current authoritative architecture documents for Fortress. Agents and contributors should consult these documents first when interpreting system behavior or architectural constraints.
+
 If a document has multiple versions:
 - Only one may be marked Canonical: Yes
 - All prior versions must be immutable
@@ -16,14 +18,14 @@ This matrix is the fast-reference truth for architectural status.
 
 | Document ID | Layer | Current Version | Status | Canonical | Supersedes |
 |-------------|-------|----------------|--------|-----------|------------|
-| fortress.core.system-overview | core | v1 | ACTIVE | Yes | — |
+| fortress.core.system-overview (Core architecture authority) | core | v1 | ACTIVE | Yes | — |
 | fortress.core.database-blueprint | core | v1 | ACTIVE | Yes | — |
-| fortress.core.event-ledger | core | v1 | ACTIVE | Yes | — |
-| fortress.core.domain-model | core | v1 | DRAFT | No | — |
+| fortress.core.event-ledger (Event ledger doctrine authority) | core | v1 | ACTIVE | Yes | — |
+| fortress.core.account-domain (Account aggregate authority) | core | v1 | ACTIVE | Yes | — |
 | fortress.core.document-domain | core | v1 | ACTIVE | Yes | — |
 | fortress.core.financial-classification | core | v1 | ACTIVE | Yes | — |
 | fortress.core.task-domain | core | v1 | ACTIVE | Yes | — |
-| fortress.ingestion.pipeline-architecture | ingestion | v3 | ACTIVE | Yes | v2 |
+| fortress.ingestion.pipeline-architecture (Ingestion pipeline authority) | ingestion | v3 | ACTIVE | Yes | v2 |
 | fortress.ingestion.bank-connectors | ingestion | v2 | ACTIVE | Yes | v1 |
 | fortress.ingestion.document-extraction | ingestion | v2 | ACTIVE | Yes | v1 |
 | fortress.ai.annotation-strategy | ai | v1 | ACTIVE | Yes | — |
@@ -52,7 +54,7 @@ This matrix is the fast-reference truth for architectural status.
 | fortress.project.build-buy-matrix | project | v1 | ACTIVE | Yes | — |
 | fortress.project.ai-development-protocol | project | v1 | ACTIVE | Yes | — |
 | fortress.project.qa-governance | project | v1 | ACTIVE | Yes | — |
-| fortress.project.dependency-model | project | v2 | ACTIVE | Yes | v1 |
+| fortress.project.dependency-model (Development governance authority) | project | v2 | ACTIVE | Yes | v1 |
 | fortress.project.version-governance | project | v1 | ACTIVE | Yes | — |
 | fortress.project.knowledge-update.household-layer | project | v1 | ACTIVE | Yes | — |
 | fortress.project.ceo-pitch | project | v1 | ACTIVE | Yes | — |

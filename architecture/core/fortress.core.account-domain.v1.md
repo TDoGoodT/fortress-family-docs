@@ -2,6 +2,7 @@
 
 ## Status
 ACTIVE
+The core.account repair path has been closed under Master Control validation. The aggregate is now operational and aligned with the canonical identity doctrine.
 
 ## Canonical
 Yes
@@ -44,6 +45,8 @@ MVP boundary:
 - accounts may represent internal manually tracked containers
 - both are treated uniformly as canonical account identities
 
+The canonical account identity is derived from canonical_handoff_request.target_entity_id, which becomes the aggregate_id used across projections and the core.account table.
+
 ## 2. MVP Aggregate Fields
 
 The `core.account` MVP aggregate contains only:
@@ -73,6 +76,8 @@ Aggregate envelope:
 - `event_type = 'core.account.created'`
 
 No update, closure, archival, or balance events are included in MVP.
+
+A corrective event (core.account.causation_backfill) was appended to restore causation traceability without mutating historical events.
 
 ## 4. Contract Trigger
 

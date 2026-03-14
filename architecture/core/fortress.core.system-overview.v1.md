@@ -13,12 +13,12 @@ No implementation.
 No infrastructure specifics.
 
 Mission:
-Define the structural backbone of Fortress as a sovereign intelligence system.
+Define the structural backbone of Fortress as a sovereign, local-first household knowledge infrastructure that converts documents and digital traces into secure, structured household information for management assistance.
 
 Architectural Constraints:
 1. Deterministic data flow
 2. Clear zone separation
-3. Event-driven philosophy
+3. System state evolves through events recorded in the append-only event ledger.
 4. AI as a layer, not the core
 5. Security embedded, not added later
 6. Infrastructure abstracted from logic
@@ -26,7 +26,7 @@ Architectural Constraints:
 Output Structure:
 
 1. System Mission Definition
-   - What Fortress fundamentally is
+   - A household knowledge infrastructure that translates documents and digital traces into structured household information.
    - What it is not
 
 2. High-Level Layer Map
@@ -44,7 +44,13 @@ Output Structure:
    - Cross-zone interaction rules
 
 4. Data Flow Model
-   - Source → Ingestion → Normalization → Core → AI → Output
+   Source documents and digital traces
+   → Raw immutable capture
+   → Deterministic normalization
+   → Canonical structured entities
+   → AI-derived views and assistance
+   → Output interfaces
+   AI outputs are derived artifacts and do not modify canonical entities.
    - Deterministic vs Non-deterministic components
 
 5. Event Philosophy

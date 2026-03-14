@@ -31,6 +31,7 @@ Constraints:
 3. Core must remain sovereign.
 4. Security must not depend on AI logic.
 5. Project/Governance layer must not influence runtime behavior directly.
+6. System state evolves through events; the event ledger is append-only and historical events are never mutated.
 
 Output Structure:
 
@@ -66,6 +67,7 @@ Ingestion:
 AI:
 - May depend on: Core
 - May depend on: Ingestion (normalized outputs only)
+- May derive insights or artifacts from allowed inputs but cannot modify canonical entities.
 
 OpenClaw (Pluggable Interface):
 - May depend on: Core
@@ -102,7 +104,7 @@ AI:
 - Must not bypass Security enforcement
 
 OpenClaw:
-- Must not access storage directly
+- Agents never access storage directly; all access occurs through governed interfaces.
 - Must not bypass Query Interface
 - Must not bypass Access Control
 
@@ -115,6 +117,7 @@ Infra:
 - No shared hidden state.
 - No direct database access across forbidden layers.
 - No dynamic dependency injection across layers.
+- Raw storage and canonical structured entities must remain separated across all flows.
 
 6. Dependency Violation Handling
 

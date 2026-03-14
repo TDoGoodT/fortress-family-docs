@@ -38,8 +38,7 @@ Define the immutable Event Ledger model that enables:
 - Cross-layer traceability
 
 Constraints:
-1. Event ledger is append-only.
-2. No update or delete operations allowed.
+1. The event ledger is append-only; historical events are never mutated or deleted.
 3. Every meaningful state transition must emit an event.
 4. Events must be replayable in order.
 5. Hash chaining must support tamper detection.
@@ -52,7 +51,7 @@ Output Structure:
 1. Event Philosophy
 
 - Events are the system’s memory.
-- State is derived from events.
+- System state is reconstructed from the event history; canonical entities are derived projections of that history.
 - No silent mutation allowed.
 - Every state transition must be explainable by event chain.
 
@@ -112,6 +111,7 @@ Each event must include:
 6. Replay Doctrine
 
 - System state must be reconstructable from ordered events.
+- Corrections must be represented as new corrective events rather than updates to existing events.
 - Replay must respect:
   - event_timestamp ordering
   - deterministic application rules

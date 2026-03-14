@@ -25,6 +25,7 @@
 - Defines required unique constraints for record-level idempotency.
 - Defines run-level vs record-level dedupe behavior.
 - Defines required operational indexes.
+- Clarifies that ingestion does not create canonical state directly; it produces normalized records and canonical handoff requests.
 - No changes to stage model, zone placement, ledger mapping, or sequencing rules.
 
 ---
@@ -117,6 +118,8 @@ sha256(
   )
 )
 
+canonical_handoff_request.target_entity_id is the canonical aggregate_id used by core aggregates.
+
 ---
 
 ### ingestion.error
@@ -184,6 +187,8 @@ UNIQUE (run_id, error_fingerprint_sha256, attempt)
 Run-level retries are allowed.
 
 Idempotency is enforced at record-level and handoff-level only.
+
+Each aggregate must have exactly one authoritative processor responsible for converting handoff requests into events.
 
 Rules:
 
