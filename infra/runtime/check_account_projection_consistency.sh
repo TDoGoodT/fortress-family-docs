@@ -17,9 +17,10 @@ docker compose exec -T postgres psql -X -U fortress -d fortress -v ON_ERROR_STOP
 
   Important:
     - created_at is excluded from divergence comparison
-    - current known upstream blocker:
-      projection depends on contract.aggregate_id = event.aggregate_id,
-      but observed event was emitted under a different aggregate_id
+    - doctrinal truth basis is:
+      normalized ledger-derived projection vs materialized aggregate
+    - historical compatibility, if present, must already be folded into
+      the canonical projection surface before this diagnostic runs
 */
 
 WITH comparison AS (

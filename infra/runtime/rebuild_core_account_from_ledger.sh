@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-echo "Rebuilding core.account from ledger projection (missing rows only)"
+echo "Rebuilding core.account from normalized ledger projection (missing rows only)"
 
 docker compose exec -T postgres psql -X -U fortress -d fortress -v ON_ERROR_STOP=1 <<'SQL'
 BEGIN;
