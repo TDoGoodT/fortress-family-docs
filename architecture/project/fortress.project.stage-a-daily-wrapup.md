@@ -288,3 +288,104 @@ Stage A blocked continuation complete, ready for Codex App resumption.
 - Exactly one new normalized forward event was emitted and materialized without touching historical ledger rows.
 - Validated aggregates remained consistent after the forward account case.
 - `core.account` Path A forward runtime evidence is ready for Master Control submission preparation.
+
+## 2026-03-15 — Master Control Final Ruling
+
+### Ruling
+- Master Control final status for `core.account`: `APPROVED`
+- Path A normalization final status: `VALIDATED`
+- `core.account` may move from `REJECT` to `APPROVED`
+- `core.account` is no longer frozen
+
+### Accepted Basis
+- Repository commits accepted:
+  - `47c8840`
+  - `8fe30b0`
+- Applied migration evidence accepted for:
+  - `034_core_account_created_contract_normalization.sql`
+  - `035_core_account_projection_normalization.sql`
+  - `036_core_account_historical_compatibility_bridge.sql`
+  - `037_core_account_projection_compatibility_union.sql`
+- Live evidence accepted for:
+  - canonical envelope contract
+  - one authoritative receipt-gated processor
+  - ledger-derived projection
+  - ledger-derived rebuild basis
+  - projection-vs-aggregate diagnostics
+  - bounded historical compatibility
+  - forward normalized event emission
+  - projection / aggregate / receipt alignment
+  - no-regression across validated aggregates
+
+### Updated Aggregate Status
+- `core.document`: `APPROVED`
+- `core.task`: `APPROVED`
+- `core.person`: `CONDITIONAL APPROVED` (reason unchanged: dedicated person-domain governance reconciliation remains open)
+- `core.account`: `APPROVED`
+
+### Follow-Up Scope
+- No blocking follow-up remains for `core.account`.
+- Approved follow-up is limited to:
+  - normal monitoring
+  - future doctrine maintenance
+  - optional documentation cleanup
+
+## 2026-03-15 — Household Knowledge Query Layer Completion
+
+### Phase Objective
+- Introduce a dedicated read-only household knowledge interface above the canonical aggregates.
+- Expose structured household query surfaces without modifying canonical state, processors, receipts, projections, or the event ledger.
+- Preserve canonical isolation by serving only from:
+  - `core.account`
+  - `core.task`
+  - `core.document`
+
+### Implemented Query Surfaces
+- Added migration `038_query_household_knowledge_layer.sql`.
+- Created dedicated schema:
+  - `query`
+- Implemented read-only views:
+  - `query.household_accounts`
+  - `query.household_tasks`
+  - `query.household_documents`
+  - `query.household_state`
+- `query.household_people` was intentionally deferred from this phase.
+
+### Verification Summary
+- Migration `038_query_household_knowledge_layer.sql` applied successfully through the controlled migration runner.
+- Query-layer dependency checks confirmed serving sources were limited to:
+  - `core.account`
+  - `core.task`
+  - `core.document`
+- Smoke tests confirmed all approved views were queryable and returned the expected shapes.
+- Row-count checks matched the serving aggregates:
+  - accounts: `2 = 2`
+  - tasks: `1 = 1`
+  - documents: `0 = 0`
+- `query.household_state` grouped-count alignment returned zero mismatches.
+- Canonical diagnostics remained clean:
+  - `core.account` projection consistency: `missing_aggregate_count = 0`, `orphan_aggregate_count = 0`, `field_divergence_count = 0`
+  - `core.task` projection consistency: `missing_aggregate_count = 0`, `orphan_aggregate_count = 0`, `field_divergence_count = 0`
+  - `core.document` projection consistency: `missing_aggregate_count = 0`, `orphan_aggregate_count = 0`, `field_divergence_count = 0`
+
+### Master Control Ruling
+- Phase: `Fortress Household Knowledge Query Layer`
+- Status: `ACCEPTED (Conditional)`
+- Master Control confirmed:
+  - read-only query-layer behavior
+  - canonical aggregate isolation
+  - no ingestion boundary violation
+  - no raw storage dependency
+  - no direct event ledger dependency
+  - correct query-schema isolation through `query`
+
+### Open Stabilization Signal
+- `hash_chain_mismatch_count = 5`
+- The mismatch predates the Query Layer.
+- The Query Layer did not modify `public.event_ledger`.
+- The mismatch does not invalidate the read-only interface implemented in this phase.
+- Investigation will occur as a separate stabilization task and must not interfere with the upcoming Identity Alignment phase.
+
+### Next-Phase Note
+- Master Control authorized progression to the Identity Alignment Phase.
+- Identity Alignment must not repair, rebuild, rewrite, or otherwise modify the event ledger or ledger hashing logic.
