@@ -39,3 +39,27 @@ Current capabilities:
 - Deterministic event - Controlled migration runner
 
 Next phase: domain projections and consumers.
+
+
+## Controlled Filesystem Inbox Intake (Manual Debugging)
+
+Fortress supports a controlled local filesystem inbox intake command for deterministic ingestion boundary testing.
+
+- Command: `infra/runtime/intake_filesystem_inbox.sh [inbox_path]`
+- Default inbox path: `~/FortressInbox` (or `FORTRESS_INBOX_PATH`)
+- Required env: `FORTRESS_RAW_STORAGE_DIR` (existing approved raw storage directory)
+
+Behavior:
+
+- Inbox is an external intake surface and must remain outside Fortress storage trees.
+- Files are copied (never moved) to raw storage, then registered through existing `ingestion.*` contracts.
+- `object_locator` is the external inbox file path (`filesystem://...`).
+- Zero-file polls do not create an ingestion run.
+- Event emission is operator-triggered after intake (`infra/runtime/emit_ingestion_events.sh <run_id>`).
+
+Example:
+
+```bash
+export FORTRESS_RAW_STORAGE_DIR="$HOME/fortress_raw"
+infra/runtime/intake_filesystem_inbox.sh "$HOME/FortressInbox"
+```
