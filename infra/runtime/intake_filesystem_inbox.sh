@@ -56,7 +56,10 @@ if ! docker compose ps postgres >/dev/null 2>&1; then
   exit 1
 fi
 
-mapfile -t FILES < <(find "${INBOX_PATH}" -type f -print | sort)
+FILES=()
+while IFS= read -r file_path; do
+  FILES+=("${file_path}")
+done < <(find "${INBOX_PATH}" -type f -print | sort)
 TOTAL_DISCOVERED="${#FILES[@]}"
 
 if [ "${TOTAL_DISCOVERED}" -eq 0 ]; then
