@@ -81,7 +81,7 @@ PY
 }
 
 resolve_source_id() {
-  docker compose exec -T postgres psql -X -A -t -U fortress -d fortress -v ON_ERROR_STOP=1 \
+  docker compose exec -T postgres psql -X -q -A -t -U fortress -d fortress -v ON_ERROR_STOP=1 \
     -v source_key="${INBOX_PATH}" <<'SQL' | tr -d '[:space:]'
 WITH ins AS (
   INSERT INTO ingestion.source (source_type, source_key)
@@ -101,7 +101,7 @@ SQL
 
 create_run_id() {
   local source_id="$1"
-  docker compose exec -T postgres psql -X -A -t -U fortress -d fortress -v ON_ERROR_STOP=1 \
+  docker compose exec -T postgres psql -X -q -A -t -U fortress -d fortress -v ON_ERROR_STOP=1 \
     -v source_id="${source_id}" <<'SQL' | tr -d '[:space:]'
 INSERT INTO ingestion.run (source_id)
 VALUES (:'source_id'::uuid)
@@ -128,7 +128,7 @@ SQL
 next_error_attempt() {
   local run_id="$1"
   local stage="$2"
-  docker compose exec -T postgres psql -X -A -t -U fortress -d fortress -v ON_ERROR_STOP=1 \
+  docker compose exec -T postgres psql -X -q -A -t -U fortress -d fortress -v ON_ERROR_STOP=1 \
     -v run_id="${run_id}" -v stage="${stage}" <<'SQL' | tr -d '[:space:]'
 SELECT COALESCE(MAX(e.attempt), 0) + 1
 FROM ingestion.error e
@@ -189,7 +189,7 @@ insert_raw_object() {
   local locator="$3"
   local sha_hex="$4"
 
-  docker compose exec -T postgres psql -X -A -t -U fortress -d fortress -v ON_ERROR_STOP=1 \
+  docker compose exec -T postgres psql -X -q -A -t -U fortress -d fortress -v ON_ERROR_STOP=1 \
     -v run_id="${run_id}" -v source_id="${source_id}" -v locator="${locator}" -v sha_hex="${sha_hex}" <<'SQL' | tr -d '[:space:]'
 WITH ins AS (
   INSERT INTO ingestion.raw_object (run_id, source_id, object_locator, content_sha256)
