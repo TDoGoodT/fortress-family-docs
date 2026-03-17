@@ -1,6 +1,8 @@
 -- 029_core_person_created_contract.sql
 -- Phase 5: core.person contract surface
 
+BEGIN;
+
 CREATE OR REPLACE VIEW core.ledger_contract_person_created AS
 SELECT
     'core.person'::text AS aggregate_type,
@@ -62,3 +64,8 @@ WHERE
     AND lower(target_entity_type) = ANY (
         ARRAY['person','core.person']
     );
+
+INSERT INTO public.schema_migrations(version)
+VALUES ('029_core_person_created_contract.sql');
+
+COMMIT;

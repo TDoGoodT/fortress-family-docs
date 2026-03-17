@@ -1,6 +1,8 @@
 -- 030_core_person_projection_rule.sql
 -- Phase 5: core.person projection rule
 
+BEGIN;
+
 CREATE OR REPLACE VIEW core.ledger_projection_person_created AS
 SELECT
     event_id,
@@ -22,3 +24,8 @@ FROM public.event_ledger
 WHERE
     aggregate_type = 'core.person'
     AND event_type = 'core.person.created';
+
+INSERT INTO public.schema_migrations(version)
+VALUES ('030_core_person_projection_rule.sql');
+
+COMMIT;

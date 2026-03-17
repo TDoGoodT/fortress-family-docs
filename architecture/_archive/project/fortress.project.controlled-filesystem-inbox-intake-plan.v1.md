@@ -1,3 +1,12 @@
+# ARCHIVE STATUS
+
+- Archived: Yes
+- Archive Reason: planning document; implementation outcome is now partially verified and differs from the intended end-to-end flow
+- Authority: historical / planning reference only
+- Read This Instead: `README.md` and `architecture/_meta/fortress.current-state.verified.v1.md`
+
+---
+
 # Controlled Filesystem Inbox Intake Capability — Implementation Plan (v1, revised)
 
 ## SECTION 1 — INBOX BOUNDARY

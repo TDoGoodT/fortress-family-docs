@@ -49,6 +49,79 @@ psql_base=(psql "$PGURI" -X -v ON_ERROR_STOP=1 -P pager=off)
 
 applied=()
 skipped=()
+bootstrap_end_index=-1
+
+schema_migrations_exists() {
+  "${psql_base[@]}" -tAc "select to_regclass('public.schema_migrations') is not null;" | tr -d '[:space:]'
+}
+
+recorded_in_schema_migrations() {
+  local version="$1"
+  "${psql_base[@]}" -tAc "select 1 from public.schema_migrations where version = '$version' limit 1;" | tr -d '[:space:]'
+}
+
+bootstrap_schema_migrations_if_needed() {
+  local exists
+  exists="$(schema_migrations_exists)" || {
+    echo "ERROR: failed checking whether public.schema_migrations exists"
+    exit 1
+  }
+
+  if [[ "$exists" == "t" ]]; then
+    return
+  fi
+
+  echo "BOOTSTRAP public.schema_migrations via canonical migration path"
+
+  # Governance boundary:
+  # - 008b_create_schema_migrations.sql is the bootstrap boundary.
+  # - No migrations may be inserted before this boundary.
+
+  for i in "${!MIGRATIONS[@]}"; do
+    local f="${MIGRATIONS[$i]}"
+
+    echo "APPLY  $f (bootstrap)"
+    "${psql_base[@]}" -f "$ROOT_DIR/$f"
+    applied+=("$f")
+
+    if [[ "$f" == "008b_create_schema_migrations.sql" ]]; then
+      bootstrap_end_index="$i"
+      break
+    fi
+  done
+
+  if [[ "$bootstrap_end_index" -lt 0 ]]; then
+    echo "ERROR: bootstrap migration 008b_create_schema_migrations.sql not found"
+    exit 1
+  fi
+
+  exists="$(schema_migrations_exists)" || {
+    echo "ERROR: failed verifying public.schema_migrations after bootstrap"
+    exit 1
+  }
+
+  if [[ "$exists" != "t" ]]; then
+    echo "ERROR: bootstrap completed but public.schema_migrations still does not exist"
+    exit 1
+  fi
+
+  for i in $(seq 0 "$bootstrap_end_index"); do
+    local f="${MIGRATIONS[$i]}"
+    local recorded
+    recorded="$(recorded_in_schema_migrations "$f")" || {
+      echo "ERROR: failed verifying schema_migrations bootstrap entry for $f"
+      exit 1
+    }
+
+    if [[ "$recorded" != "1" ]]; then
+      echo "ERROR: bootstrap migration applied but NOT recorded in public.schema_migrations: $f"
+      echo "Ruling: FAIL (bootstrap governance invariant broken)"
+      exit 1
+    fi
+  done
+
+  echo
+}
 
 echo "Fortress Migration Runner"
 echo "DB: PGURI set (host-driven psql)"
@@ -56,8 +129,17 @@ echo "Dir: $ROOT_DIR"
 echo "Count: ${#MIGRATIONS[@]}"
 echo
 
-for f in "${MIGRATIONS[@]}"; do
-  already="$("${psql_base[@]}" -tAc "select 1 from public.schema_migrations where version = '$f' limit 1;")" || {
+bootstrap_schema_migrations_if_needed
+
+start_index=0
+if [[ "$bootstrap_end_index" -ge 0 ]]; then
+  start_index=$((bootstrap_end_index + 1))
+fi
+
+for ((i = start_index; i < ${#MIGRATIONS[@]}; i++)); do
+  f="${MIGRATIONS[$i]}"
+
+  already="$(recorded_in_schema_migrations "$f")" || {
     echo "ERROR: failed checking schema_migrations for $f"
     exit 1
   }
@@ -71,7 +153,7 @@ for f in "${MIGRATIONS[@]}"; do
   echo "APPLY  $f"
   "${psql_base[@]}" -f "$ROOT_DIR/$f"
 
-  recorded="$("${psql_base[@]}" -tAc "select 1 from public.schema_migrations where version = '$f' limit 1;")" || {
+  recorded="$(recorded_in_schema_migrations "$f")" || {
     echo "ERROR: failed verifying schema_migrations after applying $f"
     exit 1
   }

@@ -1,4 +1,13 @@
-"Document ID: fortress.project.execution-plan-to-production
+# ARCHIVE STATUS
+
+- Archived: Yes
+- Archive Reason: plan document that no longer reflects the current verified repository state
+- Authority: historical reference only
+- Read This Instead: `architecture/_meta/fortress.current-state.verified.v1.md`
+
+---
+
+Document ID: fortress.project.execution-plan-to-production
 Version: v1
 Layer: project
 Status: DRAFT

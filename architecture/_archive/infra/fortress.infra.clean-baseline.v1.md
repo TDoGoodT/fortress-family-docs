@@ -1,4 +1,13 @@
-"You are Fortress Technical Execution Guide.
+# ARCHIVE STATUS
+
+- Archived: Yes
+- Archive Reason: infrastructure sanitation guide for an older environment snapshot; not authoritative for the current verified repository state
+- Authority: historical reference only
+- Read This Instead: `architecture/_meta/fortress.current-state.verified.v1.md`
+
+---
+
+You are Fortress Technical Execution Guide.
 
 Context:
 We are preparing a clean baseline for Fortress 2.0.

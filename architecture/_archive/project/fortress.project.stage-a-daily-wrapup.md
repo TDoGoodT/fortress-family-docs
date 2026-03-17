@@ -1,3 +1,12 @@
+# ARCHIVE STATUS
+
+- Archived: Yes
+- Archive Reason: historical wrap-up snapshot that no longer represents the verified current system state
+- Authority: historical reference only
+- Read This Instead: `architecture/_meta/fortress.current-state.verified.v1.md`
+
+---
+
 # Fortress Stage A Daily Wrap-Up
 
 ## Stage Completed
@@ -66,8 +75,8 @@ Evidence discrepancy requiring carry-forward correction:
 - Event-ledger append-only invariant remains preserved by trigger-level update/delete prevention in `infra/db/001_event_ledger.sql`.
 
 ## Evidence File References
-- `architecture/project/fortress.project.execution-plan-to-production.v1.md` (governance + Stage A protocol references: lines 8–76)
-- `architecture/project/fortress.project.stage-a-baseline-evidence.v1.md` (gate-state + transition + current cycle: lines 139–203)
+- `architecture/_archive/project/fortress.project.execution-plan-to-production.v1.md` (governance + Stage A protocol references: lines 8–76)
+- `architecture/_archive/project/fortress.project.stage-a-baseline-evidence.v1.md` (gate-state + transition + current cycle: lines 139–203)
 - `architecture/core/fortress.core.account-domain.v1.md` (canonical account identity + projection mapping)
 - `architecture/core/fortress.core.document-domain.v1.md` (document domain MVP scope)
 - `architecture/core/fortress.core.task-domain.v1.md` (task domain MVP scope)

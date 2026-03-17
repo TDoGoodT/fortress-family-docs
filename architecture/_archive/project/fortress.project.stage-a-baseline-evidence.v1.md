@@ -1,4 +1,13 @@
-"Document ID: fortress.project.stage-a-baseline-evidence
+# ARCHIVE STATUS
+
+- Archived: Yes
+- Archive Reason: historical evidence pack for an older execution snapshot
+- Authority: historical reference only
+- Read This Instead: `architecture/_meta/fortress.current-state.verified.v1.md`
+
+---
+
+Document ID: fortress.project.stage-a-baseline-evidence
 Version: v1
 Layer: project
 Status: DRAFT
@@ -200,4 +209,3 @@ Gate flag update:
 
 Checkpoint statement:
 - This artifact now contains the latest deterministic execution boundary for continuation in the next Codex App session.
-

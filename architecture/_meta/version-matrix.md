@@ -3,7 +3,7 @@
 This document defines the official version authority state of all
 Fortress 2.0 architectural documents.
 
-This matrix identifies the current authoritative architecture documents for Fortress. Agents and contributors should consult these documents first when interpreting system behavior or architectural constraints.
+This matrix identifies the current document authority state for Fortress. Agents and contributors should distinguish between verified current-state documents, target-state architecture, and archived historical artifacts.
 
 If a document has multiple versions:
 - Only one may be marked Canonical: Yes
@@ -14,7 +14,19 @@ This matrix is the fast-reference truth for architectural status.
 
 ---
 
-## Canonical Documents (Active Authority)
+## Verified Current-State Authority
+
+These documents should be read first when the question is "what is currently implemented and verified?"
+
+| Document ID | Layer | Version | Status | Authority Type | Notes |
+|-------------|-------|---------|--------|----------------|-------|
+| fortress.current-state.verified | meta | v1 | ACTIVE | VERIFIED CURRENT STATE | Primary source for verified repository state |
+
+---
+
+## Canonical Architecture Documents (Target / Design Authority)
+
+These documents remain canonical design authority, but many describe target-state architecture rather than fully verified implementation.
 
 | Document ID | Layer | Current Version | Status | Canonical | Supersedes |
 |-------------|-------|----------------|--------|-----------|------------|
@@ -61,6 +73,20 @@ This matrix is the fast-reference truth for architectural status.
 
 ---
 
+## Partial / Target-State Documents
+
+These documents are still useful, but should be treated as target-state, planning, or partially implemented references unless verified against code and runtime behavior.
+
+| Document Group | Layer | Status |
+|----------------|-------|--------|
+| AI documents (`fortress.ai.*`) | ai | TARGET STATE / PARTIAL IMPLEMENTATION |
+| OpenClaw documents (`fortress.openclaw.*`) | openclaw | TARGET STATE / NOT VERIFIED IN CODE |
+| Security control and access documents (`fortress.security.*`) | security | TARGET STATE / PARTIAL IMPLEMENTATION |
+| Domain documents beyond minimal implemented surfaces (`document-domain`, `task-domain`, `financial-classification`) | core | TARGET STATE / BROADER THAN VERIFIED IMPLEMENTATION |
+| Project roadmap and product planning documents | project | TARGET STATE / PLANNING |
+
+---
+
 ## Archived Versions
 
 | Document ID | Layer | Version | Status | Superseded By |
@@ -74,6 +100,20 @@ This matrix is the fast-reference truth for architectural status.
 | fortress.ai.query-interface | ai | v1 | ARCHIVED | v2 |
 | fortress.project.implementation-roadmap | project | v1 | ARCHIVED | v2 |
 | fortress.project.dependency-model | project | v1 | ARCHIVED | v2 |
+
+---
+
+## Archived Operational / Historical Documents
+
+These documents were moved to `architecture/_archive/` because they are historical execution artifacts, stale plans, or misleading status snapshots.
+
+| Document ID | Current Path | Status |
+|-------------|--------------|--------|
+| fortress.project.execution-plan-to-production | `architecture/_archive/project/fortress.project.execution-plan-to-production.v1.md` | ARCHIVED |
+| fortress.project.stage-a-baseline-evidence | `architecture/_archive/project/fortress.project.stage-a-baseline-evidence.v1.md` | ARCHIVED |
+| fortress.project.stage-a-daily-wrapup | `architecture/_archive/project/fortress.project.stage-a-daily-wrapup.md` | ARCHIVED |
+| fortress.project.controlled-filesystem-inbox-intake-plan | `architecture/_archive/project/fortress.project.controlled-filesystem-inbox-intake-plan.v1.md` | ARCHIVED |
+| fortress.infra.clean-baseline | `architecture/_archive/infra/fortress.infra.clean-baseline.v1.md` | ARCHIVED |
 
 ---
 
@@ -97,6 +137,15 @@ Before implementation:
 - Version must be referenced explicitly in development prompt
 
 No code may be written against ambiguous version state.
+
+## Recommended Reading Order
+
+1. `architecture/_meta/fortress.current-state.verified.v1.md`
+2. `architecture/_meta/version-matrix.md`
+3. `architecture/core/fortress.core.event-ledger.v1.md`
+4. `architecture/ingestion/fortress.ingestion.pipeline-architecture.v3.md`
+5. `architecture/project/fortress.project.dependency-model.v2.md`
+6. `README.md`
 
 ---
 

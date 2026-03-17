@@ -30,15 +30,33 @@ Execution: `infra/db/apply_migrations.sh`
 
 ## Status
 
-Phase 2C complete.
+Baseline status: partially verified.
+
+Authoritative verified state:
+
+- `architecture/_meta/fortress.current-state.verified.v1.md`
 
 Current capabilities:
 
 - Event Ledger with hash chain
 - Idempotent ingestion constraints
-- Deterministic event - Controlled migration runner
+- Deterministic migration runner from a clean database
+- Canonical projections and query views for document, person, task, and account
 
-Next phase: domain projections and consumers.
+Known limitations:
+
+- Ledger integrity diagnostics currently report 5 hash-chain mismatches under investigation
+- Controlled filesystem inbox intake currently stops at `ingestion.run` / `ingestion.raw_object`
+- No automatic filesystem path currently creates `raw_record`, `normalized_record`, or canonical handoff rows
+
+## Recommended Reading Order
+
+1. `architecture/_meta/fortress.current-state.verified.v1.md`
+2. `architecture/_meta/version-matrix.md`
+3. `architecture/core/fortress.core.event-ledger.v1.md`
+4. `architecture/ingestion/fortress.ingestion.pipeline-architecture.v3.md`
+5. `architecture/project/fortress.project.dependency-model.v2.md`
+6. `README.md`
 
 
 ## Controlled Filesystem Inbox Intake (Manual Debugging)
@@ -52,10 +70,11 @@ Fortress supports a controlled local filesystem inbox intake command for determi
 Behavior:
 
 - Inbox is an external intake surface and must remain outside Fortress storage trees.
-- Files are copied (never moved) to raw storage, then registered through existing `ingestion.*` contracts.
+- Files are copied (never moved) to raw storage, then registered as `ingestion.raw_object`.
 - `object_locator` is the external inbox file path (`filesystem://...`).
 - Zero-file polls do not create an ingestion run.
 - Event emission is operator-triggered after intake (`infra/runtime/emit_ingestion_events.sh <run_id>`).
+- Intake does not currently perform raw-record extraction, normalization, or handoff creation.
 
 Example:
 
