@@ -22,7 +22,7 @@ async def send_text_message(phone: str, text: str) -> bool:
     }
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.post(f"{WAHA_API_URL}/api/sendText", json=payload)
+            resp = await client.post(f"{WAHA_API_URL}/api/sendText", json=payload, headers={"X-Api-Key": "25c6dd6765b6446da432f32d2353d5f5"})
             if resp.status_code == 200 or resp.status_code == 201:
                 logger.info("Sent message to %s: %s", phone, text[:80])
                 return True
@@ -46,7 +46,7 @@ async def send_reply(phone: str, text: str, message_id: str) -> bool:
     }
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.post(f"{WAHA_API_URL}/api/sendText", json=payload)
+            resp = await client.post(f"{WAHA_API_URL}/api/sendText", json=payload, headers={"X-Api-Key": "25c6dd6765b6446da432f32d2353d5f5"})
             if resp.status_code == 200 or resp.status_code == 201:
                 logger.info("Sent reply to %s (re: %s): %s", phone, message_id, text[:80])
                 return True

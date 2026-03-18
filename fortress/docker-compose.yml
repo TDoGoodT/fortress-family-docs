@@ -38,7 +38,7 @@ services:
       - ${STORAGE_PATH:-./storage}:/data/documents
 
   waha:
-    image: devlikeapro/waha:latest
+    image: devlikeapro/waha:arm
     container_name: fortress-waha
     restart: unless-stopped
     ports:

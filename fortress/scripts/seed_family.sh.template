@@ -19,13 +19,8 @@ echo "=== Seeding family members ==="
 psql "$DB_URL" <<'SQL'
 
 INSERT INTO family_members (name, phone, role, is_active) VALUES
--- Replace with real family data:
-('Parent Name', '972XXXXXXXXX', 'parent', true),
-('Other Parent', '972XXXXXXXXX', 'parent', true)
--- Add children:
--- ('Child Name', '972XXXXXXXXX', 'child', true),
--- Add grandparents:
--- ('Grandparent Name', '972XXXXXXXXX', 'grandparent', true)
+    ('אסף', '972542364393', 'parent', true),
+    ('חן', '972545674461', 'parent', true)
 ON CONFLICT (phone) DO UPDATE SET
     name = EXCLUDED.name,
     role = EXCLUDED.role,
