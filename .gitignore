@@ -7,7 +7,9 @@
 
 # python / notebooks
 __pycache__/
+*.pyc
 .ipynb_checkpoints/
+.pytest_cache/
 
 # local artifacts
 infra/db/*.broken.*
@@ -18,3 +20,15 @@ infra/db/phase1_schema_only.sql
 
 # environment
 .env
+
+# Fortress deployment — personal data (never commit)
+fortress/scripts/seed_family.sh
+fortress/scripts/seed_*.sh
+!fortress/scripts/seed_family.sh.template
+
+# Fortress environment
+fortress/.env
+
+# Fortress storage
+fortress/storage/*
+!fortress/storage/.gitkeep

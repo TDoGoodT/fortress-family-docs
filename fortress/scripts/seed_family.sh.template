@@ -1,0 +1,39 @@
+#!/bin/bash
+# seed_family.sh — Seeds family members into the database
+# 
+# SETUP:
+#   1. Copy this file: cp seed_family.sh.template seed_family.sh
+#   2. Edit seed_family.sh with real phone numbers
+#   3. Run: ./scripts/seed_family.sh
+#
+# IMPORTANT: seed_family.sh is gitignored — never commit real phone numbers
+#
+# Phone format: Israeli international without + (e.g., 972501234567)
+
+set -euo pipefail
+
+DB_URL="${DATABASE_URL:-postgresql://fortress:fortress_dev@localhost:5432/fortress}"
+
+echo "=== Seeding family members ==="
+
+psql "$DB_URL" <<'SQL'
+
+INSERT INTO family_members (name, phone, role, is_active) VALUES
+-- Replace with real family data:
+('Parent Name', '972XXXXXXXXX', 'parent', true),
+('Other Parent', '972XXXXXXXXX', 'parent', true)
+-- Add children:
+-- ('Child Name', '972XXXXXXXXX', 'child', true),
+-- Add grandparents:
+-- ('Grandparent Name', '972XXXXXXXXX', 'grandparent', true)
+ON CONFLICT (phone) DO UPDATE SET
+    name = EXCLUDED.name,
+    role = EXCLUDED.role,
+    is_active = EXCLUDED.is_active;
+
+SQL
+
+echo "=== Family members seeded ==="
+echo ""
+psql "$DB_URL" -c \
+    "SELECT name, phone, role, is_active FROM family_members WHERE phone != '0000000000';"

@@ -1,0 +1,59 @@
+version: "3.8"
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: fortress-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: fortress
+      POSTGRES_USER: fortress
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-fortress_dev}
+    ports:
+      - "5432:5432"
+    volumes:
+      - fortress_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fortress"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  fortress:
+    build: .
+    container_name: fortress-app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://fortress:${DB_PASSWORD:-fortress_dev}@db:5432/fortress
+      STORAGE_PATH: /data/documents
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      WAHA_API_URL: http://waha:3000
+      ADMIN_PHONE: ${ADMIN_PHONE:-972542364393}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ${STORAGE_PATH:-./storage}:/data/documents
+
+  waha:
+    image: devlikeapro/waha:latest
+    container_name: fortress-waha
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - WHATSAPP_DEFAULT_ENGINE=WEBJS
+      - WAHA_DASHBOARD_ENABLED=true
+      - WHATSAPP_RESTART_ALL_SESSIONS=true
+      - WAHA_LOG_LEVEL=info
+      - WHATSAPP_API_HOSTNAME=http://fortress-app:8000
+      - WHATSAPP_HOOK_URL=http://fortress-app:8000/webhook/whatsapp
+      - WHATSAPP_HOOK_EVENTS=message,message.any
+    volumes:
+      - waha_sessions:/app/.sessions
+
+volumes:
+  fortress_data:
+  waha_sessions:
