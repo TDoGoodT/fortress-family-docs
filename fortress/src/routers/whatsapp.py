@@ -1,6 +1,7 @@
 """Fortress 2.0 WhatsApp router — WAHA webhook handler."""
 
 import logging
+
 from typing import Any
 
 from fastapi import APIRouter, Depends
@@ -29,7 +30,7 @@ async def whatsapp_webhook(
     """
     try:
         event = body.get("event", "")
-        if event not in ("message", "message.any"):
+        if event != "message":
             return {"status": "ignored", "reason": "non-message event"}
 
         payload = body.get("payload", {})
@@ -43,6 +44,7 @@ async def whatsapp_webhook(
         message_id = payload.get("id", "")
         message_text = payload.get("body", "")
         has_media = payload.get("hasMedia", False)
+        logger.info("Incoming message from %s: %s", phone, message_text)
 
         media_file_path: str | None = None
         if has_media and message_id:
@@ -60,7 +62,7 @@ async def whatsapp_webhook(
             has_media=has_media,
             media_file_path=media_file_path,
         )
-
+        logger.info("Response: %s", response_text)
         await send_text_message(phone, response_text)
         return {"status": "processed"}
 

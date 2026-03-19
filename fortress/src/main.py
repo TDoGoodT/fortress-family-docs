@@ -7,8 +7,14 @@ from collections.abc import AsyncGenerator
 import uvicorn
 from fastapi import FastAPI
 
+from src.config import LOG_LEVEL
 from src.database import test_connection
 from src.routers import health, whatsapp
+
+logging.basicConfig(
+    level=getattr(logging, LOG_LEVEL.upper(), logging.INFO),
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
 
 logger = logging.getLogger(__name__)
 
