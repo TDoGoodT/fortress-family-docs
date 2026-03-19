@@ -32,10 +32,24 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-info}
       WAHA_API_URL: http://waha:3000
       ADMIN_PHONE: ${ADMIN_PHONE:-972542364393}
+      OLLAMA_API_URL: http://ollama:11434
     ports:
       - "8000:8000"
     volumes:
       - ${STORAGE_PATH:-./storage}:/data/documents
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: fortress-ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    deploy:
+      resources:
+        reservations:
+          memory: 6G
 
   waha:
     image: devlikeapro/waha:latest
@@ -57,3 +71,4 @@ services:
 volumes:
   fortress_data:
   waha_sessions:
+  ollama_data:

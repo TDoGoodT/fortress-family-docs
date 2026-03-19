@@ -9,11 +9,14 @@ Fortress is a sovereign, local-first family intelligence system. It manages hous
 cp .env.example .env
 # Edit .env with your DB_PASSWORD
 
-# Start everything (PostgreSQL + FastAPI + WAHA)
+# Start everything (PostgreSQL + FastAPI + WAHA + Ollama)
 docker compose up -d
 
 # Apply database migrations
 ./scripts/apply_migrations.sh
+
+# Pull the Ollama model (~4.7GB on first run)
+./scripts/setup_ollama.sh
 ```
 
 The API will be available at `http://localhost:8000`. Check health at `GET /health`.
@@ -35,16 +38,22 @@ fortress/
 │   ├── database.py          # SQLAlchemy engine and session
 │   ├── models/
 │   │   └── schema.py        # ORM models (8 tables)
+│   ├── prompts/
+│   │   ├── __init__.py      # Prompt exports
+│   │   └── system_prompts.py # LLM prompt templates
 │   ├── routers/
-│   │   ├── health.py        # GET /health
+│   │   ├── health.py        # GET /health (DB + Ollama status)
 │   │   └── whatsapp.py      # POST /webhook/whatsapp (WAHA handler)
 │   ├── services/
 │   │   ├── auth.py          # Phone-based auth + permissions
 │   │   ├── audit.py         # Audit logging
 │   │   ├── documents.py     # Document processing
+│   │   ├── intent_detector.py # Intent classification (keyword + LLM)
+│   │   ├── llm_client.py    # Async Ollama REST API client
+│   │   ├── model_router.py  # Intent-based message routing
 │   │   ├── tasks.py         # Task management
 │   │   ├── recurring.py     # Recurring task patterns
-│   │   ├── message_handler.py # WhatsApp message routing
+│   │   ├── message_handler.py # Thin auth layer → model router
 │   │   └── whatsapp_client.py # WAHA API client (send messages)
 │   └── utils/
 │       ├── ids.py           # UUID generation
@@ -54,7 +63,7 @@ fortress/
 ├── scripts/                 # Operational scripts
 ├── tests/                   # pytest tests
 ├── docs/                    # Architecture documentation
-├── docker-compose.yml       # PostgreSQL + FastAPI + WAHA
+├── docker-compose.yml       # PostgreSQL + FastAPI + WAHA + Ollama
 ├── Dockerfile
 ├── requirements.txt
 └── .env.example
@@ -69,19 +78,21 @@ fortress/
 
 ## Current Status
 
-Phase 3.5 — Deployment-ready. The current implementation includes:
+Phase 4A — AI-powered intent routing. The current implementation includes:
 
-- Three-container Docker Compose: PostgreSQL 16 + FastAPI + WAHA (WhatsApp bridge)
+- Four-container Docker Compose: PostgreSQL 16 + FastAPI + WAHA (WhatsApp bridge) + Ollama (local LLM)
 - PostgreSQL schema with 8 tables
 - Phone-based auth with role-based permissions
-- WhatsApp message handling: text commands, media storage, task management via chat
+- AI-powered intent detection with keyword matching and LLM fallback
+- Model router dispatching intents to handlers with LLM-generated Hebrew responses
+- Ollama integration (llama3.1:8b) for natural language understanding
+- WhatsApp message handling via intent-based routing
 - Task management with recurring patterns (daily/weekly/monthly/yearly)
-- Keyword-based command processing (Hebrew + English)
+- Natural language task creation and completion
 - Media download and storage from WhatsApp
 - Audit logging for all actions
-- Conversation history tracking
-
-Future phases will add AI-powered document classification, RAG-based Q&A, and financial summaries.
+- Conversation history tracking with detected intents
+- System prompts tuned for Hebrew WhatsApp interactions
 
 ## Deployment
 

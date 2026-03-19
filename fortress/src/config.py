@@ -18,3 +18,7 @@ LOG_LEVEL: str = os.getenv("LOG_LEVEL", "info")
 WAHA_API_URL: str = os.getenv("WAHA_API_URL", "http://localhost:3000")
 
 ADMIN_PHONE: str = os.getenv("ADMIN_PHONE", "972542364393")
+
+OLLAMA_API_URL: str = os.getenv("OLLAMA_API_URL", "http://localhost:11434")
+
+OLLAMA_MODEL: str = os.getenv("OLLAMA_MODEL", "llama3.1:8b")
