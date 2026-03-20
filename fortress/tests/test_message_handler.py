@@ -55,14 +55,14 @@ async def test_conversation_saved(mock_auth, mock_db) -> None:
     assert mock_db.commit.called
 
 
-# ── Delegation to model router ───────────────────────────────────
+# ── Delegation to workflow engine ─────────────────────────────────
 
 
 @pytest.mark.asyncio
-@patch("src.services.message_handler.route_message", new_callable=AsyncMock)
+@patch("src.services.message_handler.run_workflow", new_callable=AsyncMock)
 @patch("src.services.message_handler.get_family_member_by_phone")
 async def test_active_member_delegates_to_router(mock_auth, mock_route, mock_db) -> None:
-    """Active member messages should be delegated to route_message."""
+    """Active member messages should be delegated to run_workflow."""
     member = _make_member()
     mock_auth.return_value = member
     mock_route.return_value = "router response"
@@ -79,10 +79,10 @@ async def test_active_member_delegates_to_router(mock_auth, mock_route, mock_db)
 
 
 @pytest.mark.asyncio
-@patch("src.services.message_handler.route_message", new_callable=AsyncMock)
+@patch("src.services.message_handler.run_workflow", new_callable=AsyncMock)
 @patch("src.services.message_handler.get_family_member_by_phone")
 async def test_media_message_delegates_to_router(mock_auth, mock_route, mock_db) -> None:
-    """Media messages should be delegated to route_message with has_media=True."""
+    """Media messages should be delegated to run_workflow with has_media=True."""
     member = _make_member()
     mock_auth.return_value = member
     mock_route.return_value = "document saved"
@@ -106,10 +106,10 @@ async def test_media_message_delegates_to_router(mock_auth, mock_route, mock_db)
 
 
 @pytest.mark.asyncio
-@patch("src.services.message_handler.route_message", new_callable=AsyncMock)
+@patch("src.services.message_handler.run_workflow", new_callable=AsyncMock)
 @patch("src.services.message_handler.get_family_member_by_phone")
 async def test_router_receives_correct_text(mock_auth, mock_route, mock_db) -> None:
-    """Router should receive the exact message text."""
+    """Workflow engine should receive the exact message text."""
     member = _make_member()
     mock_auth.return_value = member
     mock_route.return_value = "ok"

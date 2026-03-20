@@ -2,12 +2,21 @@
 
 Fortress is a sovereign, local-first family intelligence system. It manages household documents, finances, and tasks via WhatsApp, running entirely on a Mac Mini M4 via Docker Compose.
 
+## Architecture
+
+Fortress uses a hybrid AI architecture:
+
+- **AWS Bedrock** (Claude 3.5 Haiku/Sonnet) — All Hebrew text generation. Haiku handles simple intents (greetings, task confirmations), Sonnet handles complex questions.
+- **Ollama** (llama3.1:8b) — Demoted to English-only intent classification. Fast, local, no cloud dependency for routing decisions.
+- **LangGraph StateGraph** — Replaces the old model router with a structured 7-node workflow pipeline: intent → permission → memory load → action → response → memory save → conversation save.
+- **Three-tier memory** — Conversational context persisted across sessions with tiered expiration (short 7d, medium 90d, long 365d, permanent).
+
 ## Quick Start
 
 ```bash
 # Copy and configure environment
 cp .env.example .env
-# Edit .env with your DB_PASSWORD
+# Edit .env with your DB_PASSWORD, AWS settings, and phone numbers
 
 # Start everything (PostgreSQL + FastAPI + WAHA + Ollama)
 docker compose up -d
@@ -20,6 +29,10 @@ docker compose up -d
 ```
 
 The API will be available at `http://localhost:8000`. Check health at `GET /health`.
+
+### AWS Bedrock Setup
+
+Fortress requires AWS credentials with Bedrock access. See [docs/setup.md](docs/setup.md) for full IAM and credential configuration.
 
 ### WhatsApp Setup
 
@@ -34,32 +47,35 @@ The API will be available at `http://localhost:8000`. Check health at `GET /heal
 fortress/
 ├── src/
 │   ├── main.py              # FastAPI application entry point
-│   ├── config.py            # Environment configuration
+│   ├── config.py            # Environment configuration (AWS, phone, DB)
 │   ├── database.py          # SQLAlchemy engine and session
 │   ├── models/
-│   │   └── schema.py        # ORM models (8 tables)
+│   │   └── schema.py        # ORM models (10 tables incl. memories)
 │   ├── prompts/
 │   │   ├── __init__.py      # Prompt exports
-│   │   └── system_prompts.py # LLM prompt templates
+│   │   └── system_prompts.py # LLM prompt templates (Ollama + Bedrock)
 │   ├── routers/
-│   │   ├── health.py        # GET /health (DB + Ollama status)
+│   │   ├── health.py        # GET /health (DB + Ollama + Bedrock status)
 │   │   └── whatsapp.py      # POST /webhook/whatsapp (WAHA handler)
 │   ├── services/
 │   │   ├── auth.py          # Phone-based auth + permissions
 │   │   ├── audit.py         # Audit logging
+│   │   ├── bedrock_client.py # AWS Bedrock Claude client (Hebrew generation)
 │   │   ├── documents.py     # Document processing
-│   │   ├── intent_detector.py # Intent classification (keyword + LLM)
-│   │   ├── llm_client.py    # Async Ollama REST API client
-│   │   ├── model_router.py  # Intent-based message routing
+│   │   ├── intent_detector.py # Intent classification (keyword + Ollama)
+│   │   ├── llm_client.py    # Async Ollama REST API client (intent only)
+│   │   ├── memory_service.py # Three-tier memory with exclusion filtering
+│   │   ├── model_router.py  # Legacy intent-based routing (kept for compat)
 │   │   ├── tasks.py         # Task management
 │   │   ├── recurring.py     # Recurring task patterns
-│   │   ├── message_handler.py # Thin auth layer → model router
-│   │   └── whatsapp_client.py # WAHA API client (send messages)
+│   │   ├── message_handler.py # Thin auth layer → workflow engine
+│   │   ├── whatsapp_client.py # WAHA API client (send messages)
+│   │   └── workflow_engine.py # LangGraph StateGraph workflow pipeline
 │   └── utils/
 │       ├── ids.py           # UUID generation
 │       ├── phone.py         # Phone number normalization
 │       └── media.py         # Media download and storage
-├── migrations/              # SQL migration files
+├── migrations/              # SQL migration files (001–004)
 ├── scripts/                 # Operational scripts
 ├── tests/                   # pytest tests
 ├── docs/                    # Architecture documentation
@@ -73,26 +89,27 @@ fortress/
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/health` | Health check with DB status |
+| GET | `/health` | Health check (DB + Ollama + Bedrock status) |
 | POST | `/webhook/whatsapp` | WAHA webhook handler |
 
 ## Current Status
 
-Phase 4A — AI-powered intent routing. The current implementation includes:
+Phase 4B — Hybrid AI with LangGraph workflow and memory. The current implementation includes:
 
-- Four-container Docker Compose: PostgreSQL 16 + FastAPI + WAHA (WhatsApp bridge) + Ollama (local LLM)
-- PostgreSQL schema with 8 tables
+- Four-container Docker Compose: PostgreSQL 16 + FastAPI + WAHA + Ollama
+- Hybrid AI: AWS Bedrock (Claude 3.5 Haiku/Sonnet) for Hebrew, Ollama for intent classification
+- LangGraph StateGraph workflow replacing the model router
+- Three-tier memory system (short/medium/long/permanent) with exclusion filtering
+- PostgreSQL schema with 10 tables (including memories and memory_exclusions)
 - Phone-based auth with role-based permissions
-- AI-powered intent detection with keyword matching and LLM fallback
-- Model router dispatching intents to handlers with LLM-generated Hebrew responses
-- Ollama integration (llama3.1:8b) for natural language understanding
-- WhatsApp message handling via intent-based routing
+- AI-powered intent detection with keyword matching and Ollama LLM fallback
 - Task management with recurring patterns (daily/weekly/monthly/yearly)
-- Natural language task creation and completion
+- Natural language task creation and completion via Bedrock
 - Media download and storage from WhatsApp
 - Audit logging for all actions
 - Conversation history tracking with detected intents
-- System prompts tuned for Hebrew WhatsApp interactions
+- Echo prevention via WAHA `fromMe` field
+- Health endpoint monitoring DB, Ollama, and Bedrock connectivity
 
 ## Deployment
 

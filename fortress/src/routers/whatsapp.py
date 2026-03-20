@@ -7,7 +7,6 @@ from typing import Any
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from src.config import ADMIN_PHONE
 from src.database import get_db
 from src.services.message_handler import handle_incoming_message
 from src.services.whatsapp_client import send_text_message
@@ -37,8 +36,8 @@ async def whatsapp_webhook(
         from_raw = payload.get("from", "")
         phone = normalize_phone(from_raw)
 
-        # Echo prevention: ignore messages from the Fortress number itself
-        if phone == ADMIN_PHONE:
+        # Echo prevention: ignore messages sent by the bot itself
+        if payload.get("fromMe", False):
             return {"status": "ignored", "reason": "echo"}
 
         message_id = payload.get("id", "")

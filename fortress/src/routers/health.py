@@ -3,6 +3,7 @@
 from fastapi import APIRouter
 
 from src.database import test_connection
+from src.services.bedrock_client import BedrockClient
 from src.services.llm_client import OllamaClient
 
 router = APIRouter()
@@ -10,11 +11,14 @@ router = APIRouter()
 
 @router.get("/health")
 async def health() -> dict:
-    """Return service health including database and Ollama connectivity."""
+    """Return service health including database, Ollama, and Bedrock connectivity."""
     db_ok = test_connection()
 
     llm = OllamaClient()
     ollama_ok, model_name = await llm.is_available()
+
+    bedrock = BedrockClient()
+    bedrock_ok, bedrock_model = await bedrock.is_available()
 
     return {
         "status": "ok",
@@ -23,4 +27,6 @@ async def health() -> dict:
         "database": "connected" if db_ok else "disconnected",
         "ollama": "connected" if ollama_ok else "disconnected",
         "ollama_model": model_name if model_name else "not loaded",
+        "bedrock": "connected" if bedrock_ok else "disconnected",
+        "bedrock_model": bedrock_model if bedrock_model else "not available",
     }

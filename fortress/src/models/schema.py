@@ -57,6 +57,7 @@ class FamilyMember(Base):
     assigned_patterns: Mapped[list["RecurringPattern"]] = relationship(
         back_populates="assignee", foreign_keys="[RecurringPattern.assigned_to]"
     )
+    memories: Mapped[list["Memory"]] = relationship(back_populates="family_member")
 
 
 class Permission(Base):
@@ -271,3 +272,57 @@ class Conversation(Base):
     family_member: Mapped[Optional["FamilyMember"]] = relationship(
         back_populates="conversations"
     )
+
+
+class Memory(Base):
+    __tablename__ = "memories"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    family_member_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("family_members.id"), nullable=False
+    )
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    category: Mapped[str] = mapped_column(Text, nullable=False)
+    memory_type: Mapped[str] = mapped_column(Text, nullable=False)
+    expires_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    source: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    confidence: Mapped[Decimal] = mapped_column(Numeric, server_default=text("1.0"))
+    last_accessed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    access_count: Mapped[int] = mapped_column(Integer, server_default=text("0"))
+    is_active: Mapped[bool] = mapped_column(Boolean, server_default=text("true"))
+    memory_metadata: Mapped[Optional[dict]] = mapped_column(
+        "metadata", JSONB, server_default=text("'{}'")
+    )
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=text("now()")
+    )
+
+    # Relationships
+    family_member: Mapped["FamilyMember"] = relationship(back_populates="memories")
+
+
+class MemoryExclusion(Base):
+    __tablename__ = "memory_exclusions"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    pattern: Mapped[str] = mapped_column(Text, nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    exclusion_type: Mapped[str] = mapped_column(Text, nullable=False)
+    family_member_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("family_members.id"), nullable=True
+    )
+    is_active: Mapped[bool] = mapped_column(Boolean, server_default=text("true"))
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=text("now()")
+    )
+
+    # Relationships
+    family_member: Mapped[Optional["FamilyMember"]] = relationship()

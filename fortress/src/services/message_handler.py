@@ -1,4 +1,4 @@
-"""Fortress 2.0 message handler — thin auth layer delegating to model router."""
+"""Fortress 2.0 message handler — thin auth layer delegating to workflow engine."""
 
 import logging
 
@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from src.models.schema import Conversation
 from src.services.auth import get_family_member_by_phone
-from src.services.model_router import route_message
+from src.services.workflow_engine import run_workflow
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +20,7 @@ async def handle_incoming_message(
     has_media: bool = False,
     media_file_path: str | None = None,
 ) -> str:
-    """Authenticate sender and delegate to model router."""
+    """Authenticate sender and delegate to workflow engine."""
     member = get_family_member_by_phone(db, phone)
 
     if member is None:
@@ -33,7 +33,7 @@ async def handle_incoming_message(
         _save_conversation(db, member.id, message_text, response, "inactive_member")
         return response
 
-    return await route_message(
+    return await run_workflow(
         db,
         member,
         phone,

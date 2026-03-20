@@ -25,3 +25,12 @@ ADMIN_PHONE: str = os.getenv("ADMIN_PHONE", "972542364393")
 OLLAMA_API_URL: str = os.getenv("OLLAMA_API_URL", "http://localhost:11434")
 
 OLLAMA_MODEL: str = os.getenv("OLLAMA_MODEL", "llama3.1:8b")
+
+# AWS Bedrock
+AWS_REGION: str = os.getenv("AWS_REGION", "us-east-1")
+AWS_PROFILE: str = os.getenv("AWS_PROFILE", "fortress")
+BEDROCK_HAIKU_MODEL: str = os.getenv("BEDROCK_HAIKU_MODEL", "anthropic.claude-3-5-haiku-20241022-v1:0")
+BEDROCK_SONNET_MODEL: str = os.getenv("BEDROCK_SONNET_MODEL", "anthropic.claude-3-5-sonnet-20241022-v2:0")
+
+# Phone identity
+SYSTEM_PHONE: str = os.getenv("SYSTEM_PHONE", "")
