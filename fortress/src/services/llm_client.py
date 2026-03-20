@@ -1,6 +1,7 @@
 """Fortress 2.0 LLM client — async Ollama REST API communication."""
 
 import logging
+import time
 
 import httpx
 
@@ -38,6 +39,8 @@ class OllamaClient:
             "stream": False,
         }
         try:
+            logger.info("Ollama request: model=%s | prompt_len=%d", self.model, len(prompt))
+            start = time.monotonic()
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.post(
                     f"{self.base_url}/api/generate",
@@ -45,18 +48,21 @@ class OllamaClient:
                 )
                 response.raise_for_status()
                 data = response.json()
-                return data.get("response", HEBREW_FALLBACK)
+                result = data.get("response", HEBREW_FALLBACK)
+                elapsed = time.monotonic() - start
+                logger.info("Ollama response: len=%d | time=%.1fs", len(result), elapsed)
+                return result
         except httpx.TimeoutException:
             logger.error("Ollama request timed out after 30s: %s", self.base_url)
             return HEBREW_FALLBACK
         except httpx.ConnectError:
-            logger.error("Cannot connect to Ollama at %s", self.base_url)
+            logger.error("Ollama error: ConnectError: cannot connect to %s", self.base_url)
             return HEBREW_FALLBACK
         except httpx.HTTPStatusError as exc:
-            logger.error("Ollama HTTP error %s: %s", exc.response.status_code, exc)
+            logger.error("Ollama error: HTTPStatusError: %s %s", exc.response.status_code, exc)
             return HEBREW_FALLBACK
-        except Exception:
-            logger.exception("Unexpected error calling Ollama")
+        except Exception as e:
+            logger.error("Ollama error: %s: %s", type(e).__name__, e)
             return HEBREW_FALLBACK
 
     async def is_available(self) -> tuple[bool, str | None]:

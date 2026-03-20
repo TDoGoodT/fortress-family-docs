@@ -33,6 +33,7 @@ services:
       WAHA_API_URL: http://waha:3000
       ADMIN_PHONE: ${ADMIN_PHONE:-972542364393}
       OLLAMA_API_URL: http://ollama:11434
+      WAHA_API_KEY: ${WAHA_API_KEY:-}
     ports:
       - "8000:8000"
     volumes:
@@ -65,6 +66,9 @@ services:
       - WHATSAPP_API_HOSTNAME=http://fortress-app:8000
       - WHATSAPP_HOOK_URL=http://fortress-app:8000/webhook/whatsapp
       - WHATSAPP_HOOK_EVENTS=message,message.any
+      - WAHA_DASHBOARD_USERNAME=${WAHA_DASHBOARD_USERNAME:-admin}
+      - WAHA_DASHBOARD_PASSWORD=${WAHA_DASHBOARD_PASSWORD:-fortress}
+      - WHATSAPP_API_KEY=${WAHA_API_KEY:-}
     volumes:
       - waha_sessions:/app/.sessions
 

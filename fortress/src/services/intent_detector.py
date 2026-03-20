@@ -35,13 +35,17 @@ async def detect_intent(
     4. On LLM failure → unknown
     """
     if has_media:
+        logger.info("Intent: upload_document | method: media | msg: %s", text[:50])
         return "upload_document"
 
     keyword_intent = _match_keywords(text)
     if keyword_intent is not None:
+        logger.info("Intent: %s | method: keyword | msg: %s", keyword_intent, text[:50])
         return keyword_intent
 
-    return await _detect_intent_with_llm(text, llm_client)
+    llm_intent = await _detect_intent_with_llm(text, llm_client)
+    logger.info("Intent: %s | method: llm | msg: %s", llm_intent, text[:50])
+    return llm_intent
 
 
 def _match_keywords(text: str) -> str | None:

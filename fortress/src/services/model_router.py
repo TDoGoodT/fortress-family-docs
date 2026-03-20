@@ -44,12 +44,14 @@ async def route_message(
     """Route a message through intent detection, permission check, handler, and save conversation."""
     llm = OllamaClient()
     intent = await detect_intent(message_text, has_media, llm)
+    logger.info("Route: intent=%s | member=%s", intent, member.name)
 
     # Permission check
     perm = _PERMISSION_MAP.get(intent)
     if perm is not None:
         resource_type, action = perm
         if not check_permission(db, phone, resource_type, action):
+            logger.info("Permission: %s/%s = denied | member=%s", resource_type, action, member.name)
             log_action(
                 db,
                 actor_id=member.id,
@@ -63,6 +65,7 @@ async def route_message(
 
     # Dispatch to handler
     handler = _HANDLERS.get(intent, _handle_unknown)
+    logger.info("Dispatch: intent=%s | handler=%s", intent, handler.__name__)
     response = await handler(db, member, message_text, llm, media_file_path)
 
     _save_conversation(db, member.id, message_text, response, intent)
