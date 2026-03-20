@@ -111,6 +111,33 @@ Phase 4B — Hybrid AI with LangGraph workflow and memory. The current implement
 - Echo prevention via WAHA `fromMe` field
 - Health endpoint monitoring DB, Ollama, and Bedrock connectivity
 
+## Development
+
+### Running Tests
+
+```bash
+pytest fortress/tests/ -v
+```
+
+All 91 tests should pass. Tests use mocked dependencies — no Docker or database required.
+
+### Adding a New Migration
+
+1. Create `migrations/NNN_description.sql` (next sequential number)
+2. Write idempotent SQL (`CREATE TABLE IF NOT EXISTS`, etc.)
+3. Run `./scripts/apply_migrations.sh` to apply
+
+### Adding a New Service
+
+1. Create `src/services/your_service.py`
+2. Add corresponding test in `tests/test_your_service.py`
+3. Wire it into the workflow engine or router as needed
+4. Update `src/services/__init__.py` if exposing publicly
+
+### Current Phase
+
+Phase 4B Complete — Bedrock + LangGraph + Memory System. 91 passing tests, 10 database tables, 4 Docker services.
+
 ## Deployment
 
 For full deployment instructions on a Mac Mini M4, see [docs/setup.md](docs/setup.md).
