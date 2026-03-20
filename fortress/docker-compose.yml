@@ -31,6 +31,7 @@ services:
       STORAGE_PATH: /data/documents
       LOG_LEVEL: ${LOG_LEVEL:-info}
       WAHA_API_URL: http://waha:3000
+      WAHA_API_KEY: ${WAHA_API_KEY}
       ADMIN_PHONE: ${ADMIN_PHONE:-972542364393}
       OLLAMA_API_URL: http://ollama:11434
       WAHA_API_KEY: ${WAHA_API_KEY:-}
@@ -61,6 +62,9 @@ services:
     environment:
       - WHATSAPP_DEFAULT_ENGINE=WEBJS
       - WAHA_DASHBOARD_ENABLED=true
+      - WAHA_DASHBOARD_USERNAME=${WAHA_DASHBOARD_USERNAME}
+      - WAHA_DASHBOARD_PASSWORD=${WAHA_DASHBOARD_PASSWORD}
+      - WAHA_API_KEY=${WAHA_API_KEY}
       - WHATSAPP_RESTART_ALL_SESSIONS=true
       - WAHA_LOG_LEVEL=info
       - WHATSAPP_API_HOSTNAME=http://fortress-app:8000

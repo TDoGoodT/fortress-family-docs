@@ -1,4 +1,4 @@
-"""Fortress 2.0 WhatsApp client — sends messages via WAHA API."""
+﻿"""Fortress 2.0 WhatsApp client - sends messages via WAHA API."""
 
 import logging
 

@@ -16,6 +16,7 @@ STORAGE_PATH: str = os.getenv("STORAGE_PATH", "/data/documents")
 LOG_LEVEL: str = os.getenv("LOG_LEVEL", "info")
 
 WAHA_API_URL: str = os.getenv("WAHA_API_URL", "http://localhost:3000")
+WAHA_API_KEY: str = os.getenv("WAHA_API_KEY", "")
 
 WAHA_API_KEY: str = os.getenv("WAHA_API_KEY", "")
 
