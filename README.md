@@ -68,7 +68,7 @@ fortress/
 ├── src/           # Application code
 ├── migrations/    # Database schema (4 migration files, 10 tables)
 ├── scripts/       # Deployment & setup scripts
-├── tests/         # Test suite (175 tests)
+├── tests/         # Test suite (201 tests)
 ├── docs/          # Architecture & setup documentation
 └── docker-compose.yml
 ```
@@ -90,9 +90,9 @@ fortress/
 
 ## Status
 
-**Phase 4B.7 Complete — Pipeline Resilience Hotfix**
+**Phase STABLE-2 Complete — Agent Personality**
 
-- ✅ 175 passing tests
+- ✅ 201 passing tests
 - ✅ 10 database tables
 - ✅ 4 Docker services
 - ✅ WhatsApp integration
@@ -109,7 +109,7 @@ Private — Family use only.
 
 ## Roadmap & Version History
 
-### Current Version: Phase 4B.7
+### Current Version: Phase STABLE-2
 
 | Phase | Status | Description | Tests |
 |-------|--------|-------------|-------|
@@ -123,6 +123,7 @@ Private — Family use only.
 | 4B.5 — Model Routing | ✅ Complete | OpenRouter, 3-tier routing, fallbacks | 130 |
 | 4B.6 — Ollama Cleanup | ✅ Complete | Remove Ollama from critical path, unified LLM | 150 |
 | 4B.7 — Pipeline Resilience | ✅ Complete | JSON healing, response protection, logging | 175 |
+| STABLE-2 — Agent Personality | ✅ Complete | Centralised Hebrew personality, templates, consistent tone | 201 |
 | 5A — OCR | 📋 Planned | Document intelligence, invoice scanning | — |
 | 5B — Scheduler | 📋 Planned | Cron for recurring tasks, WhatsApp alerts | — |
 | 5C — RAG | 📋 Planned | pgvector, document Q&A, contract analysis | — |

@@ -1,6 +1,8 @@
 """Fortress 2.0 system prompts — LLM prompt templates for intent classification and response generation."""
 
-FORTRESS_BASE: str = (
+from src.prompts.personality import PERSONALITY
+
+FORTRESS_BASE: str = PERSONALITY + "\n\n" + (
     "You are Fortress, a family household assistant. "
     "You communicate in Hebrew. You are helpful, warm, and concise. "
     "You manage tasks, documents, and household information. "
@@ -26,7 +28,7 @@ TASK_EXTRACTOR: str = (
     "Reply with ONLY the JSON, nothing else."
 )
 
-TASK_RESPONDER: str = (
+TASK_RESPONDER: str = PERSONALITY + "\n\n" + (
     "You are presenting a task list to a family member. "
     "Format the tasks clearly for WhatsApp:\n"
     "- Use numbered list\n"
@@ -63,7 +65,7 @@ TASK_EXTRACTOR_BEDROCK: str = (
     "Reply with ONLY the JSON object, nothing else."
 )
 
-UNIFIED_CLASSIFY_AND_RESPOND: str = (
+UNIFIED_CLASSIFY_AND_RESPOND: str = PERSONALITY + "\n\n" + (
     "אתה Fortress, עוזר משפחתי חכם. קיבלת הודעה מבן משפחה.\n\n"
     "עליך לבצע שני דברים:\n"
     "1. לסווג את כוונת ההודעה לאחת מהקטגוריות הבאות:\n"

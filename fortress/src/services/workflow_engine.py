@@ -13,9 +13,15 @@ from src.prompts.system_prompts import (
     TASK_EXTRACTOR_BEDROCK,
     TASK_RESPONDER,
 )
+from src.prompts.personality import (
+    TEMPLATES as PERSONALITY_TEMPLATES,
+    format_task_created,
+    format_task_list,
+    get_greeting,
+)
 from src.services.audit import log_action
 from src.services.auth import check_permission
-from src.services.bedrock_client import HEBREW_FALLBACK, BedrockClient
+from src.services.bedrock_client import BedrockClient
 from src.services.documents import process_document
 from src.services.intent_detector import detect_intent
 from src.services.model_dispatch import ModelDispatcher
@@ -133,7 +139,7 @@ async def permission_node(state: WorkflowState) -> dict:
         )
         return {
             "permission_granted": False,
-            "response": "אין לך הרשאה לביצוע פעולה זו 🔒",
+            "response": PERSONALITY_TEMPLATES["permission_denied"],
         }
 
     return {"permission_granted": True}
@@ -172,21 +178,9 @@ async def _handle_list_tasks(
     media_file_path: str | None,
     intent: str,
 ) -> str:
-    """Fetch open tasks and format via dispatcher."""
+    """Fetch open tasks and format using personality templates."""
     tasks = list_tasks(db, status="open", assigned_to=member.id)
-    if not tasks:
-        prompt = "אין משימות פתוחות. צור תשובה קצרה ושמחה בעברית."
-        return await dispatcher.dispatch(prompt=prompt, system_prompt=FORTRESS_BASE, intent=intent)
-
-    task_lines = []
-    for i, task in enumerate(tasks, 1):
-        due = f" (עד {task.due_date})" if task.due_date else ""
-        priority = task.priority if hasattr(task, "priority") else "normal"
-        task_lines.append(f"{i}. [{priority}] {task.title}{due}")
-
-    task_data = "\n".join(task_lines)
-    prompt = f"הנה רשימת המשימות:\n{task_data}\n\nפרמט את זה יפה לוואטסאפ."
-    return await dispatcher.dispatch(prompt=prompt, system_prompt=TASK_RESPONDER, intent=intent)
+    return format_task_list(tasks)
 
 
 async def _handle_create_task(
@@ -233,8 +227,7 @@ async def _handle_create_task(
         priority=priority,
     )
 
-    prompt = f"משימה חדשה נוצרה: {title}. צור אישור קצר בעברית."
-    return await dispatcher.dispatch(prompt=prompt, system_prompt=FORTRESS_BASE, intent=intent)
+    return format_task_created(title, due_date)
 
 
 async def _handle_complete_task(
@@ -274,7 +267,8 @@ async def _handle_greeting(
     intent: str,
 ) -> str:
     """Return a local greeting without LLM dispatch."""
-    return f"שלום, {member.name}! 👋"
+    from datetime import datetime
+    return get_greeting(member.name, datetime.now().hour)
 
 
 async def _handle_upload_document(
@@ -358,15 +352,7 @@ async def _handle_unknown(
     intent: str,
 ) -> str:
     """Return a helpful message for unrecognized intents."""
-    return (
-        "לא הבנתי את הבקשה 🤔\n"
-        "אפשר לנסות:\n"
-        "• משימות — לצפות במשימות\n"
-        "• משימה חדשה: [שם] — ליצור משימה\n"
-        "• סיום משימה [מספר] — לסיים משימה\n"
-        "• מסמכים — לצפות במסמכים\n"
-        "• או לשלוח קובץ"
-    )
+    return PERSONALITY_TEMPLATES["cant_understand"].format(name=member.name)
 
 
 # Handler dispatch table
@@ -534,7 +520,7 @@ async def run_workflow(
 ) -> str:
     """Run the LangGraph workflow and return the response string.
 
-    Catches all exceptions and returns HEBREW_FALLBACK on any error.
+    Catches all exceptions and returns personality error_fallback on any error.
     """
     try:
         initial_state: WorkflowState = {
@@ -556,4 +542,4 @@ async def run_workflow(
         return result["response"]
     except Exception:
         logger.exception("Workflow failed")
-        return HEBREW_FALLBACK
+        return PERSONALITY_TEMPLATES["error_fallback"]

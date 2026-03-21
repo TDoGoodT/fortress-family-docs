@@ -5,6 +5,7 @@ import logging
 from sqlalchemy.orm import Session
 
 from src.models.schema import Conversation
+from src.prompts.personality import TEMPLATES as PERSONALITY_TEMPLATES
 from src.services.auth import get_family_member_by_phone
 from src.services.workflow_engine import run_workflow
 
@@ -24,12 +25,12 @@ async def handle_incoming_message(
     member = get_family_member_by_phone(db, phone)
 
     if member is None:
-        response = "מספר לא מזוהה. פנה למנהל המשפחה."
+        response = PERSONALITY_TEMPLATES["unknown_member"]
         _save_conversation(db, None, message_text, response, "unknown_sender")
         return response
 
     if not member.is_active:
-        response = "החשבון שלך לא פעיל."
+        response = PERSONALITY_TEMPLATES["inactive_member"]
         _save_conversation(db, member.id, message_text, response, "inactive_member")
         return response
 

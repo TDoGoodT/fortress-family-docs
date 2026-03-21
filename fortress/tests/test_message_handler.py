@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from src.models.schema import FamilyMember
+from src.prompts.personality import TEMPLATES as PERSONALITY_TEMPLATES
 from src.services.message_handler import handle_incoming_message
 
 
@@ -32,7 +33,7 @@ def _make_member(
 async def test_unknown_phone_rejected(mock_auth, mock_conv, mock_db) -> None:
     """Unknown phone number should return rejection message."""
     result = await handle_incoming_message(mock_db, "000000000", "hello", "msg1")
-    assert "מספר לא מזוהה" in result
+    assert result == PERSONALITY_TEMPLATES["unknown_member"]
 
 
 @pytest.mark.asyncio
@@ -42,7 +43,7 @@ async def test_inactive_member(mock_auth, mock_conv, mock_db) -> None:
     """Inactive member should return inactive message."""
     mock_auth.return_value = _make_member(is_active=False)
     result = await handle_incoming_message(mock_db, "972501234567", "hello", "msg1")
-    assert "לא פעיל" in result
+    assert result == PERSONALITY_TEMPLATES["inactive_member"]
 
 
 @pytest.mark.asyncio

@@ -5,13 +5,14 @@ import logging
 import re
 import time
 
+from src.prompts.personality import TEMPLATES as _PERSONALITY_TEMPLATES
 from src.prompts.system_prompts import UNIFIED_CLASSIFY_AND_RESPOND
 from src.services.intent_detector import VALID_INTENTS
 from src.services.model_dispatch import ModelDispatcher
 
 logger = logging.getLogger(__name__)
 
-HEBREW_FALLBACK_MSG = "מצטער, לא הצלחתי לעבד את הבקשה. נסה שוב."
+HEBREW_FALLBACK_MSG = _PERSONALITY_TEMPLATES["error_fallback"]
 
 
 def _heal_json(raw: str) -> dict | None:
