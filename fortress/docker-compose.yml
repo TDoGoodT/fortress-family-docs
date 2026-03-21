@@ -37,8 +37,12 @@ services:
       AWS_REGION: ${AWS_REGION:-us-east-1}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      BEDROCK_HAIKU_MODEL: ${BEDROCK_HAIKU_MODEL:-anthropic.claude-3-5-haiku-20241022-v1:0}
+      BEDROCK_HAIKU_PROFILE_ARN: ${BEDROCK_HAIKU_PROFILE_ARN:-}
       SYSTEM_PHONE: ${SYSTEM_PHONE:-}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      OPENROUTER_MODEL: ${OPENROUTER_MODEL:-meta-llama/llama-3.1-70b-instruct:free}
+      OPENROUTER_FALLBACK_MODEL: ${OPENROUTER_FALLBACK_MODEL:-google/gemma-2-9b-it:free}
     ports:
       - "8000:8000"
     volumes:

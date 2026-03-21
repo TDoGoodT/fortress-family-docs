@@ -18,6 +18,7 @@ from botocore.exceptions import (
 from src.config import (
     AWS_REGION,
     BEDROCK_HAIKU_MODEL,
+    BEDROCK_HAIKU_PROFILE_ARN,
     BEDROCK_SONNET_MODEL,
 )
 
@@ -26,7 +27,7 @@ logger = logging.getLogger(__name__)
 HEBREW_FALLBACK: str = "מצטער, לא הצלחתי לעבד את הבקשה. נסה שוב."
 
 MODEL_MAP: dict[str, str] = {
-    "haiku": BEDROCK_HAIKU_MODEL,
+    "haiku": BEDROCK_HAIKU_PROFILE_ARN or BEDROCK_HAIKU_MODEL,
     "sonnet": BEDROCK_SONNET_MODEL,
 }
 
@@ -64,7 +65,7 @@ class BedrockClient:
         """
         model_id = MODEL_MAP.get(model, BEDROCK_HAIKU_MODEL)
         body: dict[str, Any] = {
-            "anthropic_version": "bedrock-2023-10-16",
+            "anthropic_version": "bedrock-2023-05-31",
             "max_tokens": 1024,
             "messages": [{"role": "user", "content": prompt}],
         }

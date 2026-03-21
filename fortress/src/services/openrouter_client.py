@@ -46,12 +46,17 @@ class OpenRouterClient:
             "HTTP-Referer": "https://fortress.local",
             "X-Title": "Fortress",
         }
+        messages = []
+        if system_prompt.strip():
+            merged_prompt = f"{system_prompt}\n\nUser request:\n{prompt}"
+            messages.append({"role": "user", "content": merged_prompt})
+        else:
+            messages.append({"role": "user", "content": prompt})
+
         payload = {
             "model": chosen_model,
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": prompt},
-            ],
+            "messages": messages,
+            "max_tokens": 512,
         }
 
         start = time.monotonic()
@@ -91,9 +96,10 @@ class OpenRouterClient:
             return HEBREW_FALLBACK
         except httpx.HTTPStatusError as exc:
             elapsed = time.monotonic() - start
+            body = exc.response.text[:500]
             logger.error(
-                "OpenRouter HTTP error: status=%s model=%s time=%.1fs",
-                exc.response.status_code, chosen_model, elapsed,
+                "OpenRouter HTTP error: status=%s model=%s time=%.1fs body=%s",
+                exc.response.status_code, chosen_model, elapsed, body,
             )
             return HEBREW_FALLBACK
         except Exception as exc:

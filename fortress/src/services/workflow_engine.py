@@ -273,9 +273,8 @@ async def _handle_greeting(
     media_file_path: str | None,
     intent: str,
 ) -> str:
-    """Generate a personalized greeting via dispatcher."""
-    prompt = f"ברך את {member.name} בברכה חמה וקצרה בעברית."
-    return await dispatcher.dispatch(prompt=prompt, system_prompt=FORTRESS_BASE, intent=intent)
+    """Return a local greeting without LLM dispatch."""
+    return f"שלום, {member.name}! 👋"
 
 
 async def _handle_upload_document(
@@ -395,6 +394,9 @@ async def response_node(state: WorkflowState) -> dict:
 
 async def memory_save_node(state: WorkflowState) -> dict:
     """Extract and save memories from the conversation exchange."""
+    # Skip memory extraction for simple intents like greeting
+    if state.get("intent") == "greeting":
+        return {}
     try:
         bedrock = BedrockClient()
         await extract_memories_from_message(
