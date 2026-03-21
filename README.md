@@ -11,8 +11,9 @@ encrypted API calls.
 
 ```
 WhatsApp → WAHA → FastAPI → LangGraph Workflow
-                    ├── Ollama (local intent detection)
+                    ├── Unified LLM (classify + respond)
                     ├── AWS Bedrock (Hebrew AI)
+                    ├── Ollama (last-resort fallback)
                     ├── PostgreSQL (data + memory)
                     └── NAS (document storage)
 ```
@@ -21,12 +22,12 @@ WhatsApp → WAHA → FastAPI → LangGraph Workflow
 - `fortress-app` — FastAPI backend + LangGraph workflow engine
 - `fortress-db` — PostgreSQL 16 (10 tables)
 - `fortress-waha` — WhatsApp Web bridge
-- `fortress-ollama` — Local LLM for intent classification
+- `fortress-ollama` — Local LLM (last-resort generation fallback)
 
 ## Features
 
 - 📱 **WhatsApp Interface** — send messages, photos, documents
-- 🧠 **AI-Powered** — Bedrock Claude for Hebrew, Ollama for routing
+- 🧠 **AI-Powered** — Bedrock Claude for Hebrew, unified classify+respond for routing
 - ✅ **Task Management** — create, list, complete tasks via chat
 - 🔄 **Recurring Tasks** — auto-generated from patterns
 - 📄 **Document Storage** — photos and files saved to NAS
@@ -42,7 +43,7 @@ WhatsApp → WAHA → FastAPI → LangGraph Workflow
 | Backend | Python 3.12 + FastAPI |
 | AI Orchestration | LangGraph |
 | Primary AI | AWS Bedrock (Claude 3.5) |
-| Local AI | Ollama (Llama 3.1 8B) |
+| Local AI | Ollama (Llama 3.1 8B) — fallback only |
 | Database | PostgreSQL 16 |
 | WhatsApp | WAHA (self-hosted) |
 | Deployment | Docker Compose |
@@ -67,7 +68,7 @@ fortress/
 ├── src/           # Application code
 ├── migrations/    # Database schema (4 migration files, 10 tables)
 ├── scripts/       # Deployment & setup scripts
-├── tests/         # Test suite (91 tests)
+├── tests/         # Test suite (150 tests)
 ├── docs/          # Architecture & setup documentation
 └── docker-compose.yml
 ```
@@ -89,9 +90,9 @@ fortress/
 
 ## Status
 
-**Phase 4B Complete — Bedrock + LangGraph + Memory System**
+**Phase 4B.6 Complete — Bedrock + LangGraph + Memory + Unified Classify+Respond**
 
-- ✅ 91 passing tests
+- ✅ 150 passing tests
 - ✅ 10 database tables
 - ✅ 4 Docker services
 - ✅ WhatsApp integration
@@ -99,6 +100,7 @@ fortress/
 - ✅ Hebrew responses via Bedrock
 - ✅ Memory system with PII exclusions
 - ✅ Permission-based access control
+- ✅ Ollama removed from critical path — unified classify+respond
 
 ## License
 

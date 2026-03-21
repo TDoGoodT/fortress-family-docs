@@ -18,12 +18,13 @@ from src.services.auth import check_permission
 from src.services.bedrock_client import HEBREW_FALLBACK, BedrockClient
 from src.services.documents import process_document
 from src.services.intent_detector import detect_intent
-from src.services.llm_client import OllamaClient
+from src.services.model_dispatch import ModelDispatcher
 from src.services.memory_service import (
     extract_memories_from_message,
     load_memories,
     save_memory,
 )
+from src.services.unified_handler import handle_with_llm
 from src.services.tasks import complete_task, create_task, list_tasks
 
 logger = logging.getLogger(__name__)
@@ -55,6 +56,8 @@ class WorkflowState(TypedDict):
     memories: list[Memory]
     response: str
     error: str | None
+    task_data: dict | None
+    from_unified: bool
 
 
 # ---------------------------------------------------------------------------
@@ -63,11 +66,44 @@ class WorkflowState(TypedDict):
 
 
 async def intent_node(state: WorkflowState) -> dict:
-    """Detect intent using Ollama (local, English-only classification)."""
-    llm = OllamaClient()
-    intent = await detect_intent(state["message_text"], state["has_media"], llm)
+    """Detect intent using synchronous keyword matching."""
+    intent = detect_intent(state["message_text"], state["has_media"])
     logger.info("intent_node: intent=%s | member=%s", intent, state["member"].name)
     return {"intent": intent}
+
+
+async def unified_llm_node(state: WorkflowState) -> dict:
+    """Single LLM call: classify intent + generate response."""
+    memories = load_memories(state["db"], state["member"].id)
+    dispatcher = ModelDispatcher()
+    intent, response, task_data = await handle_with_llm(
+        state["message_text"], state["member"].name, memories, dispatcher,
+    )
+    return {
+        "intent": intent,
+        "response": response,
+        "task_data": task_data,
+        "from_unified": True,
+        "memories": memories,
+    }
+
+
+async def task_create_node(state: WorkflowState) -> dict:
+    """Create a task from task_data stored in state."""
+    task_data = state.get("task_data") or {}
+    title = task_data.get("title", "").strip()
+    if title:
+        create_task(
+            state["db"],
+            title,
+            state["member"].id,
+            assigned_to=state["member"].id,
+            due_date=task_data.get("due_date"),
+            category=task_data.get("category"),
+            priority=task_data.get("priority", "normal"),
+        )
+        logger.info("task_create_node: created task '%s' for %s", title, state["member"].name)
+    return {}
 
 
 async def permission_node(state: WorkflowState) -> dict:
@@ -110,16 +146,16 @@ async def memory_load_node(state: WorkflowState) -> dict:
 
 
 async def action_node(state: WorkflowState) -> dict:
-    """Dispatch to the appropriate handler based on intent, using Bedrock."""
+    """Dispatch to the appropriate handler based on intent, using ModelDispatcher."""
     intent = state["intent"]
     db = state["db"]
     member = state["member"]
     message_text = state["message_text"]
     media_file_path = state["media_file_path"]
-    bedrock = BedrockClient()
+    dispatcher = ModelDispatcher()
 
     handler = _ACTION_HANDLERS.get(intent, _handle_unknown)
-    response = await handler(db, member, message_text, bedrock, media_file_path)
+    response = await handler(db, member, message_text, dispatcher, media_file_path, intent)
     return {"response": response}
 
 
@@ -132,14 +168,15 @@ async def _handle_list_tasks(
     db: Session,
     member: FamilyMember,
     message_text: str,
-    bedrock: BedrockClient,
+    dispatcher: ModelDispatcher,
     media_file_path: str | None,
+    intent: str,
 ) -> str:
-    """Fetch open tasks and format via Bedrock haiku."""
+    """Fetch open tasks and format via dispatcher."""
     tasks = list_tasks(db, status="open", assigned_to=member.id)
     if not tasks:
         prompt = "אין משימות פתוחות. צור תשובה קצרה ושמחה בעברית."
-        return await bedrock.generate(prompt=prompt, system_prompt=FORTRESS_BASE, model="haiku")
+        return await dispatcher.dispatch(prompt=prompt, system_prompt=FORTRESS_BASE, intent=intent)
 
     task_lines = []
     for i, task in enumerate(tasks, 1):
@@ -149,21 +186,22 @@ async def _handle_list_tasks(
 
     task_data = "\n".join(task_lines)
     prompt = f"הנה רשימת המשימות:\n{task_data}\n\nפרמט את זה יפה לוואטסאפ."
-    return await bedrock.generate(prompt=prompt, system_prompt=TASK_RESPONDER, model="haiku")
+    return await dispatcher.dispatch(prompt=prompt, system_prompt=TASK_RESPONDER, intent=intent)
 
 
 async def _handle_create_task(
     db: Session,
     member: FamilyMember,
     message_text: str,
-    bedrock: BedrockClient,
+    dispatcher: ModelDispatcher,
     media_file_path: str | None,
+    intent: str,
 ) -> str:
-    """Extract task details via Bedrock haiku and create the task."""
-    extraction = await bedrock.generate(
+    """Extract task details via dispatcher and create the task."""
+    extraction = await dispatcher.dispatch(
         prompt=message_text,
         system_prompt=TASK_EXTRACTOR_BEDROCK,
-        model="haiku",
+        intent=intent,
     )
     try:
         details = json.loads(extraction)
@@ -196,15 +234,16 @@ async def _handle_create_task(
     )
 
     prompt = f"משימה חדשה נוצרה: {title}. צור אישור קצר בעברית."
-    return await bedrock.generate(prompt=prompt, system_prompt=FORTRESS_BASE, model="haiku")
+    return await dispatcher.dispatch(prompt=prompt, system_prompt=FORTRESS_BASE, intent=intent)
 
 
 async def _handle_complete_task(
     db: Session,
     member: FamilyMember,
     message_text: str,
-    bedrock: BedrockClient,
+    dispatcher: ModelDispatcher,
     media_file_path: str | None,
+    intent: str,
 ) -> str:
     """Identify and complete a task."""
     text = message_text.strip()
@@ -223,29 +262,31 @@ async def _handle_complete_task(
     complete_task(db, task.id)
 
     prompt = f"המשימה '{task.title}' הושלמה. צור אישור קצר ושמח בעברית."
-    return await bedrock.generate(prompt=prompt, system_prompt=FORTRESS_BASE, model="haiku")
+    return await dispatcher.dispatch(prompt=prompt, system_prompt=FORTRESS_BASE, intent=intent)
 
 
 async def _handle_greeting(
     db: Session,
     member: FamilyMember,
     message_text: str,
-    bedrock: BedrockClient,
+    dispatcher: ModelDispatcher,
     media_file_path: str | None,
+    intent: str,
 ) -> str:
-    """Generate a personalized greeting via Bedrock haiku."""
+    """Generate a personalized greeting via dispatcher."""
     prompt = f"ברך את {member.name} בברכה חמה וקצרה בעברית."
-    return await bedrock.generate(prompt=prompt, system_prompt=FORTRESS_BASE, model="haiku")
+    return await dispatcher.dispatch(prompt=prompt, system_prompt=FORTRESS_BASE, intent=intent)
 
 
 async def _handle_upload_document(
     db: Session,
     member: FamilyMember,
     message_text: str,
-    bedrock: BedrockClient,
+    dispatcher: ModelDispatcher,
     media_file_path: str | None,
+    intent: str,
 ) -> str:
-    """Save document and acknowledge via Bedrock haiku."""
+    """Save document and acknowledge via dispatcher."""
     if not media_file_path:
         return "לא התקבל קובץ. נסה לשלוח שוב."
     try:
@@ -258,7 +299,7 @@ async def _handle_upload_document(
             details={"file_path": media_file_path},
         )
         prompt = "קובץ התקבל ונשמר בהצלחה. צור אישור קצר בעברית."
-        return await bedrock.generate(prompt=prompt, system_prompt=FORTRESS_BASE, model="haiku")
+        return await dispatcher.dispatch(prompt=prompt, system_prompt=FORTRESS_BASE, intent=intent)
     except Exception:
         logger.exception("Error processing media from %s", member.phone)
         return "שגיאה בשמירת הקובץ. נסה שוב."
@@ -268,10 +309,11 @@ async def _handle_list_documents(
     db: Session,
     member: FamilyMember,
     message_text: str,
-    bedrock: BedrockClient,
+    dispatcher: ModelDispatcher,
     media_file_path: str | None,
+    intent: str,
 ) -> str:
-    """Return a summary of recent documents via Bedrock haiku."""
+    """Return a summary of recent documents via dispatcher."""
     from src.models.schema import Document
 
     docs = (
@@ -283,7 +325,7 @@ async def _handle_list_documents(
     )
     if not docs:
         prompt = "אין מסמכים. צור תשובה קצרה בעברית."
-        return await bedrock.generate(prompt=prompt, system_prompt=FORTRESS_BASE, model="haiku")
+        return await dispatcher.dispatch(prompt=prompt, system_prompt=FORTRESS_BASE, intent=intent)
 
     doc_lines = []
     for i, doc in enumerate(docs, 1):
@@ -291,19 +333,20 @@ async def _handle_list_documents(
         doc_lines.append(f"{i}. {name}")
 
     prompt = f"הנה רשימת המסמכים האחרונים:\n" + "\n".join(doc_lines)
-    return await bedrock.generate(prompt=prompt, system_prompt=FORTRESS_BASE, model="haiku")
+    return await dispatcher.dispatch(prompt=prompt, system_prompt=FORTRESS_BASE, intent=intent)
 
 
 async def _handle_ask_question(
     db: Session,
     member: FamilyMember,
     message_text: str,
-    bedrock: BedrockClient,
+    dispatcher: ModelDispatcher,
     media_file_path: str | None,
+    intent: str,
 ) -> str:
-    """Answer a question using Bedrock Sonnet (complex reasoning)."""
-    return await bedrock.generate(
-        prompt=message_text, system_prompt=FORTRESS_BASE, model="sonnet"
+    """Answer a question using dispatcher (routes to Bedrock Sonnet for high sensitivity)."""
+    return await dispatcher.dispatch(
+        prompt=message_text, system_prompt=FORTRESS_BASE, intent=intent
     )
 
 
@@ -311,8 +354,9 @@ async def _handle_unknown(
     db: Session,
     member: FamilyMember,
     message_text: str,
-    bedrock: BedrockClient,
+    dispatcher: ModelDispatcher,
     media_file_path: str | None,
+    intent: str,
 ) -> str:
     """Return a helpful message for unrecognized intents."""
     return (
@@ -386,11 +430,30 @@ async def conversation_save_node(state: WorkflowState) -> dict:
 # ---------------------------------------------------------------------------
 
 
+def _intent_router(state: WorkflowState) -> str:
+    """Conditional edge: needs_llm → unified_llm_node, otherwise → permission_node."""
+    if state.get("intent") == "needs_llm":
+        return "unified_llm_node"
+    return "permission_node"
+
+
 def _permission_router(state: WorkflowState) -> str:
-    """Conditional edge: denied → response_node, granted → memory_load_node."""
-    if state.get("permission_granted", False):
-        return "memory_load_node"
-    return "response_node"
+    """Conditional edge after permission_node.
+
+    - denied → response_node
+    - granted + from_unified + task_data → task_create_node
+    - granted + from_unified (no task_data) → response_node (skip action_node)
+    - granted + keyword origin → memory_load_node (existing behavior)
+    """
+    if not state.get("permission_granted", False):
+        return "response_node"
+
+    if state.get("from_unified", False):
+        if state.get("task_data"):
+            return "task_create_node"
+        return "response_node"
+
+    return "memory_load_node"
 
 
 def _build_graph() -> StateGraph:
@@ -405,22 +468,34 @@ def _build_graph() -> StateGraph:
     graph.add_node("response_node", response_node)
     graph.add_node("memory_save_node", memory_save_node)
     graph.add_node("conversation_save_node", conversation_save_node)
+    graph.add_node("unified_llm_node", unified_llm_node)
+    graph.add_node("task_create_node", task_create_node)
 
     # Set entry point
     graph.set_entry_point("intent_node")
 
     # Add edges
-    graph.add_edge("intent_node", "permission_node")
+    graph.add_conditional_edges(
+        "intent_node",
+        _intent_router,
+        {
+            "unified_llm_node": "unified_llm_node",
+            "permission_node": "permission_node",
+        },
+    )
+    graph.add_edge("unified_llm_node", "permission_node")
     graph.add_conditional_edges(
         "permission_node",
         _permission_router,
         {
             "memory_load_node": "memory_load_node",
             "response_node": "response_node",
+            "task_create_node": "task_create_node",
         },
     )
     graph.add_edge("memory_load_node", "action_node")
     graph.add_edge("action_node", "response_node")
+    graph.add_edge("task_create_node", "response_node")
     graph.add_edge("response_node", "memory_save_node")
     graph.add_edge("memory_save_node", "conversation_save_node")
     graph.add_edge("conversation_save_node", END)
@@ -462,6 +537,8 @@ async def run_workflow(
             "memories": [],
             "response": "",
             "error": None,
+            "task_data": None,
+            "from_unified": False,
         }
         result = await _compiled_graph.ainvoke(initial_state)
         return result["response"]

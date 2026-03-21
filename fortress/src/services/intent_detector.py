@@ -1,9 +1,6 @@
-"""Fortress 2.0 intent detector — keyword matching with LLM fallback."""
+"""Fortress 2.0 intent detector — synchronous keyword-only classification."""
 
 import logging
-
-from src.prompts.system_prompts import INTENT_CLASSIFIER
-from src.services.llm_client import OllamaClient
 
 logger = logging.getLogger(__name__)
 
@@ -21,18 +18,13 @@ INTENTS: dict[str, dict[str, str]] = {
 VALID_INTENTS: set[str] = set(INTENTS.keys())
 
 
-async def detect_intent(
-    text: str,
-    has_media: bool,
-    llm_client: OllamaClient,
-) -> str:
+def detect_intent(text: str, has_media: bool) -> str:
     """Classify a message into an intent category.
 
     Priority order:
     1. has_media → upload_document
     2. Keyword matching (Hebrew + English)
-    3. LLM fallback via Ollama
-    4. On LLM failure → unknown
+    3. No match → "needs_llm"
     """
     if has_media:
         logger.info("Intent: upload_document | method: media | msg: %s", text[:50])
@@ -43,9 +35,8 @@ async def detect_intent(
         logger.info("Intent: %s | method: keyword | msg: %s", keyword_intent, text[:50])
         return keyword_intent
 
-    llm_intent = await _detect_intent_with_llm(text, llm_client)
-    logger.info("Intent: %s | method: llm | msg: %s", llm_intent, text[:50])
-    return llm_intent
+    logger.info("Intent: needs_llm | method: no_keyword | msg: %s", text[:50])
+    return "needs_llm"
 
 
 def _match_keywords(text: str) -> str | None:
@@ -76,20 +67,3 @@ def _match_keywords(text: str) -> str | None:
         return "list_documents"
 
     return None
-
-
-async def _detect_intent_with_llm(text: str, llm_client: OllamaClient) -> str:
-    """Use Ollama to classify the message intent. Returns 'unknown' on failure."""
-    try:
-        response = await llm_client.generate(
-            prompt=text,
-            system_prompt=INTENT_CLASSIFIER,
-        )
-        intent = response.strip().lower().replace(" ", "_")
-        if intent in VALID_INTENTS:
-            return intent
-        logger.warning("LLM returned invalid intent '%s', defaulting to unknown", intent)
-        return "unknown"
-    except Exception:
-        logger.exception("LLM intent detection failed")
-        return "unknown"

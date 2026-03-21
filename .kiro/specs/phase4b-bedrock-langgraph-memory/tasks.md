@@ -27,7 +27,7 @@ Transform Fortress from Ollama-only to a hybrid AI system: AWS Bedrock (Claude 3
     - `is_available` returns `(bool, str | None)` tuple
     - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 1.10_
 
-  - [~]* 3.2 Write unit tests for BedrockClient (`fortress/tests/test_bedrock_client.py`)
+  - [ ]* 3.2 Write unit tests for BedrockClient (`fortress/tests/test_bedrock_client.py`)
     - Test generate success with mocked boto3 invoke_model
     - Test generate returns HEBREW_FALLBACK on timeout
     - Test generate returns HEBREW_FALLBACK on ClientError
@@ -69,7 +69,7 @@ Transform Fortress from Ollama-only to a hybrid AI system: AWS Bedrock (Claude 3
     - Handle LLM extraction returning invalid JSON (log warning, return empty list)
     - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7, 6.8, 6.9, 6.10_
 
-  - [~]* 7.2 Write unit tests for MemoryService (`fortress/tests/test_memory_service.py`)
+  - [ ]* 7.2 Write unit tests for MemoryService (`fortress/tests/test_memory_service.py`)
     - Test save_memory creates record with correct expiration for each memory_type
     - Test save_memory returns None when content matches keyword exclusion
     - Test save_memory returns None when content matches regex exclusion
@@ -107,7 +107,7 @@ Transform Fortress from Ollama-only to a hybrid AI system: AWS Bedrock (Claude 3
     - Port all handler logic from model_router.py (list_tasks, create_task, complete_task, greeting, upload_document, list_documents, ask_question, unknown)
     - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7, 7.8, 7.9, 7.10, 7.11_
 
-  - [~]* 10.2 Write unit tests for WorkflowEngine (`fortress/tests/test_workflow_engine.py`)
+  - [ ]* 10.2 Write unit tests for WorkflowEngine (`fortress/tests/test_workflow_engine.py`)
     - Test run_workflow greeting flow returns Bedrock-generated response
     - Test run_workflow list_tasks flow fetches tasks and formats via Bedrock
     - Test run_workflow create_task flow extracts details and creates task
@@ -147,14 +147,14 @@ Transform Fortress from Ollama-only to a hybrid AI system: AWS Bedrock (Claude 3
   - Preserve existing ollama and database status fields
   - _Requirements: 11.1, 11.2, 11.3_
 
-  - [~]* 15.1 Update health endpoint tests (`fortress/tests/test_health.py`)
+  - [ ]* 15.1 Update health endpoint tests (`fortress/tests/test_health.py`)
     - Add mock for BedrockClient.is_available in all existing health tests
     - Add test for bedrock connected status
     - Add test for bedrock disconnected status
     - _Requirements: 12.8_
 
 - [ ] 16. Create remaining unit tests
-  - [~]* 16.1 Create config tests (`fortress/tests/test_config.py`)
+  - [ ]* 16.1 Create config tests (`fortress/tests/test_config.py`)
     - Test AWS_REGION, AWS_PROFILE, BEDROCK_HAIKU_MODEL, BEDROCK_SONNET_MODEL, SYSTEM_PHONE exist with correct defaults
     - _Requirements: 12.8_
 

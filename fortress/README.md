@@ -4,12 +4,25 @@ Fortress is a sovereign, local-first family intelligence system. It manages hous
 
 ## Architecture
 
-Fortress uses a hybrid AI architecture:
+Fortress uses a hybrid AI architecture with 3-tier model routing:
 
-- **AWS Bedrock** (Claude 3.5 Haiku/Sonnet) — All Hebrew text generation. Haiku handles simple intents (greetings, task confirmations), Sonnet handles complex questions.
-- **Ollama** (llama3.1:8b) — Demoted to English-only intent classification. Fast, local, no cloud dependency for routing decisions.
-- **LangGraph StateGraph** — Replaces the old model router with a structured 7-node workflow pipeline: intent → permission → memory load → action → response → memory save → conversation save.
+- **Tier 1: Ollama** (llama3.1:8b) — Free, local. English-only intent classification. No cloud dependency for routing decisions.
+- **Tier 2: OpenRouter** (Free/Cheap models) — $0–2/month. Handles greetings, task formatting, simple responses. Non-sensitive data only.
+- **Tier 3: AWS Bedrock** (Claude 3.5 Haiku/Sonnet) — $5–15/month. Financial queries, document classification, contract analysis, complex reasoning. All sensitive/personal data.
+- **LangGraph StateGraph** — Structured 7-node workflow pipeline: intent → permission → memory load → action → response → memory save → conversation save.
 - **Three-tier memory** — Conversational context persisted across sessions with tiered expiration (short 7d, medium 90d, long 365d, permanent).
+
+### Model Routing
+
+Requests are routed based on data sensitivity:
+
+| Sensitivity | Intents | Provider Order |
+|------------|---------|----------------|
+| Low | greeting | OpenRouter → Bedrock → Ollama |
+| Medium | list_tasks, create_task, complete_task, list_documents, unknown | OpenRouter → Bedrock → Ollama |
+| High | ask_question, upload_document | Bedrock → Ollama (no OpenRouter) |
+
+Fallback chain: if the preferred provider fails, the next is tried automatically. If all fail, a hardcoded Hebrew message is returned. OpenRouter is optional — the system works without an API key.
 
 ## Quick Start
 
@@ -55,7 +68,7 @@ fortress/
 │   │   ├── __init__.py      # Prompt exports
 │   │   └── system_prompts.py # LLM prompt templates (Ollama + Bedrock)
 │   ├── routers/
-│   │   ├── health.py        # GET /health (DB + Ollama + Bedrock status)
+│   │   ├── health.py        # GET /health (DB + Ollama + Bedrock + OpenRouter status)
 │   │   └── whatsapp.py      # POST /webhook/whatsapp (WAHA handler)
 │   ├── services/
 │   │   ├── auth.py          # Phone-based auth + permissions
@@ -65,7 +78,10 @@ fortress/
 │   │   ├── intent_detector.py # Intent classification (keyword + Ollama)
 │   │   ├── llm_client.py    # Async Ollama REST API client (intent only)
 │   │   ├── memory_service.py # Three-tier memory with exclusion filtering
+│   │   ├── model_dispatch.py # Unified dispatch with fallback chain
 │   │   ├── model_router.py  # Legacy intent-based routing (kept for compat)
+│   │   ├── openrouter_client.py # OpenRouter API client (cheap/free models)
+│   │   ├── routing_policy.py # Intent → sensitivity → provider ordering
 │   │   ├── tasks.py         # Task management
 │   │   ├── recurring.py     # Recurring task patterns
 │   │   ├── message_handler.py # Thin auth layer → workflow engine
@@ -89,27 +105,29 @@ fortress/
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/health` | Health check (DB + Ollama + Bedrock status) |
+| GET | `/health` | Health check (DB + Ollama + Bedrock + OpenRouter status) |
 | POST | `/webhook/whatsapp` | WAHA webhook handler |
 
 ## Current Status
 
-Phase 4B — Hybrid AI with LangGraph workflow and memory. The current implementation includes:
+Phase 4B.5 — 3-Tier Model Routing with OpenRouter and Fallbacks. The current implementation includes:
 
 - Four-container Docker Compose: PostgreSQL 16 + FastAPI + WAHA + Ollama
-- Hybrid AI: AWS Bedrock (Claude 3.5 Haiku/Sonnet) for Hebrew, Ollama for intent classification
-- LangGraph StateGraph workflow replacing the model router
+- 3-tier AI routing: Ollama (intent), OpenRouter (cheap/free), Bedrock (sensitive/complex)
+- Sensitivity-based routing policy: high-sensitivity data never leaves Bedrock
+- Automatic fallback chain: preferred provider → next → hardcoded Hebrew
+- LangGraph StateGraph workflow with ModelDispatcher integration
 - Three-tier memory system (short/medium/long/permanent) with exclusion filtering
 - PostgreSQL schema with 10 tables (including memories and memory_exclusions)
 - Phone-based auth with role-based permissions
 - AI-powered intent detection with keyword matching and Ollama LLM fallback
 - Task management with recurring patterns (daily/weekly/monthly/yearly)
-- Natural language task creation and completion via Bedrock
+- Natural language task creation and completion via dispatcher
 - Media download and storage from WhatsApp
 - Audit logging for all actions
 - Conversation history tracking with detected intents
 - Echo prevention via WAHA `fromMe` field
-- Health endpoint monitoring DB, Ollama, and Bedrock connectivity
+- Health endpoint monitoring DB, Ollama, Bedrock, and OpenRouter connectivity
 
 ## Development
 
@@ -136,7 +154,7 @@ All 91 tests should pass. Tests use mocked dependencies — no Docker or databas
 
 ### Current Phase
 
-Phase 4B Complete — Bedrock + LangGraph + Memory System. 91 passing tests, 10 database tables, 4 Docker services.
+Phase 4B.5 Complete — 3-Tier Model Routing + OpenRouter + Fallbacks. 130 passing tests, 10 database tables, 4 Docker services.
 
 ## Deployment
 

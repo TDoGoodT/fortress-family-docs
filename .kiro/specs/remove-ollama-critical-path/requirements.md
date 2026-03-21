@@ -67,11 +67,12 @@ Fortress 2.0 currently uses Ollama for intent classification on every message th
 2. WHEN intent_node returns "needs_llm", THE Workflow_Engine SHALL route the message to the Unified_LLM_Node.
 3. WHEN intent_node returns any intent other than "needs_llm", THE Workflow_Engine SHALL route the message to permission_node (existing behavior).
 4. THE Unified_LLM_Node SHALL call `handle_with_llm()` and set the state "intent" and "response" fields from the result.
-5. WHEN the Unified_LLM_Node receives a "create_task" intent with task details, THE Unified_LLM_Node SHALL create the task via the task service.
+5. WHEN the Unified_LLM_Node receives a "create_task" intent with task details, THE Unified_LLM_Node SHALL store the task details in workflow state but SHALL NOT create the task. Task creation SHALL occur only after permission_node grants access.
 6. AFTER the Unified_LLM_Node completes, THE Workflow_Engine SHALL route to permission_node so that permission checks are applied to the LLM-classified intent.
 7. WHEN permission is granted after Unified_LLM_Node, THE Workflow_Engine SHALL skip action_node (response is already generated) and proceed to response_node.
 8. WHEN permission is denied after Unified_LLM_Node, THE Workflow_Engine SHALL replace the LLM-generated response with the denial message.
 9. THE Workflow_Engine intent_node SHALL NOT import or instantiate OllamaClient.
+10. WHEN permission is granted and state contains task_data from the Unified_LLM_Node, THE Workflow_Engine SHALL create the task via the task service before proceeding to response_node.
 
 ### Requirement 5: Ollama Removal from Intent Path Only
 
