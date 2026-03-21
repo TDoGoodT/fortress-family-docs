@@ -105,3 +105,25 @@ fortress/
 ## License
 
 Private — Family use only.
+
+## Roadmap & Version History
+
+### Current Version: Phase 4B.6
+
+| Phase | Status | Description | Tests |
+|-------|--------|-------------|-------|
+| 1.0 — Foundation | ✅ Complete | 6 tables, FastAPI, Docker, auth, audit | 10 |
+| 2.0 — Tasks | ✅ Complete | Tasks + recurring patterns | 28 |
+| 3.0 — WhatsApp | ✅ Complete | WAHA integration, message handler | 52 |
+| 3.5 — Deploy | ✅ Complete | Mac Mini deployment, permissions, seed | 52 |
+| 4A — Local AI | ✅ Complete | Ollama, intent detection, model router | 89 |
+| 4A — Hotfix | ✅ Complete | WAHA config, logging fixes | 89 |
+| 4B — Bedrock + Memory | ✅ Complete | AWS Bedrock, LangGraph, memory system | 91 |
+| 4B.5 — Model Routing | ✅ Complete | OpenRouter, 3-tier routing, fallbacks | 130 |
+| 4B.6 — Ollama Cleanup | ✅ Complete | Remove Ollama from critical path, unified LLM | 150 |
+| 5A — OCR | 📋 Planned | Document intelligence, invoice scanning | — |
+| 5B — Scheduler | 📋 Planned | Cron for recurring tasks, WhatsApp alerts | — |
+| 5C — RAG | 📋 Planned | pgvector, document Q&A, contract analysis | — |
+| 6.0 — NAS + Backup | 📋 Planned | NAS storage, Restic → Backblaze B2 | — |
+| 7.0 — Email | 📋 Planned | IMAP polling, auto-ingest from email | — |
+| 8.0 — Hardening | 📋 Planned | Monitoring, auto-restart, rate limiting | — |
