@@ -1,0 +1,113 @@
+# Implementation Plan
+
+- [x] 1. Add `_heal_json()` and update `handle_with_llm()` in unified_handler.py
+  - [x] 1.1 Add `_heal_json(raw: str) -> dict | None` with 4 ordered strategies
+    - Strategy 1: Direct `json.loads(raw)` — handles clean JSON
+    - Strategy 2: Strip markdown code fences (` ```json ... ``` ` and ` ``` ... ``` `) then parse
+    - Strategy 3: Regex extraction — `re.search(r'\{.*\}', raw, re.DOTALL)` then parse
+    - Strategy 4: First-brace-to-last-brace — `raw[raw.index('{'):raw.rindex('}')+1]` then parse
+    - Return `None` if all strategies fail
+    - Log which strategy succeeded at DEBUG level
+    - _Bug_Condition: json.loads(raw) raises JSONDecodeError when raw contains valid JSON wrapped in markdown, prefixed text, or embedded text_
+    - _Expected_Behavior: _heal_json extracts and returns parsed dict via progressive strategies_
+    - _Requirements: 2.1, 2.2, 2.3_
+  - [x] 1.2 Update `handle_with_llm()` to use `_heal_json(raw)` instead of `json.loads(raw)`
+    - If `_heal_json` returns a dict → extract intent, response, task_data as before
+    - If `_heal_json` returns `None` AND `raw.strip()` is non-empty → return `("unknown", raw.strip(), None)` (raw text fallback — never discard valid Hebrew text)
+    - If `_heal_json` returns `None` AND `raw.strip()` is empty → return `("unknown", HEBREW_FALLBACK_MSG, None)`
+    - Log the decision path (healed, raw-fallback, or empty-fallback)
+    - _Bug_Condition: plain text or Hebrew responses cause JSONDecodeError and return fallback instead of using the raw text_
+    - _Expected_Behavior: non-JSON text used as response with intent="unknown"; Hebrew text never discarded_
+    - _Requirements: 2.4, 3.3_
+
+- [x] 2. Add `response_format` to OpenRouter payloads with retry fallback in openrouter_client.py
+  - [x] 2.1 Add `"response_format": {"type": "json_object"}` to the payload in `generate()`
+    - _Requirements: 2.7_
+  - [x] 2.2 Add retry fallback: if API returns error indicating model doesn't support structured output, retry once without `response_format`
+    - Log the retry at WARNING level
+    - _Requirements: 2.7_
+
+- [x] 3. Protect response integrity in workflow_engine.py
+  - [x] 3.1 Guard `memory_save_node` return value — ensure it always returns `{}`, strip any `"response"` key if present, log warning
+    - Memory failures must NEVER affect user-facing response
+    - _Bug_Condition: node returns dict with "response" key → LangGraph merges and overwrites LLM response_
+    - _Expected_Behavior: node always returns {} — LLM response in state is never overwritten_
+    - _Requirements: 2.5, 3.7_
+  - [x] 3.2 Guard `conversation_save_node` return value — same protection as memory_save_node
+    - _Requirements: 2.5, 3.7_
+
+- [x] 4. Add `_is_valid_response()` to model_dispatch.py
+  - [x] 4.1 Add `_is_valid_response(result: str) -> bool` function
+    - Returns `False` for: result equals HEBREW_FALLBACK, result.strip() is empty, len(result.strip()) < 2
+    - Log invalid responses at WARNING level
+    - _Requirements: 2.6_
+  - [x] 4.2 Replace `if result != HEBREW_FALLBACK:` with `if _is_valid_response(result):` in the dispatch loop
+    - _Bug_Condition: empty/whitespace strings pass `result != HEBREW_FALLBACK` check_
+    - _Expected_Behavior: empty, whitespace-only, and too-short strings treated as failure → fallback to next provider_
+    - _Requirements: 2.6_
+
+- [x] 5. Add JSON-only hint to unified prompt in system_prompts.py
+  - Append stronger instruction to `UNIFIED_CLASSIFY_AND_RESPOND`:
+    - `"חשוב מאוד: החזר JSON תקין בלבד. אל תעטוף ב-markdown, אל תוסיף הסברים לפני או אחרי ה-JSON."`
+  - _Requirements: 2.1, 2.2, 2.3_
+
+- [x] 6. Add structured logging to all modified files
+  - [x] 6.1 Add logging in `_heal_json()` — log each strategy attempt and which one succeeded (DEBUG), log when all strategies fail (WARNING)
+  - [x] 6.2 Add logging in `handle_with_llm()` — log raw-text fallback decisions, log empty-fallback decisions
+  - [x] 6.3 Add logging in `_is_valid_response()` — log rejected responses at WARNING level
+  - [x] 6.4 Add logging in `memory_save_node` / `conversation_save_node` — log if a `"response"` key was stripped from return dict
+  - [x] 6.5 Add logging in `openrouter_client.py` — log `response_format` retry attempts
+  - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7_
+
+- [x] 7. Create test_json_healing.py and update existing test files
+  - [x] 7.1 Create `fortress/tests/test_json_healing.py` with unit tests for `_heal_json()`
+    - `test_heal_json_clean_json` — direct parse succeeds on first strategy
+    - `test_heal_json_markdown_fences` — strips ` ```json ... ``` ` and parses
+    - `test_heal_json_markdown_fences_no_lang` — strips ` ``` ... ``` ` without language tag
+    - `test_heal_json_prefixed_text` — regex extracts JSON after prefix text
+    - `test_heal_json_embedded_json` — first-brace-to-last-brace extracts embedded JSON
+    - `test_heal_json_plain_text_returns_none` — returns None for non-JSON text
+    - `test_heal_json_empty_string_returns_none` — returns None for empty input
+    - `test_heal_json_nested_braces` — correctly handles nested {} in JSON
+    - `test_heal_json_hebrew_text_returns_none` — returns None for Hebrew-only text (not discarded by caller)
+    - _Requirements: 2.1, 2.2, 2.3, 2.4_
+  - [x] 7.2 Add tests to `fortress/tests/test_unified_handler.py`
+    - `test_markdown_wrapped_json_healed` — markdown-fenced JSON returns correct intent/response
+    - `test_prefixed_json_healed` — prefixed JSON returns correct intent/response
+    - `test_embedded_json_healed` — embedded JSON returns correct intent/response
+    - `test_plain_text_raw_fallback` — plain text returns ("unknown", raw_text, None) not fallback
+    - `test_hebrew_plain_text_preserved_as_response` — Hebrew text used as response, never discarded
+    - `test_empty_raw_returns_fallback` — empty LLM output still returns HEBREW_FALLBACK_MSG
+    - _Requirements: 2.1, 2.2, 2.3, 2.4, 3.1, 3.3_
+  - [x] 7.3 Add tests to `fortress/tests/test_model_dispatch.py`
+    - `test_empty_string_treated_as_failure` — "" triggers fallback to next provider
+    - `test_whitespace_only_treated_as_failure` — "   " triggers fallback
+    - `test_too_short_treated_as_failure` — "." triggers fallback
+    - `test_valid_hebrew_not_rejected` — valid Hebrew response accepted
+    - _Requirements: 2.6, 3.3_
+  - [x] 7.4 Add tests to `fortress/tests/test_workflow_engine.py`
+    - `test_memory_save_node_never_returns_response_key` — assert "response" not in return dict
+    - `test_conversation_save_node_never_returns_response_key` — assert "response" not in return dict
+    - `test_memory_save_failure_does_not_affect_response` — exception preserves LLM response
+    - `test_conversation_save_failure_does_not_affect_response` — exception preserves LLM response
+    - _Requirements: 2.5, 3.7_
+  - [x] 7.5 Add tests to `fortress/tests/test_openrouter_client.py`
+    - `test_generate_sends_response_format` — payload includes response_format
+    - `test_generate_retries_without_response_format_on_error` — retry fallback works
+    - _Requirements: 2.7_
+
+- [x] 8. Run all tests and verify 150+ pass
+  - Run `cd fortress && python -m pytest tests/ -v` and confirm all existing 150 tests + new tests pass
+  - No test in the existing suite may be modified or deleted
+  - _Preservation: Requirements 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7_
+
+- [x] 9. Update README roadmap
+  - Add a row for `4B.7 — Pipeline Resilience` between 4B.6 and 5A in the roadmap table
+  - Mark it ✅ Complete with updated test count
+  - Update the "Status" line to reflect Phase 4B.7
+  - _Requirements: documentation_
+
+- [-] 10. Git commit and push to origin main
+  - Stage all changed files
+  - Commit with message: `fix: pipeline resilience — JSON healing, response validation, state protection`
+  - Push to `origin main`

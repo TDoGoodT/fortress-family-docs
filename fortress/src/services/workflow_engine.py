@@ -387,13 +387,21 @@ _ACTION_HANDLERS: dict = {
 # ---------------------------------------------------------------------------
 
 
+def _safe_node_return(result: dict, node_name: str) -> dict:
+    """Strip 'response' key from node return dicts to prevent state overwrites."""
+    if "response" in result:
+        logger.warning("%s: stripped 'response' key from return dict to protect state", node_name)
+        result.pop("response")
+    return result
+
+
 async def response_node(state: WorkflowState) -> dict:
     """Pass through — response is already set by action_node or permission_node."""
     return {}
 
 
 async def memory_save_node(state: WorkflowState) -> dict:
-    """Extract and save memories from the conversation exchange."""
+    """Extract and save memories from the conversation exchange. Never affects response."""
     # Skip memory extraction for simple intents like greeting
     if state.get("intent") == "greeting":
         return {}
@@ -408,11 +416,12 @@ async def memory_save_node(state: WorkflowState) -> dict:
         )
     except Exception:
         logger.exception("memory_save_node failed")
+    # NEVER return a "response" key — protect LLM response in state
     return {}
 
 
 async def conversation_save_node(state: WorkflowState) -> dict:
-    """Save the conversation record to the database."""
+    """Save the conversation record to the database. Never affects response."""
     try:
         conv = Conversation(
             family_member_id=state["member"].id,
@@ -424,6 +433,7 @@ async def conversation_save_node(state: WorkflowState) -> dict:
         state["db"].commit()
     except Exception:
         logger.exception("conversation_save_node failed")
+    # NEVER return a "response" key — protect LLM response in state
     return {}
 
 

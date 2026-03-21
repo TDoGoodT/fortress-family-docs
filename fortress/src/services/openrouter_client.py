@@ -56,30 +56,55 @@ class OpenRouterClient:
         payload = {
             "model": chosen_model,
             "messages": messages,
-            "max_tokens": 512,
+            "max_tokens": 1024,
+            "response_format": {"type": "json_object"},
         }
 
         start = time.monotonic()
         try:
             logger.info(
-                "OpenRouter request: model=%s | prompt_len=%d",
+                "OpenRouter request: model=%s | prompt_len=%d | json_mode=True",
                 chosen_model, len(prompt),
             )
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.post(
-                    f"{BASE_URL}/chat/completions",
-                    headers=headers,
-                    json=payload,
+            result = await self._send_request(headers, payload)
+            elapsed = time.monotonic() - start
+            logger.info(
+                "OpenRouter response: len=%d | time=%.1fs",
+                len(result), elapsed,
+            )
+            return result
+        except httpx.HTTPStatusError as exc:
+            body = exc.response.text[:500] if hasattr(exc.response, "text") else ""
+            # Retry without response_format if model doesn't support it
+            if exc.response.status_code == 400 and (
+                "response_format" in body.lower() or "json" in body.lower()
+            ):
+                logger.warning(
+                    "OpenRouter: model %s doesn't support json mode, retrying without response_format",
+                    chosen_model,
                 )
-                response.raise_for_status()
-                data = response.json()
-                result = data["choices"][0]["message"]["content"]
-                elapsed = time.monotonic() - start
-                logger.info(
-                    "OpenRouter response: len=%d | time=%.1fs",
-                    len(result), elapsed,
-                )
-                return result
+                payload.pop("response_format", None)
+                try:
+                    result = await self._send_request(headers, payload)
+                    elapsed = time.monotonic() - start
+                    logger.info(
+                        "OpenRouter response (no json mode): len=%d | time=%.1fs",
+                        len(result), elapsed,
+                    )
+                    return result
+                except Exception as retry_exc:
+                    elapsed = time.monotonic() - start
+                    logger.error(
+                        "OpenRouter retry failed: %s: %s model=%s time=%.1fs",
+                        type(retry_exc).__name__, retry_exc, chosen_model, elapsed,
+                    )
+                    return HEBREW_FALLBACK
+            elapsed = time.monotonic() - start
+            logger.error(
+                "OpenRouter HTTP error: status=%s model=%s time=%.1fs body=%s",
+                exc.response.status_code, chosen_model, elapsed, body,
+            )
+            return HEBREW_FALLBACK
         except httpx.TimeoutException:
             elapsed = time.monotonic() - start
             logger.error(
@@ -94,14 +119,6 @@ class OpenRouterClient:
                 chosen_model, elapsed,
             )
             return HEBREW_FALLBACK
-        except httpx.HTTPStatusError as exc:
-            elapsed = time.monotonic() - start
-            body = exc.response.text[:500]
-            logger.error(
-                "OpenRouter HTTP error: status=%s model=%s time=%.1fs body=%s",
-                exc.response.status_code, chosen_model, elapsed, body,
-            )
-            return HEBREW_FALLBACK
         except Exception as exc:
             elapsed = time.monotonic() - start
             logger.error(
@@ -109,6 +126,21 @@ class OpenRouterClient:
                 type(exc).__name__, exc, chosen_model, elapsed,
             )
             return HEBREW_FALLBACK
+
+    async def _send_request(self, headers: dict, payload: dict) -> str:
+        """Send a single request to OpenRouter and return the content string.
+
+        Raises httpx exceptions on failure (caller handles).
+        """
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                f"{BASE_URL}/chat/completions",
+                headers=headers,
+                json=payload,
+            )
+            response.raise_for_status()
+            data = response.json()
+            return data["choices"][0]["message"]["content"]
 
     async def is_available(self) -> tuple[bool, str | None]:
         """Check if OpenRouter is reachable and API key is configured.

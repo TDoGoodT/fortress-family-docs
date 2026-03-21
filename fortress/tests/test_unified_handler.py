@@ -69,11 +69,11 @@ async def test_create_task_without_task_data() -> None:
 
 
 @pytest.mark.asyncio
-async def test_invalid_json_returns_fallback() -> None:
+async def test_invalid_json_returns_raw_text() -> None:
     d = _mock_dispatcher("this is not json at all")
     intent, response, task_data = await handle_with_llm("test", "user", [], d)
     assert intent == "unknown"
-    assert response == HEBREW_FALLBACK_MSG
+    assert response == "this is not json at all"
     assert task_data is None
 
 
@@ -113,3 +113,67 @@ async def test_logging_output(caplog: pytest.LogCaptureFixture) -> None:
     assert any("intent=greeting" in r.message for r in caplog.records)
     assert any("response_len=" in r.message for r in caplog.records)
     assert any("elapsed=" in r.message for r in caplog.records)
+
+
+# ── JSON healing integration ─────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_markdown_wrapped_json_healed() -> None:
+    """Markdown-fenced JSON returns correct intent/response."""
+    raw = '```json\n{"intent": "greeting", "response": "שלום וברכה!"}\n```'
+    d = _mock_dispatcher(raw)
+    intent, response, task_data = await handle_with_llm("שלום", "אבא", [], d)
+    assert intent == "greeting"
+    assert response == "שלום וברכה!"
+    assert task_data is None
+
+
+@pytest.mark.asyncio
+async def test_prefixed_json_healed() -> None:
+    """Prefixed JSON returns correct intent/response."""
+    raw = 'Here is the response: {"intent": "greeting", "response": "שלום!"}'
+    d = _mock_dispatcher(raw)
+    intent, response, task_data = await handle_with_llm("שלום", "אבא", [], d)
+    assert intent == "greeting"
+    assert response == "שלום!"
+
+
+@pytest.mark.asyncio
+async def test_embedded_json_healed() -> None:
+    """Embedded JSON returns correct intent/response."""
+    raw = 'text before {"intent": "unknown", "response": "לא ברור"} text after'
+    d = _mock_dispatcher(raw)
+    intent, response, task_data = await handle_with_llm("test", "user", [], d)
+    assert intent == "unknown"
+    assert response == "לא ברור"
+
+
+@pytest.mark.asyncio
+async def test_plain_text_raw_fallback() -> None:
+    """Plain text returns (unknown, raw_text, None) not fallback."""
+    d = _mock_dispatcher("this is just plain text with no json")
+    intent, response, task_data = await handle_with_llm("test", "user", [], d)
+    assert intent == "unknown"
+    assert response == "this is just plain text with no json"
+    assert response != HEBREW_FALLBACK_MSG
+    assert task_data is None
+
+
+@pytest.mark.asyncio
+async def test_hebrew_plain_text_preserved_as_response() -> None:
+    """Hebrew text used as response, never discarded."""
+    d = _mock_dispatcher("שלום, מה שלומך היום?")
+    intent, response, task_data = await handle_with_llm("test", "user", [], d)
+    assert intent == "unknown"
+    assert response == "שלום, מה שלומך היום?"
+    assert response != HEBREW_FALLBACK_MSG
+
+
+@pytest.mark.asyncio
+async def test_empty_raw_returns_fallback() -> None:
+    """Empty LLM output still returns HEBREW_FALLBACK_MSG."""
+    d = _mock_dispatcher("")
+    intent, response, task_data = await handle_with_llm("test", "user", [], d)
+    assert intent == "unknown"
+    assert response == HEBREW_FALLBACK_MSG

@@ -114,7 +114,7 @@ Replace the two-call message flow (Ollama intent classification → LLM response
     - Update the Status section to reflect Phase 4B.6 completion with "✅ Complete" and final test count
     - _Requirements: 7.1_
 
-- [-] 9. Final checkpoint — Full test suite and git push
+- [x] 9. Final checkpoint — Full test suite and git push
   - Run `pytest fortress/tests/ -v` and confirm all tests pass with final count
   - Run `git add -A && git commit -m "feat: remove Ollama from critical path — unified classify+respond"` and `git push origin main`
   - Ensure all tests pass, ask the user if questions arise.

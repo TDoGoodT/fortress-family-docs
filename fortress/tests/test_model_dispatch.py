@@ -162,3 +162,56 @@ async def test_dispatch_logs_attempts():
         await dispatcher.dispatch("hello", "sys", "greeting")
     # Should have logged the successful dispatch
     assert mock_logger.info.call_count >= 1
+
+
+# ── _is_valid_response validation ────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_empty_string_treated_as_failure():
+    """Empty string triggers fallback to next provider."""
+    dispatcher, bedrock, openrouter, ollama, key = _make_dispatcher(
+        openrouter_result="",
+        bedrock_result="bedrock answer",
+    )
+    with patch("src.services.model_dispatch.OPENROUTER_API_KEY", key):
+        result = await dispatcher.dispatch("hello", "sys", "greeting")
+    assert result == "bedrock answer"
+    openrouter.generate.assert_called_once()
+    bedrock.generate.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_whitespace_only_treated_as_failure():
+    """Whitespace-only string triggers fallback."""
+    dispatcher, bedrock, openrouter, ollama, key = _make_dispatcher(
+        openrouter_result="   \n  ",
+        bedrock_result="bedrock answer",
+    )
+    with patch("src.services.model_dispatch.OPENROUTER_API_KEY", key):
+        result = await dispatcher.dispatch("hello", "sys", "greeting")
+    assert result == "bedrock answer"
+
+
+@pytest.mark.asyncio
+async def test_too_short_treated_as_failure():
+    """Single-char string triggers fallback."""
+    dispatcher, bedrock, openrouter, ollama, key = _make_dispatcher(
+        openrouter_result=".",
+        bedrock_result="bedrock answer",
+    )
+    with patch("src.services.model_dispatch.OPENROUTER_API_KEY", key):
+        result = await dispatcher.dispatch("hello", "sys", "greeting")
+    assert result == "bedrock answer"
+
+
+@pytest.mark.asyncio
+async def test_valid_hebrew_not_rejected():
+    """Valid Hebrew response is accepted, not confused with fallback."""
+    dispatcher, bedrock, openrouter, ollama, key = _make_dispatcher(
+        openrouter_result="שלום, מה שלומך?",
+    )
+    with patch("src.services.model_dispatch.OPENROUTER_API_KEY", key):
+        result = await dispatcher.dispatch("hello", "sys", "greeting")
+    assert result == "שלום, מה שלומך?"
+    bedrock.generate.assert_not_called()

@@ -78,5 +78,6 @@ UNIFIED_CLASSIFY_AND_RESPOND: str = (
     "החזר JSON בלבד בפורמט הבא:\n"
     '{"intent": "...", "response": "...", "task_data": {...}}\n\n'
     "task_data נדרש רק כאשר intent הוא create_task.\n"
-    "אל תוסיף טקסט מחוץ ל-JSON."
+    "אל תוסיף טקסט מחוץ ל-JSON.\n\n"
+    "חשוב מאוד: החזר JSON תקין בלבד. אל תעטוף ב-markdown, אל תוסיף הסברים לפני או אחרי ה-JSON."
 )

@@ -14,6 +14,19 @@ from src.services.routing_policy import get_route, get_sensitivity
 logger = logging.getLogger(__name__)
 
 
+def _is_valid_response(result: str) -> bool:
+    """Check if LLM response is usable (not empty, not fallback, not too short)."""
+    if not result or not result.strip():
+        logger.warning("Dispatch: rejected empty/whitespace response")
+        return False
+    if result == HEBREW_FALLBACK:
+        return False
+    if len(result.strip()) < 2:
+        logger.warning("Dispatch: rejected too-short response (%d chars)", len(result.strip()))
+        return False
+    return True
+
+
 class ModelDispatcher:
     """Unified dispatch service that tries providers in routing order."""
 
@@ -45,7 +58,7 @@ class ModelDispatcher:
         for provider in route:
             try:
                 result = await self._try_provider(provider, prompt, system_prompt, intent)
-                if result != HEBREW_FALLBACK:
+                if _is_valid_response(result):
                     elapsed = time.monotonic() - start
                     logger.info(
                         "Dispatch: intent=%s sensitivity=%s provider=%s "

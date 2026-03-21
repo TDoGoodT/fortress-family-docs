@@ -190,3 +190,62 @@ async def test_is_available_with_empty_key():
         assert ok is False
         assert model is None
         mock_cls.assert_not_called()
+
+
+# ── response_format and retry ────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_generate_sends_response_format():
+    """Payload includes response_format: json_object."""
+    client = OpenRouterClient(api_key="test-key", model="test-model")
+    mock_resp = _mock_response("ok")
+
+    with patch("src.services.openrouter_client.httpx.AsyncClient") as mock_cls:
+        mock_http = AsyncMock()
+        mock_http.post = AsyncMock(return_value=mock_resp)
+        mock_http.__aenter__ = AsyncMock(return_value=mock_http)
+        mock_http.__aexit__ = AsyncMock(return_value=False)
+        mock_cls.return_value = mock_http
+
+        await client.generate("hello", "sys")
+        call_kwargs = mock_http.post.call_args
+        payload = call_kwargs.kwargs.get("json") or call_kwargs[1].get("json")
+        assert payload["response_format"] == {"type": "json_object"}
+
+
+@pytest.mark.asyncio
+async def test_generate_retries_without_response_format_on_error():
+    """Retry without response_format when model returns 400 about json."""
+    client = OpenRouterClient(api_key="test-key", model="test-model")
+
+    # First call raises 400 with response_format error
+    error_resp = MagicMock()
+    error_resp.status_code = 400
+    error_resp.text = "response_format is not supported by this model"
+    error_resp.raise_for_status.side_effect = httpx.HTTPStatusError(
+        "400", request=MagicMock(), response=error_resp,
+    )
+
+    # Second call succeeds
+    success_resp = _mock_response("retry success")
+
+    call_count = 0
+
+    async def mock_post(*args, **kwargs):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            return error_resp
+        return success_resp
+
+    with patch("src.services.openrouter_client.httpx.AsyncClient") as mock_cls:
+        mock_http = AsyncMock()
+        mock_http.post = mock_post
+        mock_http.__aenter__ = AsyncMock(return_value=mock_http)
+        mock_http.__aexit__ = AsyncMock(return_value=False)
+        mock_cls.return_value = mock_http
+
+        result = await client.generate("hello", "sys")
+        assert result == "retry success"
+        assert call_count == 2

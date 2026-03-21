@@ -168,3 +168,50 @@ def test_ollama_in_fallback_chain() -> None:
     from src.services.routing_policy import ROUTE_MAP
     for level, providers in ROUTE_MAP.items():
         assert "ollama" in providers, f"'ollama' missing from {level} route"
+
+
+# ── Response protection (Properties 4, 6) ────────────────────────
+
+from src.services.workflow_engine import memory_save_node, conversation_save_node
+
+
+@pytest.mark.asyncio
+@patch("src.services.workflow_engine.BedrockClient")
+@patch("src.services.workflow_engine.extract_memories_from_message", new_callable=AsyncMock)
+async def test_memory_save_node_never_returns_response_key(mock_extract, mock_bedrock) -> None:
+    """memory_save_node must never return a 'response' key."""
+    state = _make_state(intent="ask_question", response="LLM answer")
+    result = await memory_save_node(state)
+    assert "response" not in result
+
+
+@pytest.mark.asyncio
+async def test_conversation_save_node_never_returns_response_key() -> None:
+    """conversation_save_node must never return a 'response' key."""
+    db = MagicMock()
+    state = _make_state(intent="greeting", response="שלום!")
+    state["db"] = db
+    result = await conversation_save_node(state)
+    assert "response" not in result
+
+
+@pytest.mark.asyncio
+@patch("src.services.workflow_engine.BedrockClient")
+@patch("src.services.workflow_engine.extract_memories_from_message", new_callable=AsyncMock)
+async def test_memory_save_failure_does_not_affect_response(mock_extract, mock_bedrock) -> None:
+    """Exception in memory save preserves LLM response."""
+    mock_extract.side_effect = Exception("memory extraction failed")
+    state = _make_state(intent="ask_question", response="LLM answer")
+    result = await memory_save_node(state)
+    assert "response" not in result
+
+
+@pytest.mark.asyncio
+async def test_conversation_save_failure_does_not_affect_response() -> None:
+    """Exception in conversation save preserves LLM response."""
+    db = MagicMock()
+    db.add.side_effect = Exception("db error")
+    state = _make_state(intent="greeting", response="שלום!")
+    state["db"] = db
+    result = await conversation_save_node(state)
+    assert "response" not in result

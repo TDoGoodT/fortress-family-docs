@@ -68,7 +68,7 @@ fortress/
 ├── src/           # Application code
 ├── migrations/    # Database schema (4 migration files, 10 tables)
 ├── scripts/       # Deployment & setup scripts
-├── tests/         # Test suite (150 tests)
+├── tests/         # Test suite (175 tests)
 ├── docs/          # Architecture & setup documentation
 └── docker-compose.yml
 ```
@@ -90,9 +90,9 @@ fortress/
 
 ## Status
 
-**Phase 4B.6 Complete — Bedrock + LangGraph + Memory + Unified Classify+Respond**
+**Phase 4B.7 Complete — Pipeline Resilience Hotfix**
 
-- ✅ 150 passing tests
+- ✅ 175 passing tests
 - ✅ 10 database tables
 - ✅ 4 Docker services
 - ✅ WhatsApp integration
@@ -101,6 +101,7 @@ fortress/
 - ✅ Memory system with PII exclusions
 - ✅ Permission-based access control
 - ✅ Ollama removed from critical path — unified classify+respond
+- ✅ JSON healing — resilient to imperfect LLM output
 
 ## License
 
@@ -108,7 +109,7 @@ Private — Family use only.
 
 ## Roadmap & Version History
 
-### Current Version: Phase 4B.6
+### Current Version: Phase 4B.7
 
 | Phase | Status | Description | Tests |
 |-------|--------|-------------|-------|
@@ -121,6 +122,7 @@ Private — Family use only.
 | 4B — Bedrock + Memory | ✅ Complete | AWS Bedrock, LangGraph, memory system | 91 |
 | 4B.5 — Model Routing | ✅ Complete | OpenRouter, 3-tier routing, fallbacks | 130 |
 | 4B.6 — Ollama Cleanup | ✅ Complete | Remove Ollama from critical path, unified LLM | 150 |
+| 4B.7 — Pipeline Resilience | ✅ Complete | JSON healing, response protection, logging | 175 |
 | 5A — OCR | 📋 Planned | Document intelligence, invoice scanning | — |
 | 5B — Scheduler | 📋 Planned | Cron for recurring tasks, WhatsApp alerts | — |
 | 5C — RAG | 📋 Planned | pgvector, document Q&A, contract analysis | — |
