@@ -28,8 +28,7 @@ OLLAMA_MODEL: str = os.getenv("OLLAMA_MODEL", "llama3.1:8b")
 
 # AWS Bedrock
 AWS_REGION: str = os.getenv("AWS_REGION", "us-east-1")
-AWS_PROFILE: str = os.getenv("AWS_PROFILE", "fortress")
-BEDROCK_HAIKU_MODEL: str = os.getenv("BEDROCK_HAIKU_MODEL", "anthropic.claude-3-5-haiku-20241022-v1:0")
+BEDROCK_HAIKU_MODEL: str = os.getenv("BEDROCK_HAIKU_MODEL", "anthropic.claude-3-haiku-20240307-v1:0")
 BEDROCK_SONNET_MODEL: str = os.getenv("BEDROCK_SONNET_MODEL", "anthropic.claude-3-5-sonnet-20241022-v2:0")
 
 # Phone identity

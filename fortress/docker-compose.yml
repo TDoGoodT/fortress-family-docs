@@ -35,13 +35,13 @@ services:
       ADMIN_PHONE: ${ADMIN_PHONE:-972542364393}
       OLLAMA_API_URL: http://ollama:11434
       AWS_REGION: ${AWS_REGION:-us-east-1}
-      AWS_PROFILE: ${AWS_PROFILE:-fortress}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
       SYSTEM_PHONE: ${SYSTEM_PHONE:-}
     ports:
       - "8000:8000"
     volumes:
       - ${STORAGE_PATH:-./storage}:/data/documents
-      - ~/.aws:/root/.aws:ro
 
   ollama:
     image: ollama/ollama:latest
