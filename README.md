@@ -90,7 +90,7 @@ fortress/
 
 ## Status
 
-**Phase STABLE-4 Complete — Document Flow**
+**Phase STABLE-5 Complete — Recurring Scheduler**
 
 - ✅ 254 passing tests
 - ✅ 10 database tables
@@ -109,7 +109,7 @@ Private — Family use only.
 
 ## Roadmap & Version History
 
-### Current Version: Phase STABLE-4
+### Current Version: Phase STABLE-5
 
 | Phase | Status | Description | Tests |
 |-------|--------|-------------|-------|
@@ -126,8 +126,8 @@ Private — Family use only.
 | STABLE-2 — Agent Personality | ✅ Complete | Centralised Hebrew personality, templates, consistent tone | 201 |
 | STABLE-3 — Core Flows Hardening | ✅ Complete | Delete tasks, ownership, dedup, prompt cleanup, migration | 228 |
 | STABLE-4 — Document Flow | ✅ Complete | Document storage, metadata, list/upload personality templates | 254 |
+| STABLE-5 — Recurring Scheduler | ✅ Complete | Recurring task scheduler, WhatsApp notifications, pattern management | 254+ |
 | 5A — OCR | 📋 Planned | Document intelligence, invoice scanning | — |
-| 5B — Scheduler | 📋 Planned | Cron for recurring tasks, WhatsApp alerts | — |
 | 5C — RAG | 📋 Planned | pgvector, document Q&A, contract analysis | — |
 | 6.0 — NAS + Backup | 📋 Planned | NAS storage, Restic → Backblaze B2 | — |
 | 7.0 — Email | 📋 Planned | IMAP polling, auto-ingest from email | — |

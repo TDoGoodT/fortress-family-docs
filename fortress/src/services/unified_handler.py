@@ -114,6 +114,7 @@ async def handle_with_llm(
             intent = data.get("intent", "").strip().lower()
             response_text = data.get("response", raw)
             task_data = data.get("task_data") if intent == "create_task" else None
+            recurring_data = data.get("recurring_data") if intent == "create_recurring" else None
             delete_target = data.get("delete_target") if intent == "delete_task" else None
 
             if intent not in VALID_INTENTS:
@@ -123,6 +124,10 @@ async def handle_with_llm(
             # Embed delete_target in task_data for workflow state
             if delete_target is not None:
                 task_data = {"delete_target": delete_target}
+
+            # Embed recurring_data in task_data for workflow state
+            if recurring_data is not None:
+                task_data = {"recurring_data": recurring_data}
 
             elapsed = time.monotonic() - start
             logger.info(

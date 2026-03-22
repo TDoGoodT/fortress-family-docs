@@ -93,7 +93,7 @@ Replace LLM-dispatched document handlers with deterministic personality template
     - Update test count in the status section
     - _Requirements: 7.1, 7.2_
 
-- [-] 8. Final checkpoint — All tests pass and push
+- [x] 8. Final checkpoint — All tests pass and push
   - Run full test suite, ensure all existing 228 tests plus new tests pass.
   - Push to origin main.
   - Ensure all tests pass, ask the user if questions arise.

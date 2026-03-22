@@ -20,6 +20,7 @@ from src.prompts.system_prompts import (
 from src.prompts.personality import (
     TEMPLATES as PERSONALITY_TEMPLATES,
     format_document_list,
+    format_recurring_list,
     format_task_created,
     format_task_list,
     get_greeting,
@@ -36,6 +37,7 @@ from src.services.memory_service import (
     save_memory,
 )
 from src.services.unified_handler import handle_with_llm
+from src.services import recurring
 from src.services.tasks import archive_task, complete_task, create_task, list_tasks
 
 logger = logging.getLogger(__name__)
@@ -51,6 +53,9 @@ _PERMISSION_MAP: dict[str, tuple[str, str] | None] = {
     "list_documents": ("documents", "read"),
     "ask_question": None,
     "unknown": None,
+    "list_recurring": ("tasks", "read"),
+    "create_recurring": ("tasks", "write"),
+    "delete_recurring": ("tasks", "write"),
 }
 
 
@@ -437,6 +442,147 @@ async def _handle_ask_question(
     )
 
 
+async def _handle_list_recurring(
+    db: Session,
+    member: FamilyMember,
+    message_text: str,
+    dispatcher: ModelDispatcher,
+    media_file_path: str | None,
+    intent: str,
+) -> str:
+    """Fetch active recurring patterns for the member and format them."""
+    from src.models.schema import RecurringPattern
+
+    patterns = (
+        db.query(RecurringPattern)
+        .filter(
+            RecurringPattern.is_active.is_(True),
+            RecurringPattern.assigned_to == member.id,
+        )
+        .all()
+    )
+    return format_recurring_list(patterns)
+
+
+async def _handle_create_recurring(
+    db: Session,
+    member: FamilyMember,
+    message_text: str,
+    dispatcher: ModelDispatcher,
+    media_file_path: str | None,
+    intent: str,
+) -> str:
+    """Parse title + frequency from message and create a recurring pattern."""
+    from datetime import date, timedelta
+
+    text = message_text.strip()
+
+    # Strip prefix
+    if "תזכורת חדשה:" in text:
+        title_part = text.split("תזכורת חדשה:", 1)[1].strip()
+    elif text.lower().startswith("recurring:"):
+        title_part = text.split(":", 1)[1].strip()
+    else:
+        title_part = text
+
+    # Parse frequency from Hebrew keywords
+    freq_map = {
+        "יומי": "daily",
+        "שבועי": "weekly",
+        "חודשי": "monthly",
+        "כל חודש": "monthly",
+        "שנתי": "yearly",
+    }
+    frequency = "monthly"  # default
+    for heb_kw, eng_freq in freq_map.items():
+        if heb_kw in title_part:
+            frequency = eng_freq
+            title_part = title_part.replace(heb_kw, "").strip()
+            break
+
+    title = title_part.strip()
+    if not title:
+        title = message_text.strip()
+
+    # Calculate next_due_date as today + one frequency period
+    today = date.today()
+    if frequency == "daily":
+        next_due = today + timedelta(days=1)
+    elif frequency == "weekly":
+        next_due = today + timedelta(days=7)
+    elif frequency == "yearly":
+        next_due = date(today.year + 1, today.month, today.day)
+    else:  # monthly
+        month = today.month % 12 + 1
+        year = today.year + (1 if today.month == 12 else 0)
+        day = min(today.day, 28)  # safe day for all months
+        next_due = date(year, month, day)
+
+    pattern = recurring.create_pattern(
+        db,
+        title=title,
+        frequency=frequency,
+        next_due_date=next_due,
+        assigned_to=member.id,
+    )
+
+    return PERSONALITY_TEMPLATES["recurring_created"].format(
+        title=title,
+        frequency=frequency,
+        next_due_date=str(next_due),
+    )
+
+
+async def _handle_delete_recurring(
+    db: Session,
+    member: FamilyMember,
+    message_text: str,
+    dispatcher: ModelDispatcher,
+    media_file_path: str | None,
+    intent: str,
+) -> str:
+    """Identify a recurring pattern by number or title and deactivate it."""
+    from src.models.schema import RecurringPattern
+
+    text = message_text.strip()
+
+    # Get active patterns for this member
+    patterns = (
+        db.query(RecurringPattern)
+        .filter(
+            RecurringPattern.is_active.is_(True),
+            RecurringPattern.assigned_to == member.id,
+        )
+        .all()
+    )
+
+    if not patterns:
+        return PERSONALITY_TEMPLATES["recurring_not_found"]
+
+    # Try to find by number
+    num_match = re.search(r"\d+", text)
+    if num_match:
+        index = int(num_match.group())
+        if 1 <= index <= len(patterns):
+            pattern = patterns[index - 1]
+            recurring.deactivate_pattern(db, pattern.id)
+            return PERSONALITY_TEMPLATES["recurring_deleted"].format(title=pattern.title)
+        return PERSONALITY_TEMPLATES["recurring_not_found"]
+
+    # Try title match: strip delete keywords, use remainder
+    title_candidate = text
+    for kw in ["מחק תזכורת", "בטל תזכורת", "מחק", "בטל", "delete recurring"]:
+        title_candidate = title_candidate.replace(kw, "").strip()
+
+    if title_candidate:
+        for pattern in patterns:
+            if pattern.title.lower() == title_candidate.lower():
+                recurring.deactivate_pattern(db, pattern.id)
+                return PERSONALITY_TEMPLATES["recurring_deleted"].format(title=pattern.title)
+
+    return PERSONALITY_TEMPLATES["recurring_not_found"]
+
+
 async def _handle_unknown(
     db: Session,
     member: FamilyMember,
@@ -459,6 +605,9 @@ _ACTION_HANDLERS: dict = {
     "list_documents": _handle_list_documents,
     "ask_question": _handle_ask_question,
     "unknown": _handle_unknown,
+    "list_recurring": _handle_list_recurring,
+    "create_recurring": _handle_create_recurring,
+    "delete_recurring": _handle_delete_recurring,
 }
 
 

@@ -14,6 +14,9 @@ INTENTS: dict[str, dict[str, str]] = {
     "ask_question": {"model_tier": "local"},
     "unknown": {"model_tier": "local"},
     "delete_task": {"model_tier": "local"},
+    "list_recurring": {"model_tier": "local"},
+    "create_recurring": {"model_tier": "local"},
+    "delete_recurring": {"model_tier": "local"},
 }
 
 VALID_INTENTS: set[str] = set(INTENTS.keys())
@@ -66,6 +69,18 @@ def _match_keywords(text: str) -> str | None:
     # List documents
     if "מסמכים" in stripped or lower == "documents":
         return "list_documents"
+
+    # Create recurring (prefix match — more specific, check first)
+    if stripped.startswith("תזכורת חדשה:") or lower.startswith("recurring:"):
+        return "create_recurring"
+
+    # Delete recurring (more specific than list, check before list)
+    if "מחק תזכורת" in stripped or "בטל תזכורת" in stripped:
+        return "delete_recurring"
+
+    # List recurring
+    if "תזכורות" in stripped or "חוזרות" in stripped or lower == "recurring":
+        return "list_recurring"
 
     # Delete task — check "מחק משימה" before standalone "מחק"
     if "מחק משימה" in stripped or "הסר משימה" in stripped or "בטל משימה" in stripped:

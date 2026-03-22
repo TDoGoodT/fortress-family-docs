@@ -71,9 +71,13 @@ UNIFIED_CLASSIFY_AND_RESPOND: str = PERSONALITY + "\n\n" + (
     "עליך לבצע שני דברים:\n"
     "1. לסווג את כוונת ההודעה לאחת מהקטגוריות הבאות:\n"
     "   list_tasks, create_task, complete_task, delete_task, greeting, "
-    "upload_document, list_documents, ask_question, unknown\n"
+    "upload_document, list_documents, ask_question, "
+    "list_recurring, create_recurring, delete_recurring, unknown\n"
     "   - delete_task: המשתמש רוצה למחוק או לבטל משימה\n"
     "   - list_documents: המשתמש רוצה לראות מסמכים ששמורים\n"
+    "   - list_recurring: המשתמש רוצה לראות תזכורות חוזרות\n"
+    "   - create_recurring: המשתמש רוצה ליצור תזכורת חוזרת\n"
+    "   - delete_recurring: המשתמש רוצה למחוק תזכורת חוזרת\n"
     "2. לייצר תשובה קצרה ומתאימה בעברית (זה וואטסאפ, לא אימייל).\n\n"
     "אם הכוונה היא create_task, חלץ גם את פרטי המשימה:\n"
     "- title: שם המשימה בעברית\n"
@@ -83,10 +87,18 @@ UNIFIED_CLASSIFY_AND_RESPOND: str = PERSONALITY + "\n\n" + (
     "- assigned_to: שם בן המשפחה שהמשימה מיועדת לו, או null אם לא צוין\n\n"
     "אם הכוונה היא delete_task, חלץ גם:\n"
     "- delete_target: מספר המשימה, שם המשימה, או null\n\n"
+    "אם הכוונה היא create_recurring, חלץ גם:\n"
+    '"recurring_data": {\n'
+    '    "title": "...",\n'
+    '    "frequency": "daily|weekly|monthly|yearly",\n'
+    '    "day_of_month": number or null,\n'
+    '    "month_of_year": number or null\n'
+    "}\n\n"
     "החזר JSON בלבד בפורמט הבא:\n"
-    '{"intent": "...", "response": "...", "task_data": {...}, "delete_target": ...}\n\n'
+    '{"intent": "...", "response": "...", "task_data": {...}, "delete_target": ..., "recurring_data": {...}}\n\n'
     "task_data נדרש רק כאשר intent הוא create_task.\n"
     "delete_target נדרש רק כאשר intent הוא delete_task.\n"
+    "recurring_data נדרש רק כאשר intent הוא create_recurring.\n"
     "אל תוסיף טקסט מחוץ ל-JSON.\n\n"
     "חשוב מאוד: החזר JSON תקין בלבד. אל תעטוף ב-markdown, אל תוסיף הסברים לפני או אחרי ה-JSON.\n\n"
     "אל תמציא פעולות שלא ביצעת. אם לא מחקת/השלמת/יצרת משימה בפועל — אל תגיד שעשית את זה. "

@@ -56,6 +56,14 @@ TEMPLATES: dict[str, str] = {
     "task_duplicate": "המשימה הזו כבר קיימת ✅",
     "document_list_header": "📁 המסמכים שלך:\n",
     "document_list_empty": "אין מסמכים שמורים 📂",
+    "reminder_new_task": "📋 תזכורת: {title}\n📅 עד {due_date}\nנוצר אוטומטית מתבנית חוזרת.",
+    "scheduler_summary": "🔄 סיכום יומי: נוצרו {count} משימות מתבניות חוזרות.",
+    "recurring_list_header": "🔄 התזכורות החוזרות שלך:\n",
+    "recurring_list_empty": "אין תזכורות חוזרות פעילות 📭",
+    "recurring_list_item": "{index}. {title} — {frequency} (הבא: {next_due_date})",
+    "recurring_created": "יצרתי תזכורת חוזרת: {title} ✅\nתדירות: {frequency}\nהבא: {next_due_date}",
+    "recurring_deleted": "תזכורת חוזרת בוטלה: {title} ✅",
+    "recurring_not_found": "לא מצאתי את התזכורת הזו 🤷",
 }
 
 _PRIORITY_EMOJI: dict[str, str] = {
@@ -131,5 +139,24 @@ def format_document_list(documents: list) -> str:
         created_at = getattr(doc, "created_at", None) or (doc.get("created_at") if isinstance(doc, dict) else None)
         date_text = str(created_at)[:10] if created_at else ""
         lines.append(f"{emoji} {i}. {filename}\n   📅 {date_text}")
+
+    return "\n".join(lines)
+
+
+def format_recurring_list(patterns: list) -> str:
+    """Return a formatted Hebrew recurring-pattern list, or the empty-list template."""
+    if not patterns:
+        return TEMPLATES["recurring_list_empty"]
+
+    lines: list[str] = [TEMPLATES["recurring_list_header"]]
+    for i, pattern in enumerate(patterns, 1):
+        title = getattr(pattern, "title", None) or (pattern.get("title", "") if isinstance(pattern, dict) else "")
+        frequency = getattr(pattern, "frequency", None) or (pattern.get("frequency", "") if isinstance(pattern, dict) else "")
+        next_due_date = getattr(pattern, "next_due_date", None) or (pattern.get("next_due_date") if isinstance(pattern, dict) else None)
+        lines.append(
+            TEMPLATES["recurring_list_item"].format(
+                index=i, title=title, frequency=frequency, next_due_date=next_due_date,
+            )
+        )
 
     return "\n".join(lines)

@@ -37,5 +37,8 @@ OPENROUTER_API_KEY: str = os.getenv("OPENROUTER_API_KEY", "")
 OPENROUTER_MODEL: str = os.getenv("OPENROUTER_MODEL", "meta-llama/llama-3.1-70b-instruct:free")
 OPENROUTER_FALLBACK_MODEL: str = os.getenv("OPENROUTER_FALLBACK_MODEL", "google/gemma-2-9b-it:free")
 
+# Scheduler
+SCHEDULER_HOUR: int = int(os.getenv("SCHEDULER_HOUR", "7"))
+
 # Phone identity
 SYSTEM_PHONE: str = os.getenv("SYSTEM_PHONE", "")

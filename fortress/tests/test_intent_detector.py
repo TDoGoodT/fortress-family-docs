@@ -10,11 +10,11 @@ from src.services.intent_detector import INTENTS, detect_intent
 
 
 def test_intents_contains_all_required() -> None:
-    """INTENTS dict should contain all 9 required intents."""
+    """INTENTS dict should contain all 12 required intents."""
     required = {
         "list_tasks", "create_task", "complete_task", "greeting",
         "upload_document", "list_documents", "ask_question", "unknown",
-        "delete_task",
+        "delete_task", "list_recurring", "create_recurring", "delete_recurring",
     }
     assert required == set(INTENTS.keys())
 

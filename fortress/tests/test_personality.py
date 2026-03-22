@@ -42,6 +42,14 @@ REQUIRED_TEMPLATE_KEYS = {
     "task_delete_which",
     "task_not_found",
     "task_duplicate",
+    "reminder_new_task",
+    "scheduler_summary",
+    "recurring_list_header",
+    "recurring_list_empty",
+    "recurring_list_item",
+    "recurring_created",
+    "recurring_deleted",
+    "recurring_not_found",
 }
 
 
