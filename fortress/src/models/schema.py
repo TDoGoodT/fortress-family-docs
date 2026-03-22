@@ -59,6 +59,7 @@ class FamilyMember(Base):
     )
     memories: Mapped[list["Memory"]] = relationship(back_populates="family_member")
     bug_reports: Mapped[list["BugReport"]] = relationship(back_populates="reporter")
+    conversation_state: Mapped[Optional["ConversationState"]] = relationship(back_populates="family_member", uselist=False)
 
 
 class Permission(Base):
@@ -355,3 +356,21 @@ class BugReport(Base):
 
     # Relationships
     reporter: Mapped["FamilyMember"] = relationship(back_populates="bug_reports")
+
+
+class ConversationState(Base):
+    __tablename__ = "conversation_state"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
+    family_member_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("family_members.id"), unique=True, nullable=False)
+    last_intent: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    last_entity_type: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    last_entity_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
+    last_action: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    pending_confirmation: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
+    pending_action: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    context: Mapped[Optional[dict]] = mapped_column(JSONB, server_default=text("'{}'"))
+    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), server_default=text("now()"))
+    created_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), server_default=text("now()"))
+
+    family_member: Mapped["FamilyMember"] = relationship(back_populates="conversation_state", uselist=False)

@@ -37,6 +37,13 @@ def _make_state(**overrides) -> WorkflowState:
         "task_data": None,
         "from_unified": False,
         "delete_target": None,
+        "conv_state": None,
+        "time_context": "",
+        "state_context": "",
+        "created_task_id": None,
+        "deleted_task_id": None,
+        "listed_tasks": [],
+        "created_recurring_id": None,
     }
     state.update(overrides)
     return state

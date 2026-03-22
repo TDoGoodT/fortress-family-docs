@@ -9,6 +9,7 @@ from src.prompts.personality import TEMPLATES as _PERSONALITY_TEMPLATES
 from src.prompts.system_prompts import UNIFIED_CLASSIFY_AND_RESPOND
 from src.services.intent_detector import VALID_INTENTS
 from src.services.model_dispatch import ModelDispatcher
+from src.utils.time_context import format_time_for_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -83,6 +84,8 @@ async def handle_with_llm(
     member_name: str,
     memories: list,
     dispatcher: ModelDispatcher,
+    time_context: str = "",
+    state_context: str = "",
 ) -> tuple[str, str, dict | None]:
     """Single LLM call: classify intent + generate response.
 
@@ -91,12 +94,24 @@ async def handle_with_llm(
     start = time.monotonic()
 
     try:
+        # Fallback: generate time context if not provided
+        if not time_context:
+            time_context = format_time_for_prompt()
+
         memory_context = ""
         if memories:
             memory_lines = [f"- {m.content}" for m in memories]
             memory_context = "\nזיכרונות רלוונטיים:\n" + "\n".join(memory_lines) + "\n"
 
-        prompt = f"שם המשתמש: {member_name}\n{memory_context}\nהודעה: {message_text}\n\nחשוב: החזר JSON בלבד. בלי markdown, בלי הסברים."
+        # Build prompt: {TIME_CONTEXT} {STATE_CONTEXT} {SPECIFIC_PROMPT} הודעת המשתמש: {message}
+        context_parts = []
+        if time_context:
+            context_parts.append(time_context)
+        if state_context:
+            context_parts.append(state_context)
+        context_block = "\n\n".join(context_parts)
+
+        prompt = f"{context_block}\n\nשם המשתמש: {member_name}\n{memory_context}\nהודעת המשתמש: {message_text}\n\nחשוב: החזר JSON בלבד. בלי markdown, בלי הסברים."
 
         raw = await dispatcher.dispatch(
             prompt=prompt,

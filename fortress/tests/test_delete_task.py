@@ -1,4 +1,4 @@
-"""Unit tests for the delete_task workflow — soft-delete, routing, and edge cases."""
+"""Unit tests for the delete_task workflow — confirmation flow, routing, and edge cases."""
 
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
@@ -32,6 +32,13 @@ def _make_state(**overrides) -> WorkflowState:
         "task_data": None,
         "from_unified": False,
         "delete_target": None,
+        "conv_state": None,
+        "time_context": "",
+        "state_context": "",
+        "created_task_id": None,
+        "deleted_task_id": None,
+        "listed_tasks": [],
+        "created_recurring_id": None,
     }
     state.update(overrides)
     return state
@@ -45,38 +52,44 @@ def _make_task(title: str = "לקנות חלב", task_id=None):
     return t
 
 
-# ── Delete by task number ────────────────────────────────────────
+# ── Delete by task number sets pending confirmation ──────────────
 
 
 @pytest.mark.asyncio
-@patch("src.services.workflow_engine.archive_task")
+@patch("src.services.workflow_engine.set_pending_confirmation")
 @patch("src.services.workflow_engine.list_tasks")
-async def test_delete_by_number(mock_list, mock_archive) -> None:
-    """'מחק משימה 2' should archive the 2nd task in the list."""
+async def test_delete_by_number(mock_list, mock_set_pending) -> None:
+    """'מחק משימה 2' should set pending confirmation for the 2nd task."""
     tasks = [_make_task("משימה א"), _make_task("משימה ב"), _make_task("משימה ג")]
     mock_list.return_value = tasks
-    mock_archive.return_value = tasks[1]
     state = _make_state(message_text="מחק משימה 2")
     result = await delete_task_node(state)
-    mock_archive.assert_called_once_with(state["db"], tasks[1].id)
+    mock_set_pending.assert_called_once_with(
+        state["db"], state["member"].id, "delete_task",
+        {"task_id": str(tasks[1].id), "title": tasks[1].title},
+    )
     assert "משימה ב" in result["response"]
+    assert "כן/לא" in result["response"]
 
 
-# ── Delete by title match ────────────────────────────────────────
+# ── Delete by title match sets pending confirmation ──────────────
 
 
 @pytest.mark.asyncio
-@patch("src.services.workflow_engine.archive_task")
+@patch("src.services.workflow_engine.set_pending_confirmation")
 @patch("src.services.workflow_engine.list_tasks")
-async def test_delete_by_title(mock_list, mock_archive) -> None:
-    """'מחק לקנות חלב' should find and archive by case-insensitive title."""
+async def test_delete_by_title(mock_list, mock_set_pending) -> None:
+    """'מחק לקנות חלב' should set pending confirmation by title match."""
     task = _make_task("לקנות חלב")
     mock_list.return_value = [task]
-    mock_archive.return_value = task
     state = _make_state(message_text="מחק לקנות חלב")
     result = await delete_task_node(state)
-    mock_archive.assert_called_once_with(state["db"], task.id)
+    mock_set_pending.assert_called_once_with(
+        state["db"], state["member"].id, "delete_task",
+        {"task_id": str(task.id), "title": task.title},
+    )
     assert "לקנות חלב" in result["response"]
+    assert "כן/לא" in result["response"]
 
 
 # ── Ambiguous delete ─────────────────────────────────────────────
@@ -121,20 +134,21 @@ async def test_task_number_out_of_range(mock_list) -> None:
     assert result["response"] == PERSONALITY_TEMPLATES["task_not_found"]
 
 
-# ── archive_task is used (not complete_task or DELETE) ───────────
+# ── set_pending_confirmation is used (not direct archive) ────────
 
 
 @pytest.mark.asyncio
-@patch("src.services.workflow_engine.archive_task")
+@patch("src.services.workflow_engine.set_pending_confirmation")
 @patch("src.services.workflow_engine.list_tasks")
-async def test_uses_archive_not_complete(mock_list, mock_archive) -> None:
-    """Deletion uses archive_task, not complete_task."""
+async def test_uses_pending_not_direct_archive(mock_list, mock_set_pending) -> None:
+    """Deletion sets pending confirmation, not direct archive."""
     task = _make_task("test")
     mock_list.return_value = [task]
-    mock_archive.return_value = task
     state = _make_state(message_text="מחק משימה 1")
-    await delete_task_node(state)
-    mock_archive.assert_called_once()
+    result = await delete_task_node(state)
+    mock_set_pending.assert_called_once()
+    # Confirm the response is a confirmation prompt
+    assert "כן/לא" in result["response"]
 
 
 # ── Permission router routes delete_task correctly ───────────────

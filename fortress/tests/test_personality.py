@@ -54,6 +54,12 @@ REQUIRED_TEMPLATE_KEYS = {
     "bug_list_header",
     "bug_list_empty",
     "bug_list_item",
+    "confirm_delete",
+    "action_cancelled",
+    "cancelled",
+    "task_updated",
+    "task_update_which",
+    "verification_failed",
 }
 
 

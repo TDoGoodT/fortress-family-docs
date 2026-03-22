@@ -10,12 +10,13 @@ from src.services.intent_detector import INTENTS, detect_intent
 
 
 def test_intents_contains_all_required() -> None:
-    """INTENTS dict should contain all 14 required intents."""
+    """INTENTS dict should contain all 16 required intents."""
     required = {
         "list_tasks", "create_task", "complete_task", "greeting",
         "upload_document", "list_documents", "ask_question", "unknown",
         "delete_task", "list_recurring", "create_recurring", "delete_recurring",
         "report_bug", "list_bugs",
+        "cancel_action", "update_task",
     }
     assert required == set(INTENTS.keys())
 
@@ -200,3 +201,74 @@ def test_intents_includes_bug_tracker() -> None:
     """INTENTS dict should include report_bug and list_bugs."""
     assert "report_bug" in INTENTS
     assert "list_bugs" in INTENTS
+
+
+# ── Cancel action keyword matching (Sprint 1) ────────────────────
+
+
+def test_cancel_azov() -> None:
+    """'עזוב' should return cancel_action."""
+    assert detect_intent("עזוב", False) == "cancel_action"
+
+
+def test_cancel_taazov() -> None:
+    """'תעזוב' should return cancel_action."""
+    assert detect_intent("תעזוב", False) == "cancel_action"
+
+
+def test_cancel_batel() -> None:
+    """'בטל' should return cancel_action."""
+    assert detect_intent("בטל", False) == "cancel_action"
+
+
+def test_cancel_tavtel() -> None:
+    """'תבטל' should return cancel_action."""
+    assert detect_intent("תבטל", False) == "cancel_action"
+
+
+def test_cancel_lo() -> None:
+    """'לא' should return cancel_action."""
+    assert detect_intent("לא", False) == "cancel_action"
+
+
+def test_cancel_english() -> None:
+    """'cancel' should return cancel_action."""
+    assert detect_intent("cancel", False) == "cancel_action"
+
+
+def test_cancel_al_taase_et_ze() -> None:
+    """'אל תעשה את זה' should return cancel_action (prefix match)."""
+    assert detect_intent("אל תעשה את זה", False) == "cancel_action"
+
+
+def test_cancel_al_timchak() -> None:
+    """'אל תמחק' should return cancel_action (prefix match)."""
+    assert detect_intent("אל תמחק", False) == "cancel_action"
+
+
+# ── Update task keyword matching (Sprint 1) ──────────────────────
+
+
+def test_update_teshane() -> None:
+    """'תשנה' should return update_task."""
+    assert detect_intent("תשנה", False) == "update_task"
+
+
+def test_update_taadken() -> None:
+    """'תעדכן' should return update_task."""
+    assert detect_intent("תעדכן", False) == "update_task"
+
+
+def test_update_adken() -> None:
+    """'עדכן' should return update_task."""
+    assert detect_intent("עדכן", False) == "update_task"
+
+
+def test_update_shane() -> None:
+    """'שנה' should return update_task."""
+    assert detect_intent("שנה", False) == "update_task"
+
+
+def test_update_english() -> None:
+    """'update' should return update_task."""
+    assert detect_intent("update", False) == "update_task"

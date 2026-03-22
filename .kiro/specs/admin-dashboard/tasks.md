@@ -101,7 +101,7 @@ Add a browser-based admin dashboard to Fortress. The implementation follows the 
     - Add admin dashboard mention to the STABLE-6 row in the roadmap table
     - _Requirements: 8.1_
 
-- [-] 9. Final checkpoint — Run all tests and push
+- [x] 9. Final checkpoint — Run all tests and push
   - Ensure all tests pass, ask the user if questions arise.
   - Push to origin main when everything is green.
 

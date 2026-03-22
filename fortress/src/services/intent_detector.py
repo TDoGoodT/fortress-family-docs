@@ -19,6 +19,8 @@ INTENTS: dict[str, dict[str, str]] = {
     "delete_recurring": {"model_tier": "local"},
     "report_bug": {"model_tier": "local"},
     "list_bugs": {"model_tier": "local"},
+    "cancel_action": {"model_tier": "local"},
+    "update_task": {"model_tier": "local"},
 }
 
 VALID_INTENTS: set[str] = set(INTENTS.keys())
@@ -83,6 +85,18 @@ def _match_keywords(text: str) -> str | None:
     # List recurring
     if "תזכורות" in stripped or "חוזרות" in stripped or lower == "recurring":
         return "list_recurring"
+
+    # Cancel action (exact keywords + prefix match)
+    cancel_words = {"עזוב", "תעזוב", "בטל", "תבטל", "לא", "cancel"}
+    if stripped in cancel_words or lower in cancel_words:
+        return "cancel_action"
+    if stripped.startswith("אל תעשה") or stripped.startswith("אל "):
+        return "cancel_action"
+
+    # Update task
+    update_words = {"תשנה", "תעדכן", "עדכן", "שנה", "update"}
+    if stripped in update_words or lower in update_words:
+        return "update_task"
 
     # Delete task — check "מחק משימה" before standalone "מחק"
     if "מחק משימה" in stripped or "הסר משימה" in stripped or "בטל משימה" in stripped:

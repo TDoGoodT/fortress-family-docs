@@ -14,3 +14,4 @@ langchain-aws==0.2.0
 langchain-community==0.3.0
 langgraph==0.3.34
 apscheduler==3.10.4
+pytz==2024.1

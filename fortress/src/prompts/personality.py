@@ -68,6 +68,12 @@ TEMPLATES: dict[str, str] = {
     "bug_list_header": "🐛 באגים פתוחים:\n",
     "bug_list_empty": "אין באגים פתוחים! 🎉",
     "bug_list_item": "{index}. {description}\n   📅 {created_at}",
+    "confirm_delete": "למחוק את '{title}'? (כן/לא)",
+    "action_cancelled": "בוטל ✅",
+    "cancelled": "בסדר, עזבתי 😊",
+    "task_updated": "משימה עודכנה: {title} ✅{changes}",
+    "task_update_which": "איזו משימה לעדכן? 🤔\n{task_list}",
+    "verification_failed": "משהו השתבש בשמירה 😅 אפשר לנסות שוב?",
 }
 
 _PRIORITY_EMOJI: dict[str, str] = {
