@@ -11,7 +11,7 @@ from langgraph.graph import END, StateGraph
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from src.models.schema import Conversation, FamilyMember, Memory, Task
+from src.models.schema import Conversation, FamilyMember, Memory, Task, BugReport
 from src.prompts.system_prompts import (
     FORTRESS_BASE,
     TASK_EXTRACTOR_BEDROCK,
@@ -19,6 +19,7 @@ from src.prompts.system_prompts import (
 )
 from src.prompts.personality import (
     TEMPLATES as PERSONALITY_TEMPLATES,
+    format_bug_list,
     format_document_list,
     format_recurring_list,
     format_task_created,
@@ -56,6 +57,8 @@ _PERMISSION_MAP: dict[str, tuple[str, str] | None] = {
     "list_recurring": ("tasks", "read"),
     "create_recurring": ("tasks", "write"),
     "delete_recurring": ("tasks", "write"),
+    "report_bug": ("tasks", "write"),
+    "list_bugs": ("tasks", "read"),
 }
 
 
@@ -390,6 +393,10 @@ async def _handle_upload_document(
     intent: str,
 ) -> str:
     """Save document and return personality template confirmation."""
+    logger.info(
+        "upload_document: has_media=%s media_file_path=%s member=%s",
+        bool(media_file_path), media_file_path, member.name,
+    )
     if not media_file_path:
         return "לא התקבל קובץ. נסה לשלוח שוב."
     try:
@@ -595,6 +602,46 @@ async def _handle_unknown(
     return PERSONALITY_TEMPLATES["cant_understand"].format(name=member.name)
 
 
+async def _handle_report_bug(
+    db: Session,
+    member: FamilyMember,
+    message_text: str,
+    dispatcher: ModelDispatcher,
+    media_file_path: str | None,
+    intent: str,
+) -> str:
+    """Create a bug report from the message."""
+    text = message_text.strip()
+    for prefix in ("באג:", "bug:", "באג", "bug"):
+        if text.startswith(prefix):
+            text = text[len(prefix):].strip()
+            break
+    description = text or message_text.strip()
+
+    bug = BugReport(reported_by=member.id, description=description)
+    db.add(bug)
+    db.flush()
+    return PERSONALITY_TEMPLATES["bug_reported"].format(description=description)
+
+
+async def _handle_list_bugs(
+    db: Session,
+    member: FamilyMember,
+    message_text: str,
+    dispatcher: ModelDispatcher,
+    media_file_path: str | None,
+    intent: str,
+) -> str:
+    """Return a formatted list of open bug reports."""
+    bugs = (
+        db.query(BugReport)
+        .filter(BugReport.status == "open")
+        .order_by(BugReport.created_at.desc())
+        .all()
+    )
+    return format_bug_list(bugs)
+
+
 # Handler dispatch table
 _ACTION_HANDLERS: dict = {
     "list_tasks": _handle_list_tasks,
@@ -608,6 +655,8 @@ _ACTION_HANDLERS: dict = {
     "list_recurring": _handle_list_recurring,
     "create_recurring": _handle_create_recurring,
     "delete_recurring": _handle_delete_recurring,
+    "report_bug": _handle_report_bug,
+    "list_bugs": _handle_list_bugs,
 }
 
 
@@ -645,6 +694,11 @@ async def memory_save_node(state: WorkflowState) -> dict:
         )
     except Exception:
         logger.exception("memory_save_node failed")
+        try:
+            state["db"].rollback()
+            logger.info("Session rolled back after memory save failure")
+        except Exception:
+            logger.exception("memory_save_node: rollback also failed")
     # NEVER return a "response" key — protect LLM response in state
     return {}
 
@@ -662,6 +716,11 @@ async def conversation_save_node(state: WorkflowState) -> dict:
         state["db"].commit()
     except Exception:
         logger.exception("conversation_save_node failed")
+        try:
+            state["db"].rollback()
+            logger.info("Session rolled back after conversation save failure")
+        except Exception:
+            logger.exception("conversation_save_node: rollback also failed")
     # NEVER return a "response" key — protect LLM response in state
     return {}
 

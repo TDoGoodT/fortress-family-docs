@@ -14,6 +14,18 @@ from src.prompts.system_prompts import MEMORY_EXTRACTOR
 
 logger = logging.getLogger(__name__)
 
+# Valid memory categories (must match DB CHECK constraint)
+VALID_CATEGORIES: set[str] = {"preference", "goal", "fact", "habit", "context"}
+
+# Map known invalid LLM categories to valid ones
+CATEGORY_MAP: dict[str, str] = {
+    "task": "context",
+    "reminder": "context",
+    "note": "fact",
+    "info": "fact",
+    "memory": "fact",
+}
+
 # Expiration offsets by memory type
 EXPIRATION_DAYS: dict[str, int | None] = {
     "short": 7,
@@ -77,6 +89,12 @@ async def save_memory(
 
     Returns the Memory object, or None if the content is excluded.
     """
+    # Validate/map category before any DB operation
+    if category not in VALID_CATEGORIES:
+        original = category
+        category = CATEGORY_MAP.get(category, "context")
+        logger.warning("Invalid memory category '%s' mapped to '%s'", original, category)
+
     if check_exclusion(db, content, family_member_id):
         logger.info("Memory excluded for member %s: %s", family_member_id, content[:50])
         return None

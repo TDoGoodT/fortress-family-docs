@@ -221,3 +221,152 @@ async def test_conversation_save_failure_does_not_affect_response() -> None:
     state["db"] = db
     result = await conversation_save_node(state)
     assert "response" not in result
+
+
+# ── Session rollback resilience (STABLE-6) ───────────────────────
+
+
+@pytest.mark.asyncio
+@patch("src.services.workflow_engine.BedrockClient")
+@patch("src.services.workflow_engine.extract_memories_from_message", new_callable=AsyncMock)
+async def test_memory_save_node_calls_rollback_on_failure(mock_extract, mock_bedrock) -> None:
+    """memory_save_node calls db.rollback() when extraction fails."""
+    mock_extract.side_effect = Exception("db integrity error")
+    db = MagicMock()
+    state = _make_state(intent="ask_question", response="LLM answer")
+    state["db"] = db
+    result = await memory_save_node(state)
+    db.rollback.assert_called_once()
+    assert result == {}
+
+
+@pytest.mark.asyncio
+async def test_conversation_save_node_calls_rollback_on_failure() -> None:
+    """conversation_save_node calls db.rollback() when commit fails."""
+    db = MagicMock()
+    db.commit.side_effect = Exception("PendingRollbackError")
+    state = _make_state(intent="greeting", response="שלום!")
+    state["db"] = db
+    result = await conversation_save_node(state)
+    db.rollback.assert_called_once()
+    assert result == {}
+
+
+@pytest.mark.asyncio
+@patch("src.services.workflow_engine.BedrockClient")
+@patch("src.services.workflow_engine.extract_memories_from_message", new_callable=AsyncMock)
+async def test_memory_save_node_survives_rollback_failure(mock_extract, mock_bedrock) -> None:
+    """memory_save_node survives even if rollback itself fails."""
+    mock_extract.side_effect = Exception("db error")
+    db = MagicMock()
+    db.rollback.side_effect = Exception("rollback failed too")
+    state = _make_state(intent="ask_question", response="LLM answer")
+    state["db"] = db
+    result = await memory_save_node(state)
+    assert result == {}
+    assert "response" not in result
+
+
+@pytest.mark.asyncio
+async def test_conversation_save_node_survives_rollback_failure() -> None:
+    """conversation_save_node survives even if rollback itself fails."""
+    db = MagicMock()
+    db.commit.side_effect = Exception("PendingRollbackError")
+    db.rollback.side_effect = Exception("rollback failed too")
+    state = _make_state(intent="greeting", response="שלום!")
+    state["db"] = db
+    result = await conversation_save_node(state)
+    assert result == {}
+    assert "response" not in result
+
+
+# ── Bug tracker handlers (STABLE-6) ──────────────────────────────
+
+from src.services.workflow_engine import (
+    _ACTION_HANDLERS,
+    _PERMISSION_MAP,
+)
+
+
+def test_permission_map_includes_bug_tracker() -> None:
+    """_PERMISSION_MAP should include report_bug and list_bugs."""
+    assert "report_bug" in _PERMISSION_MAP
+    assert _PERMISSION_MAP["report_bug"] == ("tasks", "write")
+    assert "list_bugs" in _PERMISSION_MAP
+    assert _PERMISSION_MAP["list_bugs"] == ("tasks", "read")
+
+
+def test_action_handlers_includes_bug_tracker() -> None:
+    """_ACTION_HANDLERS should include report_bug and list_bugs."""
+    assert "report_bug" in _ACTION_HANDLERS
+    assert "list_bugs" in _ACTION_HANDLERS
+
+
+@pytest.mark.asyncio
+async def test_handle_report_bug_creates_record() -> None:
+    """_handle_report_bug should add a BugReport to the DB and return confirmation."""
+    from src.services.workflow_engine import _handle_report_bug
+
+    db = MagicMock()
+    member = MagicMock()
+    member.id = uuid4()
+    member.name = "TestUser"
+
+    result = await _handle_report_bug(
+        db, member, "באג: תמונה לא נשמרת", MagicMock(), None, "report_bug",
+    )
+    db.add.assert_called_once()
+    db.flush.assert_called_once()
+    assert "תמונה לא נשמרת" in result
+
+
+@pytest.mark.asyncio
+async def test_handle_report_bug_strips_english_prefix() -> None:
+    """_handle_report_bug should strip 'bug:' prefix."""
+    from src.services.workflow_engine import _handle_report_bug
+
+    db = MagicMock()
+    member = MagicMock()
+    member.id = uuid4()
+
+    result = await _handle_report_bug(
+        db, member, "bug: photos not saving", MagicMock(), None, "report_bug",
+    )
+    assert "photos not saving" in result
+
+
+@pytest.mark.asyncio
+async def test_handle_list_bugs_empty() -> None:
+    """_handle_list_bugs should return empty template when no bugs."""
+    from src.services.workflow_engine import _handle_list_bugs
+    from src.prompts.personality import TEMPLATES
+
+    db = MagicMock()
+    db.query.return_value.filter.return_value.order_by.return_value.all.return_value = []
+    member = MagicMock()
+    member.id = uuid4()
+
+    result = await _handle_list_bugs(
+        db, member, "באגים", MagicMock(), None, "list_bugs",
+    )
+    assert result == TEMPLATES["bug_list_empty"]
+
+
+@pytest.mark.asyncio
+async def test_handle_list_bugs_with_bugs() -> None:
+    """_handle_list_bugs should format bugs using format_bug_list."""
+    from src.services.workflow_engine import _handle_list_bugs
+
+    bug1 = MagicMock()
+    bug1.description = "תמונה לא נשמרת"
+    bug1.created_at = "2026-03-20T10:00:00"
+
+    db = MagicMock()
+    db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [bug1]
+    member = MagicMock()
+    member.id = uuid4()
+
+    result = await _handle_list_bugs(
+        db, member, "באגים", MagicMock(), None, "list_bugs",
+    )
+    assert "תמונה לא נשמרת" in result

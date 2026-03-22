@@ -66,14 +66,14 @@ See [docs/setup.md](fortress/docs/setup.md) for detailed instructions.
 ```
 fortress/
 ├── src/           # Application code
-├── migrations/    # Database schema (5 migration files, 10 tables)
+├── migrations/    # Database schema (6 migration files, 11 tables)
 ├── scripts/       # Deployment & setup scripts
-├── tests/         # Test suite (254 tests)
+├── tests/         # Test suite (303 tests)
 ├── docs/          # Architecture & setup documentation
 └── docker-compose.yml
 ```
 
-## Database (10 tables)
+## Database (11 tables)
 
 | Table | Purpose |
 |-------|---------|
@@ -87,13 +87,14 @@ fortress/
 | memory_exclusions | PII protection rules |
 | audit_log | Action history |
 | conversations | WhatsApp message history |
+| bug_reports | Bug tracking (parents only) |
 
 ## Status
 
-**Phase STABLE-5 Complete — Recurring Scheduler**
+**Phase STABLE-6 Complete — Early Production**
 
-- ✅ 254 passing tests
-- ✅ 10 database tables
+- ✅ 303 passing tests
+- ✅ 11 database tables
 - ✅ 4 Docker services
 - ✅ WhatsApp integration
 - ✅ AI-powered intent routing
@@ -109,7 +110,7 @@ Private — Family use only.
 
 ## Roadmap & Version History
 
-### Current Version: Phase STABLE-5
+### Current Version: Phase STABLE-6
 
 | Phase | Status | Description | Tests |
 |-------|--------|-------------|-------|
@@ -127,6 +128,7 @@ Private — Family use only.
 | STABLE-3 — Core Flows Hardening | ✅ Complete | Delete tasks, ownership, dedup, prompt cleanup, migration | 228 |
 | STABLE-4 — Document Flow | ✅ Complete | Document storage, metadata, list/upload personality templates | 254 |
 | STABLE-5 — Recurring Scheduler | ✅ Complete | Recurring task scheduler, WhatsApp notifications, pattern management | 254+ |
+| STABLE-6 — Early Production | ✅ Complete | Bug tracker, memory fix, session resilience, media logging | 303 |
 | 5A — OCR | 📋 Planned | Document intelligence, invoice scanning | — |
 | 5C — RAG | 📋 Planned | pgvector, document Q&A, contract analysis | — |
 | 6.0 — NAS + Backup | 📋 Planned | NAS storage, Restic → Backblaze B2 | — |

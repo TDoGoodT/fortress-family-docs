@@ -196,3 +196,38 @@ async def test_delete_task_with_delete_target() -> None:
     assert response == "מוחק את המשימה"
     assert task_data is not None
     assert task_data["delete_target"] == "2"
+
+
+# ── Bug tracker intents in unified handler (STABLE-6) ────────────
+
+
+def test_unified_prompt_contains_report_bug() -> None:
+    """UNIFIED_CLASSIFY_AND_RESPOND should include report_bug intent."""
+    assert "report_bug" in UNIFIED_CLASSIFY_AND_RESPOND
+
+
+def test_unified_prompt_contains_list_bugs() -> None:
+    """UNIFIED_CLASSIFY_AND_RESPOND should include list_bugs intent."""
+    assert "list_bugs" in UNIFIED_CLASSIFY_AND_RESPOND
+
+
+def test_report_bug_in_valid_intents() -> None:
+    """report_bug should be in VALID_INTENTS."""
+    from src.services.intent_detector import VALID_INTENTS
+    assert "report_bug" in VALID_INTENTS
+
+
+def test_list_bugs_in_valid_intents() -> None:
+    """list_bugs should be in VALID_INTENTS."""
+    from src.services.intent_detector import VALID_INTENTS
+    assert "list_bugs" in VALID_INTENTS
+
+
+@pytest.mark.asyncio
+async def test_report_bug_intent_handled() -> None:
+    """Unified handler should accept report_bug as a valid intent."""
+    raw = json.dumps({"intent": "report_bug", "response": "באג נרשם"})
+    dispatcher = _mock_dispatcher(raw)
+    intent, response, task_data = await handle_with_llm("באג: test", "Test", [], dispatcher)
+    assert intent == "report_bug"
+    assert "באג נרשם" in response

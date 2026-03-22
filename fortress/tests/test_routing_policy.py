@@ -71,3 +71,14 @@ def test_get_route_returns_copy():
     route2 = get_route("greeting")
     assert route1 == route2
     assert route1 is not route2
+
+
+# ── Bug tracker routing (STABLE-6) ───────────────────────────────
+
+
+def test_report_bug_is_medium_sensitivity():
+    assert get_sensitivity("report_bug") == "medium"
+
+
+def test_list_bugs_is_medium_sensitivity():
+    assert get_sensitivity("list_bugs") == "medium"

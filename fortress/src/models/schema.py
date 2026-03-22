@@ -58,6 +58,7 @@ class FamilyMember(Base):
         back_populates="assignee", foreign_keys="[RecurringPattern.assigned_to]"
     )
     memories: Mapped[list["Memory"]] = relationship(back_populates="family_member")
+    bug_reports: Mapped[list["BugReport"]] = relationship(back_populates="reporter")
 
 
 class Permission(Base):
@@ -326,3 +327,31 @@ class MemoryExclusion(Base):
 
     # Relationships
     family_member: Mapped[Optional["FamilyMember"]] = relationship()
+
+
+class BugReport(Base):
+    __tablename__ = "bug_reports"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    reported_by: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("family_members.id"), nullable=False
+    )
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(
+        Text, nullable=False, server_default=text("'open'")
+    )
+    priority: Mapped[str] = mapped_column(Text, server_default=text("'normal'"))
+    bug_metadata: Mapped[Optional[dict]] = mapped_column(
+        "metadata", JSONB, server_default=text("'{}'")
+    )
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=text("now()")
+    )
+    resolved_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    # Relationships
+    reporter: Mapped["FamilyMember"] = relationship(back_populates="bug_reports")

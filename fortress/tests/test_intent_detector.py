@@ -10,11 +10,12 @@ from src.services.intent_detector import INTENTS, detect_intent
 
 
 def test_intents_contains_all_required() -> None:
-    """INTENTS dict should contain all 12 required intents."""
+    """INTENTS dict should contain all 14 required intents."""
     required = {
         "list_tasks", "create_task", "complete_task", "greeting",
         "upload_document", "list_documents", "ask_question", "unknown",
         "delete_task", "list_recurring", "create_recurring", "delete_recurring",
+        "report_bug", "list_bugs",
     }
     assert required == set(INTENTS.keys())
 
@@ -155,3 +156,47 @@ def test_english_delete_task() -> None:
 def test_hebrew_delete_task_with_number() -> None:
     """'מחק משימה 3' should also return delete_task (substring match)."""
     assert detect_intent("מחק משימה 3", False) == "delete_task"
+
+
+# ── Bug tracker keyword matching (STABLE-6) ──────────────────────
+
+
+def test_hebrew_report_bug_prefix() -> None:
+    """'באג: ...' should return report_bug."""
+    assert detect_intent("באג: תמונה לא נשמרת", False) == "report_bug"
+
+
+def test_hebrew_report_bug_standalone() -> None:
+    """'באג' alone should return report_bug."""
+    assert detect_intent("באג", False) == "report_bug"
+
+
+def test_english_report_bug_prefix() -> None:
+    """'bug: ...' should return report_bug."""
+    assert detect_intent("bug: photos not saving", False) == "report_bug"
+
+
+def test_english_report_bug_standalone() -> None:
+    """'bug' alone should return report_bug."""
+    assert detect_intent("bug", False) == "report_bug"
+
+
+def test_hebrew_list_bugs() -> None:
+    """'באגים' should return list_bugs."""
+    assert detect_intent("באגים", False) == "list_bugs"
+
+
+def test_hebrew_list_bugs_alt() -> None:
+    """'רשימת באגים' should return list_bugs."""
+    assert detect_intent("רשימת באגים", False) == "list_bugs"
+
+
+def test_english_list_bugs() -> None:
+    """'bugs' should return list_bugs."""
+    assert detect_intent("bugs", False) == "list_bugs"
+
+
+def test_intents_includes_bug_tracker() -> None:
+    """INTENTS dict should include report_bug and list_bugs."""
+    assert "report_bug" in INTENTS
+    assert "list_bugs" in INTENTS

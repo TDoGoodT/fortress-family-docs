@@ -47,6 +47,12 @@ async def whatsapp_webhook(
 
         media_file_path: str | None = None
         if has_media and message_id:
+            logger.info(
+                "Media received: type=%s mimetype=%s filename=%s",
+                payload.get("type", "unknown"),
+                payload.get("mimetype", "unknown"),
+                payload.get("filename", "unknown"),
+            )
             media_result = await download_media(message_id)
             if media_result:
                 file_bytes, mimetype = media_result

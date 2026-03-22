@@ -50,6 +50,10 @@ REQUIRED_TEMPLATE_KEYS = {
     "recurring_created",
     "recurring_deleted",
     "recurring_not_found",
+    "bug_reported",
+    "bug_list_header",
+    "bug_list_empty",
+    "bug_list_item",
 }
 
 
@@ -193,3 +197,43 @@ def test_format_document_list_emojis_per_type() -> None:
     assert "🖼️" in result
     assert "📊" in result
     assert "📎" in result
+
+
+# ── Bug tracker templates (STABLE-6) ─────────────────────────────
+
+from src.prompts.personality import format_bug_list
+
+
+def test_bug_templates_exist() -> None:
+    """Bug tracker templates should be in TEMPLATES dict."""
+    for key in ("bug_reported", "bug_list_header", "bug_list_empty", "bug_list_item"):
+        assert key in TEMPLATES, f"Missing template key: {key}"
+
+
+def test_format_bug_list_empty() -> None:
+    """Empty bug list returns bug_list_empty template."""
+    assert format_bug_list([]) == TEMPLATES["bug_list_empty"]
+
+
+def test_format_bug_list_multiple_bugs() -> None:
+    """format_bug_list formats multiple bugs correctly."""
+    bugs = [
+        {"description": "תמונה לא נשמרת", "created_at": "2026-03-20T10:00:00"},
+        {"description": "הודעה לא נשלחת", "created_at": "2026-03-21T12:00:00"},
+    ]
+    result = format_bug_list(bugs)
+    assert "תמונה לא נשמרת" in result
+    assert "הודעה לא נשלחת" in result
+    assert TEMPLATES["bug_list_header"].strip() in result
+
+
+def test_format_bug_list_contains_dates() -> None:
+    """format_bug_list includes date info."""
+    bugs = [{"description": "test bug", "created_at": "2026-03-20T10:00:00"}]
+    result = format_bug_list(bugs)
+    assert "2026-03-20" in result
+
+
+def test_bug_reported_template_has_description_placeholder() -> None:
+    """bug_reported template should contain {description} placeholder."""
+    assert "{description}" in TEMPLATES["bug_reported"]

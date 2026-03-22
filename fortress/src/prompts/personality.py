@@ -64,6 +64,10 @@ TEMPLATES: dict[str, str] = {
     "recurring_created": "יצרתי תזכורת חוזרת: {title} ✅\nתדירות: {frequency}\nהבא: {next_due_date}",
     "recurring_deleted": "תזכורת חוזרת בוטלה: {title} ✅",
     "recurring_not_found": "לא מצאתי את התזכורת הזו 🤷",
+    "bug_reported": "באג נרשם ✅\n📝 {description}",
+    "bug_list_header": "🐛 באגים פתוחים:\n",
+    "bug_list_empty": "אין באגים פתוחים! 🎉",
+    "bug_list_item": "{index}. {description}\n   📅 {created_at}",
 }
 
 _PRIORITY_EMOJI: dict[str, str] = {
@@ -156,6 +160,25 @@ def format_recurring_list(patterns: list) -> str:
         lines.append(
             TEMPLATES["recurring_list_item"].format(
                 index=i, title=title, frequency=frequency, next_due_date=next_due_date,
+            )
+        )
+
+    return "\n".join(lines)
+
+
+def format_bug_list(bugs: list) -> str:
+    """Return a formatted Hebrew bug list, or the empty-list template."""
+    if not bugs:
+        return TEMPLATES["bug_list_empty"]
+
+    lines: list[str] = [TEMPLATES["bug_list_header"]]
+    for i, bug in enumerate(bugs, 1):
+        description = getattr(bug, "description", None) or (bug.get("description", "") if isinstance(bug, dict) else "")
+        created_at = getattr(bug, "created_at", None) or (bug.get("created_at") if isinstance(bug, dict) else None)
+        date_text = str(created_at)[:10] if created_at else ""
+        lines.append(
+            TEMPLATES["bug_list_item"].format(
+                index=i, description=description, created_at=date_text,
             )
         )
 

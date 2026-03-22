@@ -19,6 +19,8 @@ SENSITIVITY_MAP: dict[str, SensitivityLevel] = {
     "list_recurring": "medium",
     "create_recurring": "medium",
     "delete_recurring": "medium",
+    "report_bug": "medium",
+    "list_bugs": "medium",
 }
 
 ROUTE_MAP: dict[SensitivityLevel, list[Provider]] = {

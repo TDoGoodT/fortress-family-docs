@@ -17,6 +17,8 @@ INTENTS: dict[str, dict[str, str]] = {
     "list_recurring": {"model_tier": "local"},
     "create_recurring": {"model_tier": "local"},
     "delete_recurring": {"model_tier": "local"},
+    "report_bug": {"model_tier": "local"},
+    "list_bugs": {"model_tier": "local"},
 }
 
 VALID_INTENTS: set[str] = set(INTENTS.keys())
@@ -89,5 +91,15 @@ def _match_keywords(text: str) -> str | None:
         return "delete_task"
     if "delete task" in lower:
         return "delete_task"
+
+    # Report bug (prefix match — check before standalone "באג")
+    if stripped.startswith("באג:") or lower.startswith("bug:"):
+        return "report_bug"
+    if stripped == "באג" or lower == "bug":
+        return "report_bug"
+
+    # List bugs
+    if stripped in ("באגים", "רשימת באגים") or lower == "bugs":
+        return "list_bugs"
 
     return None
