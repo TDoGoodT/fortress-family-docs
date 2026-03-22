@@ -43,7 +43,7 @@
 - [x] 11. Unified handler integration
   - [x] 11.1 Update `UNIFIED_CLASSIFY_AND_RESPOND` prompt in `fortress/src/prompts/system_prompts.py` to include `report_bug` and `list_bugs` with Hebrew descriptions
   - [x] 11.2 Write unit tests in `fortress/tests/test_unified_handler.py`: verify `report_bug` and `list_bugs` are valid intents handled by unified handler
-- [x] 12. Update existing test assertions for new template keys
+- [ ] 12. Update existing test assertions for new template keys
   - [x] 12.1 Update `REQUIRED_TEMPLATE_KEYS` set in `fortress/tests/test_personality.py` to include `bug_reported`, `bug_list_header`, `bug_list_empty`, `bug_list_item`
   - [x] 12.2 Update `test_intents_contains_all_required` in `fortress/tests/test_intent_detector.py` to include `report_bug` and `list_bugs`
   - [x] 12.3 Run full test suite to verify all 262+ tests pass

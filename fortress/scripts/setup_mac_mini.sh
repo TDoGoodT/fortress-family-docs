@@ -107,14 +107,20 @@ else
     echo "❌ WAHA not responding at http://localhost:3000/api/sessions"
 fi
 
-# ── 9. Summary ────────────────────────────────────────────────────
+# ── 9. Open Dashboard ─────────────────────────────────────────────
+echo ""
+echo "Opening dashboard..."
+bash "$SCRIPT_DIR/open_dashboard.sh"
+
+# ── 10. Summary ───────────────────────────────────────────────────
 echo ""
 echo "========================================="
 echo "  Fortress setup complete!"
 echo "========================================="
 echo ""
 echo "Next steps:"
-echo "  1. Open http://localhost:3000"
-echo "  2. Scan QR code with Fortress phone"
-echo "  3. Send a test message"
+echo "  1. Dashboard: http://localhost:8000/dashboard"
+echo "  2. Open http://localhost:3000"
+echo "  3. Scan QR code with Fortress phone"
+echo "  4. Send a test message"
 echo ""

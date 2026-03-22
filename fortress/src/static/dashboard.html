@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="he">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🏰 Fortress Admin Dashboard</title>
+<style>
+  :root {
+    --bg: #1a1a2e;
+    --card-bg: #16213e;
+    --accent: #0f3460;
+    --text: #e0e0e0;
+    --success: #4ecca3;
+    --warning: #f0a500;
+    --error: #e74c3c;
+    --border: #2a2a4a;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 16px;
+  }
+  .error-banner {
+    display: none;
+    background: var(--error);
+    color: #fff;
+    text-align: center;
+    padding: 10px;
+    font-weight: bold;
+    border-radius: 8px;
+    margin-bottom: 12px;
+  }
+  .error-banner.visible { display: block; }
+  header {
+    text-align: center;
+    margin-bottom: 20px;
+    padding: 16px;
+    background: var(--card-bg);
+    border-radius: 12px;
+    border: 1px solid var(--border);
+  }
+  header h1 { font-size: 1.5rem; margin-bottom: 6px; }
+  header .meta { font-size: 0.9rem; opacity: 0.8; }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+  .card {
+    background: var(--card-bg);
+    border-radius: 12px;
+    padding: 16px;
+    border: 1px solid var(--border);
+  }
+  .card h2 {
+    font-size: 1.1rem;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  .card.full-width { grid-column: 1 / -1; }
+  .health-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 8px;
+  }
+  .health-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    background: var(--accent);
+    border-radius: 8px;
+    font-size: 0.9rem;
+  }
+  .health-item .model-name {
+    font-size: 0.75rem;
+    opacity: 0.7;
+    display: block;
+  }
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 10px;
+  }
+  .stat-item {
+    text-align: center;
+    padding: 12px 8px;
+    background: var(--accent);
+    border-radius: 8px;
+  }
+  .stat-item .value {
+    font-size: 1.8rem;
+    font-weight: bold;
+    display: block;
+  }
+  .stat-item .label { font-size: 0.8rem; opacity: 0.7; }
+  .bug-list, .activity-list, .member-list { list-style: none; }
+  .bug-list li, .activity-list li, .member-list li {
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.9rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+  }
+  .bug-list li:last-child, .activity-list li:last-child, .member-list li:last-child {
+    border-bottom: none;
+  }
+  .activity-list li { flex-wrap: wrap; }
+  .activity-list .msg-preview {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    direction: rtl;
+    text-align: right;
+  }
+  .activity-list .meta-info {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    font-size: 0.8rem;
+    opacity: 0.7;
+    flex-shrink: 0;
+  }
+  .priority-high { color: var(--error); font-weight: bold; }
+  .priority-medium { color: var(--warning); }
+  .priority-low { color: var(--success); }
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: bold;
+  }
+  .badge-active { background: var(--success); color: #000; }
+  .badge-inactive { background: var(--error); color: #fff; }
+  .empty-state {
+    text-align: center;
+    padding: 20px;
+    opacity: 0.5;
+    font-style: italic;
+  }
+  footer {
+    text-align: center;
+    padding: 12px;
+    font-size: 0.85rem;
+    opacity: 0.6;
+  }
+  @media (max-width: 640px) {
+    body { padding: 8px; }
+    header h1 { font-size: 1.2rem; }
+    .grid { grid-template-columns: 1fr; }
+    .stat-grid { grid-template-columns: repeat(2, 1fr); }
+    .health-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body>
+
+<div class="error-banner" id="errorBanner">⚠️ Connection lost — retrying...</div>
+
+<header>
+  <h1>🏰 Fortress Admin Dashboard</h1>
+  <div class="meta">
+    <span id="headerPhase">Phase: STABLE-6</span> |
+    <span id="headerVersion">v...</span> |
+    <span id="headerUptime">Uptime: ...</span>
+  </div>
+</header>
+
+<div class="grid">
+  <div class="card full-width">
+    <h2>🖥️ System Health</h2>
+    <div class="health-grid" id="healthGrid">
+      <div class="health-item"><span>⏳</span> Loading...</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>📊 Today</h2>
+    <div class="stat-grid" id="todayStats">
+      <div class="stat-item"><span class="value">-</span><span class="label">Loading</span></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>📋 Open Items</h2>
+    <div class="stat-grid" id="openItems">
+      <div class="stat-item"><span class="value">-</span><span class="label">Loading</span></div>
+    </div>
+  </div>
+
+  <div class="card full-width">
+    <h2>🐛 Open Bugs</h2>
+    <ul class="bug-list" id="bugList">
+      <li class="empty-state">Loading...</li>
+    </ul>
+  </div>
+
+  <div class="card full-width">
+    <h2 dir="rtl">💬 Recent Activity</h2>
+    <ul class="activity-list" id="activityList">
+      <li class="empty-state">Loading...</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2>👨‍👩‍👧‍👦 Family Members</h2>
+    <ul class="member-list" id="memberList">
+      <li class="empty-state">Loading...</li>
+    </ul>
+  </div>
+</div>
+
+<footer>
+  <div id="lastRefresh">Last refresh: --:--:--</div>
+  <div>Auto-refresh: every 30s</div>
+</footer>
+
+<script>
+var HEBREW_FALLBACK = "\u05DE\u05E6\u05D8\u05E2\u05E8, \u05DC\u05D0 \u05D4\u05E6\u05DC\u05D7\u05EA\u05D9 \u05DC\u05E2\u05D1\u05D3 \u05D0\u05EA \u05D4\u05D1\u05E7\u05E9\u05D4. \u05E0\u05E1\u05D4 \u05E9\u05D5\u05D1.";
+
+function formatUptime(seconds) {
+  var d = Math.floor(seconds / 86400);
+  var h = Math.floor((seconds % 86400) / 3600);
+  var m = Math.floor((seconds % 3600) / 60);
+  var parts = [];
+  if (d > 0) parts.push(d + "d");
+  if (h > 0 || d > 0) parts.push(h + "h");
+  parts.push(m + "m");
+  return parts.join(" ");
+}
+
+function statusEmoji(status) {
+  if (status === "connected") return "\uD83D\uDFE2";
+  if (status === "warning" || status === "no_key") return "\uD83D\uDFE1";
+  return "\uD83D\uDD34";
+}
+
+function formatTime(isoStr) {
+  if (!isoStr) return "--:--";
+  var d = new Date(isoStr);
+  return d.toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" });
+}
+
+function shortId(uuid) {
+  if (!uuid) return "????";
+  return "#" + uuid.substring(0, 4);
+}
+
+function escapeHtml(str) {
+  if (!str) return "";
+  var div = document.createElement("div");
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+function priorityClass(p) {
+  if (!p) return "";
+  var lower = p.toLowerCase();
+  if (lower === "high" || lower === "critical") return "priority-high";
+  if (lower === "medium") return "priority-medium";
+  return "priority-low";
+}
+
+function renderHealth(health) {
+  var services = [
+    { key: "database", label: "Database", model: null },
+    { key: "ollama", label: "Ollama", model: health.ollama_model },
+    { key: "bedrock", label: "Bedrock", model: health.bedrock_model },
+    { key: "openrouter", label: "OpenRouter", model: health.openrouter_model },
+    { key: "waha", label: "WhatsApp", model: null }
+  ];
+  var el = document.getElementById("healthGrid");
+  el.innerHTML = services.map(function(s) {
+    var status = health[s.key] || "disconnected";
+    var modelHtml = s.model ? '<span class="model-name">' + escapeHtml(s.model) + '</span>' : '';
+    return '<div class="health-item">' +
+      '<span>' + statusEmoji(status) + '</span>' +
+      '<div><strong>' + escapeHtml(s.label) + '</strong>' + modelHtml + '</div>' +
+      '</div>';
+  }).join("");
+}
+
+function renderToday(today) {
+  var items = [
+    { emoji: "\uD83D\uDCAC", value: today.conversations, label: "Messages" },
+    { emoji: "\u2705", value: today.tasks_created, label: "Tasks" },
+    { emoji: "\uD83D\uDC1B", value: today.bugs_reported, label: "Bugs" },
+    { emoji: "\u26A0\uFE0F", value: today.errors, label: "Errors" }
+  ];
+  var el = document.getElementById("todayStats");
+  el.innerHTML = items.map(function(i) {
+    return '<div class="stat-item">' +
+      '<span class="value">' + i.emoji + ' ' + i.value + '</span>' +
+      '<span class="label">' + i.label + '</span></div>';
+  }).join("");
+}
+
+function renderOpenItems(openItems) {
+  var items = [
+    { emoji: "\uD83D\uDCCB", value: openItems.open_tasks, label: "Open Tasks" },
+    { emoji: "\uD83D\uDC1B", value: openItems.open_bugs, label: "Open Bugs" }
+  ];
+  var el = document.getElementById("openItems");
+  el.innerHTML = items.map(function(i) {
+    return '<div class="stat-item">' +
+      '<span class="value">' + i.emoji + ' ' + i.value + '</span>' +
+      '<span class="label">' + i.label + '</span></div>';
+  }).join("");
+}
+
+function renderBugs(bugs) {
+  var el = document.getElementById("bugList");
+  if (!bugs || bugs.length === 0) {
+    el.innerHTML = '<li class="empty-state">No open bugs 🎉</li>';
+    return;
+  }
+  el.innerHTML = bugs.map(function(b) {
+    var pClass = priorityClass(b.priority);
+    return '<li>' +
+      '<span dir="rtl">🐛 <strong>' + escapeHtml(shortId(b.id)) + '</strong> — ' + escapeHtml(b.description) + '</span>' +
+      '<span class="meta-info">' +
+        '<span class="' + pClass + '">' + escapeHtml(b.priority || "normal") + '</span>' +
+        '<span>' + formatTime(b.created_at) + '</span>' +
+      '</span>' +
+      '</li>';
+  }).join("");
+}
+
+function renderActivity(conversations) {
+  var el = document.getElementById("activityList");
+  if (!conversations || conversations.length === 0) {
+    el.innerHTML = '<li class="empty-state">No recent activity</li>';
+    return;
+  }
+  el.innerHTML = conversations.map(function(c) {
+    var success = c.message_out && c.message_out.indexOf(HEBREW_FALLBACK) === -1;
+    var icon = success ? "\u2705" : "\u274C";
+    var name = c.member_name || "Unknown";
+    var msg = c.message_in || "(media)";
+    return '<li>' +
+      '<span class="msg-preview">' + escapeHtml(name) + ': "' + escapeHtml(msg.substring(0, 50)) + '"</span>' +
+      '<span class="meta-info">' +
+        '<span>' + formatTime(c.created_at) + '</span>' +
+        '<span>' + (c.intent ? escapeHtml(c.intent) : "") + '</span>' +
+        '<span>' + icon + '</span>' +
+      '</span>' +
+      '</li>';
+  }).join("");
+}
+
+function renderMembers(members) {
+  var el = document.getElementById("memberList");
+  if (!members || members.length === 0) {
+    el.innerHTML = '<li class="empty-state">No family members</li>';
+    return;
+  }
+  el.innerHTML = members.map(function(m) {
+    return '<li>' +
+      '<span>👤 ' + escapeHtml(m.name) + ' (' + escapeHtml(m.role) + ')</span>' +
+      '<span class="badge ' + (m.is_active ? 'badge-active' : 'badge-inactive') + '">' +
+        (m.is_active ? 'Active' : 'Inactive') +
+      '</span>' +
+      '</li>';
+  }).join("");
+}
+
+function renderSystem(system) {
+  document.getElementById("headerVersion").textContent = "v" + (system.version || "?.?.?");
+  document.getElementById("headerUptime").textContent = "Uptime: " + formatUptime(system.uptime_seconds || 0);
+}
+
+function updateRefreshTime() {
+  var now = new Date();
+  document.getElementById("lastRefresh").textContent =
+    "Last refresh: " + now.toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+}
+
+function fetchData() {
+  fetch("/dashboard/data")
+    .then(function(resp) {
+      if (!resp.ok) throw new Error("HTTP " + resp.status);
+      return resp.json();
+    })
+    .then(function(data) {
+      document.getElementById("errorBanner").classList.remove("visible");
+      renderHealth(data.health || {});
+      renderToday(data.today || {});
+      renderOpenItems(data.open_items || {});
+      renderBugs(data.open_bugs || []);
+      renderActivity(data.recent_conversations || []);
+      renderMembers(data.family_members || []);
+      renderSystem(data.system || {});
+      updateRefreshTime();
+    })
+    .catch(function() {
+      document.getElementById("errorBanner").classList.add("visible");
+    });
+}
+
+// Initial fetch and auto-refresh
+fetchData();
+setInterval(fetchData, 30000);
+</script>
+</body>
+</html>

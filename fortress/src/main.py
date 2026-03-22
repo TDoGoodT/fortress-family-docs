@@ -1,6 +1,7 @@
 """Fortress 2.0 application entry point."""
 
 import logging
+import time
 from contextlib import asynccontextmanager
 from collections.abc import AsyncGenerator
 
@@ -8,11 +9,14 @@ import uvicorn
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 
 from src.config import LOG_LEVEL, SCHEDULER_HOUR
 from src.database import SessionLocal, test_connection
-from src.routers import health, scheduler, whatsapp
+from src.routers import dashboard, health, scheduler, whatsapp
 from src.services.scheduler import run_daily_schedule
+
+APP_START_TIME: float = time.time()
 
 logging.basicConfig(
     level=getattr(logging, LOG_LEVEL.upper(), logging.INFO),
@@ -63,6 +67,9 @@ app = FastAPI(title="Fortress", version="2.0.0", lifespan=lifespan)
 app.include_router(health.router)
 app.include_router(whatsapp.router)
 app.include_router(scheduler.router)
+app.include_router(dashboard.router)
+
+app.mount("/static", StaticFiles(directory="src/static"), name="static")
 
 if __name__ == "__main__":
     uvicorn.run("src.main:app", host="0.0.0.0", port=8000)
