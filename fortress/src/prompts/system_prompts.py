@@ -73,6 +73,7 @@ UNIFIED_CLASSIFY_AND_RESPOND: str = PERSONALITY + "\n\n" + (
     "   list_tasks, create_task, complete_task, delete_task, greeting, "
     "upload_document, list_documents, ask_question, unknown\n"
     "   - delete_task: המשתמש רוצה למחוק או לבטל משימה\n"
+    "   - list_documents: המשתמש רוצה לראות מסמכים ששמורים\n"
     "2. לייצר תשובה קצרה ומתאימה בעברית (זה וואטסאפ, לא אימייל).\n\n"
     "אם הכוונה היא create_task, חלץ גם את פרטי המשימה:\n"
     "- title: שם המשימה בעברית\n"

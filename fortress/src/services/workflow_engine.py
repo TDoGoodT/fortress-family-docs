@@ -19,6 +19,7 @@ from src.prompts.system_prompts import (
 )
 from src.prompts.personality import (
     TEMPLATES as PERSONALITY_TEMPLATES,
+    format_document_list,
     format_task_created,
     format_task_list,
     get_greeting,
@@ -383,11 +384,11 @@ async def _handle_upload_document(
     media_file_path: str | None,
     intent: str,
 ) -> str:
-    """Save document and acknowledge via dispatcher."""
+    """Save document and return personality template confirmation."""
     if not media_file_path:
         return "לא התקבל קובץ. נסה לשלוח שוב."
     try:
-        await process_document(db, media_file_path, member.id, "whatsapp")
+        doc = await process_document(db, media_file_path, member.id, "whatsapp")
         log_action(
             db,
             actor_id=member.id,
@@ -395,11 +396,10 @@ async def _handle_upload_document(
             resource_type="document",
             details={"file_path": media_file_path},
         )
-        prompt = "קובץ התקבל ונשמר בהצלחה. צור אישור קצר בעברית."
-        return await dispatcher.dispatch(prompt=prompt, system_prompt=FORTRESS_BASE, intent=intent)
+        return PERSONALITY_TEMPLATES["document_saved"].format(filename=doc.original_filename)
     except Exception:
         logger.exception("Error processing media from %s", member.phone)
-        return "שגיאה בשמירת הקובץ. נסה שוב."
+        return PERSONALITY_TEMPLATES["error_fallback"]
 
 
 async def _handle_list_documents(
@@ -410,27 +410,17 @@ async def _handle_list_documents(
     media_file_path: str | None,
     intent: str,
 ) -> str:
-    """Return a summary of recent documents via dispatcher."""
+    """Return a formatted list of recent documents using personality templates."""
     from src.models.schema import Document
 
     docs = (
         db.query(Document)
         .filter(Document.uploaded_by == member.id)
         .order_by(Document.created_at.desc())
-        .limit(10)
+        .limit(20)
         .all()
     )
-    if not docs:
-        prompt = "אין מסמכים. צור תשובה קצרה בעברית."
-        return await dispatcher.dispatch(prompt=prompt, system_prompt=FORTRESS_BASE, intent=intent)
-
-    doc_lines = []
-    for i, doc in enumerate(docs, 1):
-        name = doc.original_filename or doc.file_path.split("/")[-1]
-        doc_lines.append(f"{i}. {name}")
-
-    prompt = f"הנה רשימת המסמכים האחרונים:\n" + "\n".join(doc_lines)
-    return await dispatcher.dispatch(prompt=prompt, system_prompt=FORTRESS_BASE, intent=intent)
+    return format_document_list(docs)
 
 
 async def _handle_ask_question(

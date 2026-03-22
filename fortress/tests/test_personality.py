@@ -6,6 +6,7 @@ from src.prompts.personality import (
     GREETINGS,
     PERSONALITY,
     TEMPLATES,
+    format_document_list,
     format_task_created,
     format_task_list,
     get_greeting,
@@ -30,6 +31,8 @@ REQUIRED_TEMPLATE_KEYS = {
     "task_list_empty",
     "task_list_header",
     "document_saved",
+    "document_list_header",
+    "document_list_empty",
     "permission_denied",
     "unknown_member",
     "inactive_member",
@@ -151,3 +154,34 @@ def test_unified_prompt_starts_with_personality() -> None:
 def test_task_responder_starts_with_personality() -> None:
     from src.prompts.system_prompts import TASK_RESPONDER
     assert TASK_RESPONDER.startswith(PERSONALITY)
+
+
+# ── format_document_list ─────────────────────────────────────────
+
+
+def test_format_document_list_empty() -> None:
+    assert format_document_list([]) == TEMPLATES["document_list_empty"]
+
+
+def test_format_document_list_multiple_documents() -> None:
+    docs = [
+        {"original_filename": "invoice.pdf", "doc_type": "document", "created_at": "2026-03-01T10:00:00"},
+        {"original_filename": "photo.jpg", "doc_type": "image", "created_at": "2026-03-02T12:00:00"},
+    ]
+    result = format_document_list(docs)
+    assert "invoice.pdf" in result
+    assert "photo.jpg" in result
+
+
+def test_format_document_list_emojis_per_type() -> None:
+    docs = [
+        {"original_filename": "a.pdf", "doc_type": "document", "created_at": "2026-01-01"},
+        {"original_filename": "b.jpg", "doc_type": "image", "created_at": "2026-01-01"},
+        {"original_filename": "c.xlsx", "doc_type": "spreadsheet", "created_at": "2026-01-01"},
+        {"original_filename": "d.zip", "doc_type": "other", "created_at": "2026-01-01"},
+    ]
+    result = format_document_list(docs)
+    assert "📄" in result
+    assert "🖼️" in result
+    assert "📊" in result
+    assert "📎" in result

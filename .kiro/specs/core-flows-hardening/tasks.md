@@ -159,7 +159,7 @@ Incremental implementation of six production gaps: delete_task flow, duplicate p
   - Update the test count to reflect the new total
   - _Requirements: 12.1_
 
-- [-] 11. Final checkpoint — run all tests
+- [x] 11. Final checkpoint — run all tests
   - Run `pytest fortress/tests/ -x -q` and ensure all tests pass (existing 201 + ~30 new)
   - Ensure all tests pass, ask the user if questions arise.
 

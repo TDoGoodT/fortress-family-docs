@@ -54,6 +54,8 @@ TEMPLATES: dict[str, str] = {
     "task_delete_which": "איזו משימה למחוק? 🤔\n{task_list}",
     "task_not_found": "לא מצאתי את המשימה הזו 🤷",
     "task_duplicate": "המשימה הזו כבר קיימת ✅",
+    "document_list_header": "📁 המסמכים שלך:\n",
+    "document_list_empty": "אין מסמכים שמורים 📂",
 }
 
 _PRIORITY_EMOJI: dict[str, str] = {
@@ -104,5 +106,30 @@ def format_task_list(tasks: list[dict]) -> str:
         due = getattr(task, "due_date", None) or (task.get("due_date") if isinstance(task, dict) else None)
         due_text = f" (עד {due})" if due else ""
         lines.append(f"{i}. {emoji} {title}{due_text}")
+
+    return "\n".join(lines)
+
+
+_DOC_TYPE_EMOJI: dict[str, str] = {
+    "document": "📄",
+    "image": "🖼️",
+    "spreadsheet": "📊",
+    "other": "📎",
+}
+
+
+def format_document_list(documents: list) -> str:
+    """Return a formatted Hebrew document list, or the empty-list template."""
+    if not documents:
+        return TEMPLATES["document_list_empty"]
+
+    lines: list[str] = [TEMPLATES["document_list_header"]]
+    for i, doc in enumerate(documents, 1):
+        doc_type = getattr(doc, "doc_type", None) or (doc.get("doc_type") if isinstance(doc, dict) else None) or "other"
+        emoji = _DOC_TYPE_EMOJI.get(doc_type, "📎")
+        filename = getattr(doc, "original_filename", None) or (doc.get("original_filename") if isinstance(doc, dict) else None) or "ללא שם"
+        created_at = getattr(doc, "created_at", None) or (doc.get("created_at") if isinstance(doc, dict) else None)
+        date_text = str(created_at)[:10] if created_at else ""
+        lines.append(f"{emoji} {i}. {filename}\n   📅 {date_text}")
 
     return "\n".join(lines)

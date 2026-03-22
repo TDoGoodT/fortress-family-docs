@@ -68,7 +68,7 @@ fortress/
 ├── src/           # Application code
 ├── migrations/    # Database schema (5 migration files, 10 tables)
 ├── scripts/       # Deployment & setup scripts
-├── tests/         # Test suite (228 tests)
+├── tests/         # Test suite (254 tests)
 ├── docs/          # Architecture & setup documentation
 └── docker-compose.yml
 ```
@@ -90,9 +90,9 @@ fortress/
 
 ## Status
 
-**Phase STABLE-3 Complete — Core Flows Hardening**
+**Phase STABLE-4 Complete — Document Flow**
 
-- ✅ 228 passing tests
+- ✅ 254 passing tests
 - ✅ 10 database tables
 - ✅ 4 Docker services
 - ✅ WhatsApp integration
@@ -109,7 +109,7 @@ Private — Family use only.
 
 ## Roadmap & Version History
 
-### Current Version: Phase STABLE-3
+### Current Version: Phase STABLE-4
 
 | Phase | Status | Description | Tests |
 |-------|--------|-------------|-------|
@@ -125,6 +125,7 @@ Private — Family use only.
 | 4B.7 — Pipeline Resilience | ✅ Complete | JSON healing, response protection, logging | 175 |
 | STABLE-2 — Agent Personality | ✅ Complete | Centralised Hebrew personality, templates, consistent tone | 201 |
 | STABLE-3 — Core Flows Hardening | ✅ Complete | Delete tasks, ownership, dedup, prompt cleanup, migration | 228 |
+| STABLE-4 — Document Flow | ✅ Complete | Document storage, metadata, list/upload personality templates | 254 |
 | 5A — OCR | 📋 Planned | Document intelligence, invoice scanning | — |
 | 5B — Scheduler | 📋 Planned | Cron for recurring tasks, WhatsApp alerts | — |
 | 5C — RAG | 📋 Planned | pgvector, document Q&A, contract analysis | — |
