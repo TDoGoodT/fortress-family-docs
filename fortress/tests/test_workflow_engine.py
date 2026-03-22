@@ -36,6 +36,7 @@ def _make_state(**overrides) -> WorkflowState:
         "error": None,
         "task_data": None,
         "from_unified": False,
+        "delete_target": None,
     }
     state.update(overrides)
     return state
@@ -102,6 +103,11 @@ async def test_task_created_after_permission_granted() -> None:
         task_data=task_data,
         intent="create_task",
     )
+    # Configure mock DB so duplicate check and name resolution return None
+    mock_query = MagicMock()
+    mock_query.filter.return_value = mock_query
+    mock_query.first.return_value = None
+    state["db"].query.return_value = mock_query
     with patch("src.services.workflow_engine.create_task") as mock_create:
         await task_create_node(state)
         mock_create.assert_called_once()

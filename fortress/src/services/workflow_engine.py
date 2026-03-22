@@ -2,12 +2,16 @@
 
 import json
 import logging
+import re
+from datetime import datetime, timedelta, timezone
 from typing import TypedDict
+from uuid import UUID
 
 from langgraph.graph import END, StateGraph
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from src.models.schema import Conversation, FamilyMember, Memory
+from src.models.schema import Conversation, FamilyMember, Memory, Task
 from src.prompts.system_prompts import (
     FORTRESS_BASE,
     TASK_EXTRACTOR_BEDROCK,
@@ -31,7 +35,7 @@ from src.services.memory_service import (
     save_memory,
 )
 from src.services.unified_handler import handle_with_llm
-from src.services.tasks import complete_task, create_task, list_tasks
+from src.services.tasks import archive_task, complete_task, create_task, list_tasks
 
 logger = logging.getLogger(__name__)
 
@@ -40,12 +44,25 @@ _PERMISSION_MAP: dict[str, tuple[str, str] | None] = {
     "list_tasks": ("tasks", "read"),
     "create_task": ("tasks", "write"),
     "complete_task": ("tasks", "write"),
+    "delete_task": ("tasks", "write"),
     "greeting": None,
     "upload_document": ("documents", "write"),
     "list_documents": ("documents", "read"),
     "ask_question": None,
     "unknown": None,
 }
+
+
+def _resolve_member_by_name(db: Session, name: str) -> UUID | None:
+    """Case-insensitive partial match on family_members.name. Returns member ID or None."""
+    member = (
+        db.query(FamilyMember)
+        .filter(func.lower(FamilyMember.name).contains(name.lower()))
+        .first()
+    )
+    if member:
+        return member.id
+    return None
 
 
 class WorkflowState(TypedDict):
@@ -64,6 +81,7 @@ class WorkflowState(TypedDict):
     error: str | None
     task_data: dict | None
     from_unified: bool
+    delete_target: str | None
 
 
 # ---------------------------------------------------------------------------
@@ -95,21 +113,107 @@ async def unified_llm_node(state: WorkflowState) -> dict:
 
 
 async def task_create_node(state: WorkflowState) -> dict:
-    """Create a task from task_data stored in state."""
+    """Create a task from task_data stored in state, with duplicate check and owner resolution."""
     task_data = state.get("task_data") or {}
     title = task_data.get("title", "").strip()
-    if title:
-        create_task(
-            state["db"],
-            title,
-            state["member"].id,
-            assigned_to=state["member"].id,
-            due_date=task_data.get("due_date"),
-            category=task_data.get("category"),
-            priority=task_data.get("priority", "normal"),
+    if not title:
+        return {}
+
+    db = state["db"]
+    member = state["member"]
+
+    # Resolve assigned_to from name string
+    assigned_to_name = task_data.get("assigned_to")
+    assigned_to_id = member.id  # default: sender
+    if assigned_to_name and isinstance(assigned_to_name, str):
+        resolved = _resolve_member_by_name(db, assigned_to_name)
+        if resolved:
+            assigned_to_id = resolved
+        else:
+            logger.warning("task_create_node: name '%s' not found, falling back to sender", assigned_to_name)
+
+    # Duplicate check: same title (case-insensitive), same assigned_to, open, within 5 min
+    try:
+        five_min_ago = datetime.now(timezone.utc) - timedelta(minutes=5)
+        existing = (
+            db.query(Task)
+            .filter(
+                func.lower(Task.title) == title.lower(),
+                Task.assigned_to == assigned_to_id,
+                Task.status == "open",
+                Task.created_at > five_min_ago,
+            )
+            .first()
         )
-        logger.info("task_create_node: created task '%s' for %s", title, state["member"].name)
+        if existing:
+            logger.info("task_create_node: duplicate detected for '%s'", title)
+            return {"response": PERSONALITY_TEMPLATES["task_duplicate"]}
+    except Exception:
+        logger.exception("task_create_node: duplicate check failed, proceeding with creation")
+
+    create_task(
+        db,
+        title,
+        member.id,
+        assigned_to=assigned_to_id,
+        due_date=task_data.get("due_date"),
+        category=task_data.get("category"),
+        priority=task_data.get("priority", "normal"),
+    )
+    logger.info("task_create_node: created task '%s' for %s", title, member.name)
     return {}
+
+
+async def delete_task_node(state: WorkflowState) -> dict:
+    """Identify and soft-delete (archive) a task."""
+    db = state["db"]
+    member = state["member"]
+    message = state["message_text"].strip()
+    delete_target = state.get("delete_target")
+
+    tasks = list_tasks(db, status="open", assigned_to=member.id)
+
+    # Try to extract task number from message or delete_target
+    number = None
+    # Check delete_target first (from LLM)
+    if delete_target:
+        num_match = re.search(r"\d+", str(delete_target))
+        if num_match:
+            number = int(num_match.group())
+
+    # Fallback: extract number from message
+    if number is None:
+        num_match = re.search(r"\d+", message)
+        if num_match:
+            number = int(num_match.group())
+
+    if number is not None:
+        if 1 <= number <= len(tasks):
+            task = tasks[number - 1]
+            result = archive_task(db, task.id)
+            if result:
+                return {"response": PERSONALITY_TEMPLATES["task_deleted"].format(title=task.title)}
+        return {"response": PERSONALITY_TEMPLATES["task_not_found"]}
+
+    # Try title match: strip delete keywords, use remainder
+    title_candidate = message
+    for kw in ["מחק משימה", "הסר משימה", "בטל משימה", "מחק", "delete task"]:
+        title_candidate = title_candidate.replace(kw, "").strip()
+
+    if title_candidate:
+        for task in tasks:
+            if task.title.lower() == title_candidate.lower():
+                result = archive_task(db, task.id)
+                if result:
+                    return {"response": PERSONALITY_TEMPLATES["task_deleted"].format(title=task.title)}
+                return {"response": PERSONALITY_TEMPLATES["task_not_found"]}
+
+    # Ambiguous — show task list
+    if not tasks:
+        return {"response": PERSONALITY_TEMPLATES["task_not_found"]}
+
+    task_lines = "\n".join(f"{i}. {t.title}" for i, t in enumerate(tasks, 1))
+    return {"response": PERSONALITY_TEMPLATES["task_delete_which"].format(task_list=task_lines)}
 
 
 async def permission_node(state: WorkflowState) -> dict:
@@ -439,12 +543,16 @@ def _permission_router(state: WorkflowState) -> str:
     """Conditional edge after permission_node.
 
     - denied → response_node
+    - granted + delete_task → delete_task_node
     - granted + from_unified + task_data → task_create_node
     - granted + from_unified (no task_data) → response_node (skip action_node)
     - granted + keyword origin → memory_load_node (existing behavior)
     """
     if not state.get("permission_granted", False):
         return "response_node"
+
+    if state.get("intent") == "delete_task":
+        return "delete_task_node"
 
     if state.get("from_unified", False):
         if state.get("task_data"):
@@ -468,6 +576,7 @@ def _build_graph() -> StateGraph:
     graph.add_node("conversation_save_node", conversation_save_node)
     graph.add_node("unified_llm_node", unified_llm_node)
     graph.add_node("task_create_node", task_create_node)
+    graph.add_node("delete_task_node", delete_task_node)
 
     # Set entry point
     graph.set_entry_point("intent_node")
@@ -489,11 +598,13 @@ def _build_graph() -> StateGraph:
             "memory_load_node": "memory_load_node",
             "response_node": "response_node",
             "task_create_node": "task_create_node",
+            "delete_task_node": "delete_task_node",
         },
     )
     graph.add_edge("memory_load_node", "action_node")
     graph.add_edge("action_node", "response_node")
     graph.add_edge("task_create_node", "response_node")
+    graph.add_edge("delete_task_node", "response_node")
     graph.add_edge("response_node", "memory_save_node")
     graph.add_edge("memory_save_node", "conversation_save_node")
     graph.add_edge("conversation_save_node", END)
@@ -537,6 +648,7 @@ async def run_workflow(
             "error": None,
             "task_data": None,
             "from_unified": False,
+            "delete_target": None,
         }
         result = await _compiled_graph.ainvoke(initial_state)
         return result["response"]

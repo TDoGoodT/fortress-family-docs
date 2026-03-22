@@ -15,6 +15,7 @@ SENSITIVITY_MAP: dict[str, SensitivityLevel] = {
     "ask_question": "high",
     "upload_document": "high",
     "needs_llm": "medium",
+    "delete_task": "medium",
 }
 
 ROUTE_MAP: dict[SensitivityLevel, list[Provider]] = {

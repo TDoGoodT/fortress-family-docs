@@ -177,3 +177,22 @@ async def test_empty_raw_returns_fallback() -> None:
     intent, response, task_data = await handle_with_llm("test", "user", [], d)
     assert intent == "unknown"
     assert response == HEBREW_FALLBACK_MSG
+
+
+# ── delete_task intent with delete_target ────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_delete_task_with_delete_target() -> None:
+    """delete_task intent extracts delete_target from JSON response."""
+    payload = json.dumps({
+        "intent": "delete_task",
+        "response": "מוחק את המשימה",
+        "delete_target": "2",
+    })
+    d = _mock_dispatcher(payload)
+    intent, response, task_data = await handle_with_llm("מחק משימה 2", "אבא", [], d)
+    assert intent == "delete_task"
+    assert response == "מוחק את המשימה"
+    assert task_data is not None
+    assert task_data["delete_target"] == "2"

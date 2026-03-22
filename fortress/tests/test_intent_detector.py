@@ -10,10 +10,11 @@ from src.services.intent_detector import INTENTS, detect_intent
 
 
 def test_intents_contains_all_required() -> None:
-    """INTENTS dict should contain all 8 required intents."""
+    """INTENTS dict should contain all 9 required intents."""
     required = {
         "list_tasks", "create_task", "complete_task", "greeting",
         "upload_document", "list_documents", "ask_question", "unknown",
+        "delete_task",
     }
     assert required == set(INTENTS.keys())
 
@@ -126,3 +127,31 @@ def test_no_ollama_import() -> None:
 def test_no_llm_fallback_function() -> None:
     """_detect_intent_with_llm should not exist in the module."""
     assert not hasattr(intent_detector, "_detect_intent_with_llm")
+
+
+# ── Delete task keyword matching ─────────────────────────────────
+
+
+def test_hebrew_delete_task_machak_meshima() -> None:
+    assert detect_intent("מחק משימה", False) == "delete_task"
+
+
+def test_hebrew_delete_task_machak_standalone() -> None:
+    assert detect_intent("מחק", False) == "delete_task"
+
+
+def test_hebrew_delete_task_haser_meshima() -> None:
+    assert detect_intent("הסר משימה", False) == "delete_task"
+
+
+def test_hebrew_delete_task_batel_meshima() -> None:
+    assert detect_intent("בטל משימה", False) == "delete_task"
+
+
+def test_english_delete_task() -> None:
+    assert detect_intent("delete task", False) == "delete_task"
+
+
+def test_hebrew_delete_task_with_number() -> None:
+    """'מחק משימה 3' should also return delete_task (substring match)."""
+    assert detect_intent("מחק משימה 3", False) == "delete_task"

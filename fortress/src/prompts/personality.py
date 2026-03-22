@@ -50,6 +50,10 @@ TEMPLATES: dict[str, str] = {
     "inactive_member": "החשבון שלך לא פעיל. פנה להורים.",
     "error_fallback": "משהו השתבש 😅 אפשר לנסות שוב?",
     "cant_understand": "לא הבנתי, {name}. אפשר לנסח אחרת? 🤔",
+    "task_deleted": "משימה נמחקה: {title} ✅",
+    "task_delete_which": "איזו משימה למחוק? 🤔\n{task_list}",
+    "task_not_found": "לא מצאתי את המשימה הזו 🤷",
+    "task_duplicate": "המשימה הזו כבר קיימת ✅",
 }
 
 _PRIORITY_EMOJI: dict[str, str] = {

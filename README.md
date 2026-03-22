@@ -66,9 +66,9 @@ See [docs/setup.md](fortress/docs/setup.md) for detailed instructions.
 ```
 fortress/
 ├── src/           # Application code
-├── migrations/    # Database schema (4 migration files, 10 tables)
+├── migrations/    # Database schema (5 migration files, 10 tables)
 ├── scripts/       # Deployment & setup scripts
-├── tests/         # Test suite (201 tests)
+├── tests/         # Test suite (228 tests)
 ├── docs/          # Architecture & setup documentation
 └── docker-compose.yml
 ```
@@ -90,9 +90,9 @@ fortress/
 
 ## Status
 
-**Phase STABLE-2 Complete — Agent Personality**
+**Phase STABLE-3 Complete — Core Flows Hardening**
 
-- ✅ 201 passing tests
+- ✅ 228 passing tests
 - ✅ 10 database tables
 - ✅ 4 Docker services
 - ✅ WhatsApp integration
@@ -109,7 +109,7 @@ Private — Family use only.
 
 ## Roadmap & Version History
 
-### Current Version: Phase STABLE-2
+### Current Version: Phase STABLE-3
 
 | Phase | Status | Description | Tests |
 |-------|--------|-------------|-------|
@@ -124,6 +124,7 @@ Private — Family use only.
 | 4B.6 — Ollama Cleanup | ✅ Complete | Remove Ollama from critical path, unified LLM | 150 |
 | 4B.7 — Pipeline Resilience | ✅ Complete | JSON healing, response protection, logging | 175 |
 | STABLE-2 — Agent Personality | ✅ Complete | Centralised Hebrew personality, templates, consistent tone | 201 |
+| STABLE-3 — Core Flows Hardening | ✅ Complete | Delete tasks, ownership, dedup, prompt cleanup, migration | 228 |
 | 5A — OCR | 📋 Planned | Document intelligence, invoice scanning | — |
 | 5B — Scheduler | 📋 Planned | Cron for recurring tasks, WhatsApp alerts | — |
 | 5C — RAG | 📋 Planned | pgvector, document Q&A, contract analysis | — |

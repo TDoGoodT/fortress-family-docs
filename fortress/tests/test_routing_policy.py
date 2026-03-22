@@ -13,7 +13,7 @@ def test_greeting_is_low_sensitivity():
     assert get_sensitivity("greeting") == "low"
 
 
-@pytest.mark.parametrize("intent", ["list_tasks", "create_task", "complete_task", "list_documents", "unknown"])
+@pytest.mark.parametrize("intent", ["list_tasks", "create_task", "complete_task", "list_documents", "unknown", "delete_task"])
 def test_medium_sensitivity_intents(intent: str):
     assert get_sensitivity(intent) == "medium"
 

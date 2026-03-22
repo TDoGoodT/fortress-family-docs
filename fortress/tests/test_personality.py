@@ -35,10 +35,14 @@ REQUIRED_TEMPLATE_KEYS = {
     "inactive_member",
     "error_fallback",
     "cant_understand",
+    "task_deleted",
+    "task_delete_which",
+    "task_not_found",
+    "task_duplicate",
 }
 
 
-def test_templates_has_all_ten_keys() -> None:
+def test_templates_has_all_required_keys() -> None:
     assert set(TEMPLATES.keys()) == REQUIRED_TEMPLATE_KEYS
 
 

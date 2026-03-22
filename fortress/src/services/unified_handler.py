@@ -114,10 +114,15 @@ async def handle_with_llm(
             intent = data.get("intent", "").strip().lower()
             response_text = data.get("response", raw)
             task_data = data.get("task_data") if intent == "create_task" else None
+            delete_target = data.get("delete_target") if intent == "delete_task" else None
 
             if intent not in VALID_INTENTS:
                 logger.warning("Unified handler: invalid intent '%s', defaulting to unknown", intent)
                 intent = "unknown"
+
+            # Embed delete_target in task_data for workflow state
+            if delete_target is not None:
+                task_data = {"delete_target": delete_target}
 
             elapsed = time.monotonic() - start
             logger.info(
