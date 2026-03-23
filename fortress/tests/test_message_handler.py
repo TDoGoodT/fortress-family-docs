@@ -1,4 +1,9 @@
-"""Unit tests for the message handler service."""
+"""Unit tests for the message handler service.
+
+Updated for Skills Engine architecture (Sprint R1).
+The message handler now routes through: auth → parse → execute → format,
+with LLM fallback for unmatched messages.
+"""
 
 import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -56,67 +61,91 @@ async def test_conversation_saved(mock_auth, mock_db) -> None:
     assert mock_db.commit.called
 
 
-# ── Delegation to workflow engine ─────────────────────────────────
+# ── Skills Engine path tests ─────────────────────────────────────
 
 
 @pytest.mark.asyncio
-@patch("src.services.message_handler.run_workflow", new_callable=AsyncMock)
+@patch("src.services.message_handler._save_conversation")
+@patch("src.services.message_handler.execute")
+@patch("src.services.message_handler.parse_command")
 @patch("src.services.message_handler.get_family_member_by_phone")
-async def test_active_member_delegates_to_router(mock_auth, mock_route, mock_db) -> None:
-    """Active member messages should be delegated to run_workflow."""
+async def test_active_member_delegates_to_router(mock_auth, mock_parse, mock_exec, mock_conv, mock_db) -> None:
+    """Active member messages matched by parser should go through Skills Engine."""
+    from src.skills.base_skill import Command, Result
+
     member = _make_member()
     mock_auth.return_value = member
-    mock_route.return_value = "router response"
+    mock_parse.return_value = Command(skill="task", action="list")
+    mock_exec.return_value = Result(success=True, message="router response")
+
     result = await handle_incoming_message(mock_db, "972501234567", "משימות", "msg1")
     assert result == "router response"
-    mock_route.assert_called_once_with(
-        mock_db,
-        member,
-        "972501234567",
-        "משימות",
-        has_media=False,
-        media_file_path=None,
-    )
+    mock_exec.assert_called_once()
 
 
 @pytest.mark.asyncio
-@patch("src.services.message_handler.run_workflow", new_callable=AsyncMock)
+@patch("src.services.message_handler._save_conversation")
+@patch("src.services.message_handler.execute")
+@patch("src.services.message_handler.parse_command")
 @patch("src.services.message_handler.get_family_member_by_phone")
-async def test_media_message_delegates_to_router(mock_auth, mock_route, mock_db) -> None:
-    """Media messages should be delegated to run_workflow with has_media=True."""
+async def test_media_message_delegates_to_router(mock_auth, mock_parse, mock_exec, mock_conv, mock_db) -> None:
+    """Media messages should be parsed and executed through Skills Engine."""
+    from src.skills.base_skill import Command, Result
+
     member = _make_member()
     mock_auth.return_value = member
-    mock_route.return_value = "document saved"
+    mock_parse.return_value = Command(skill="media", action="save", params={"media_file_path": "/data/file.pdf"})
+    mock_exec.return_value = Result(success=True, message="document saved")
+
     result = await handle_incoming_message(
-        mock_db,
-        "972501234567",
-        "",
-        "msg1",
-        has_media=True,
-        media_file_path="/data/documents/2026/03/file.pdf",
+        mock_db, "972501234567", "", "msg1",
+        has_media=True, media_file_path="/data/file.pdf",
     )
     assert result == "document saved"
-    mock_route.assert_called_once_with(
-        mock_db,
-        member,
-        "972501234567",
-        "",
-        has_media=True,
-        media_file_path="/data/documents/2026/03/file.pdf",
-    )
+    mock_parse.assert_called_once()
+    # Verify has_media was passed to parser
+    _, kwargs = mock_parse.call_args
+    assert kwargs.get("has_media") is True
 
 
 @pytest.mark.asyncio
-@patch("src.services.message_handler.run_workflow", new_callable=AsyncMock)
+@patch("src.services.message_handler._save_conversation")
+@patch("src.services.message_handler.execute")
+@patch("src.services.message_handler.parse_command")
 @patch("src.services.message_handler.get_family_member_by_phone")
-async def test_router_receives_correct_text(mock_auth, mock_route, mock_db) -> None:
-    """Workflow engine should receive the exact message text."""
+async def test_router_receives_correct_text(mock_auth, mock_parse, mock_exec, mock_conv, mock_db) -> None:
+    """Parser should receive the exact message text."""
+    from src.skills.base_skill import Command, Result
+
     member = _make_member()
     mock_auth.return_value = member
-    mock_route.return_value = "ok"
+    mock_parse.return_value = Command(skill="task", action="create")
+    mock_exec.return_value = Result(success=True, message="ok")
+
     await handle_incoming_message(mock_db, "972501234567", "משימה חדשה: קניות", "msg1")
-    call_args = mock_route.call_args
-    assert call_args[0][3] == "משימה חדשה: קניות"
+    call_args = mock_parse.call_args
+    assert call_args[0][0] == "משימה חדשה: קניות"
+
+
+# ── LLM fallback tests ──────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+@patch("src.services.message_handler._save_conversation")
+@patch("src.services.workflow_engine.run_workflow", new_callable=AsyncMock)
+@patch("src.services.message_handler.parse_command", return_value=None)
+@patch("src.services.message_handler.get_family_member_by_phone")
+async def test_llm_fallback_when_no_match(mock_auth, mock_parse, mock_workflow, mock_conv, mock_db) -> None:
+    """Unmatched messages should fall back to LLM workflow engine."""
+    member = _make_member()
+    mock_auth.return_value = member
+    mock_workflow.return_value = "llm response"
+
+    result = await handle_incoming_message(mock_db, "972501234567", "מה המצב?", "msg1")
+    assert result == "llm response"
+
+
+# ── Conversation saving tests ────────────────────────────────────
 
 
 @pytest.mark.asyncio
@@ -140,3 +169,26 @@ async def test_inactive_member_saves_conversation(mock_auth, mock_conv, mock_db)
     mock_conv.assert_called_once()
     call_args = mock_conv.call_args
     assert call_args[0][4] == "inactive_member"
+
+
+# ── Skills Engine intent tracking ────────────────────────────────
+
+
+@pytest.mark.asyncio
+@patch("src.services.message_handler._save_conversation")
+@patch("src.services.message_handler.execute")
+@patch("src.services.message_handler.parse_command")
+@patch("src.services.message_handler.get_family_member_by_phone")
+async def test_skills_path_saves_intent(mock_auth, mock_parse, mock_exec, mock_conv, mock_db) -> None:
+    """Skills Engine path should save conversation with skill.action intent."""
+    from src.skills.base_skill import Command, Result
+
+    member = _make_member()
+    mock_auth.return_value = member
+    mock_parse.return_value = Command(skill="system", action="cancel")
+    mock_exec.return_value = Result(success=True, message="ok")
+
+    await handle_incoming_message(mock_db, "972501234567", "בטל", "msg1")
+    mock_conv.assert_called_once()
+    call_args = mock_conv.call_args
+    assert call_args[0][4] == "system.cancel"

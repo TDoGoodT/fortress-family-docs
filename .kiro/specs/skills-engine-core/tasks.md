@@ -1,0 +1,31 @@
+# Tasks — Skills Engine Core (Sprint R1)
+
+- [x] 1. Create `src/skills/base_skill.py` — Command, Result dataclasses and BaseSkill ABC
+  - [x] 1.1 Define Command dataclass with skill, action, params fields
+  - [x] 1.2 Define Result dataclass with success, message, entity_type, entity_id, action, data fields
+  - [x] 1.3 Define BaseSkill ABC with abstract name, description, commands properties and execute, verify, get_help methods
+- [x] 2. Create `src/skills/registry.py` — SkillRegistry singleton
+  - [x] 2.1 Implement SkillRegistry with register, get, all_commands, list_skills methods
+  - [x] 2.2 Export module-level singleton `registry`
+- [x] 3. Create `src/engine/__init__.py` — empty package init
+- [x] 4. Create `src/engine/command_parser.py` — deterministic parser
+  - [x] 4.1 Define CANCEL_PATTERNS and CONFIRM_PATTERNS as compiled regex
+  - [x] 4.2 Implement parse_command with priority: media → cancel → confirm → skill patterns → None fallback
+- [x] 5. Create `src/engine/executor.py` — dispatch → verify → state → audit
+  - [x] 5.1 Implement execute function with skill lookup, execution, verify, state update, audit log
+  - [x] 5.2 Implement _handle_confirm for confirmation re-dispatch
+  - [x] 5.3 Implement exception handling with db.rollback and error_fallback template
+- [x] 6. Create `src/engine/response_formatter.py` — WhatsApp truncation
+- [x] 7. Create `src/skills/system_skill.py` — cancel, confirm, help
+- [x] 8. Create `src/skills/__init__.py` — register SystemSkill at import
+- [x] 9. Update `src/services/message_handler.py` — auth → parse → execute → format with LLM fallback
+- [x] 10. Create unit tests
+  - [x] 10.1 Create `tests/test_base_skill.py`
+  - [x] 10.2 Create `tests/test_registry.py`
+  - [x] 10.3 Create `tests/test_command_parser.py`
+  - [x] 10.4 Create `tests/test_executor.py`
+  - [x] 10.5 Create `tests/test_response_formatter.py`
+  - [x] 10.6 Create `tests/test_system_skill.py`
+- [x] 11. Run all tests — verify new + existing tests pass
+- [x] 12. Update README.md roadmap with R1 row
+- [-] 13. Git operations — branch, commit, push to rebuild/skills-engine

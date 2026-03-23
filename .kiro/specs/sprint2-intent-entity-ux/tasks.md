@@ -46,7 +46,7 @@ Incremental implementation of Sprint 2 features following the design document. E
     - Add `store_info` description for factual information storage
     - _Requirements: 2.1, 3.2 (partial — LLM prompt side), 8.2_
 
-- [-] 6. Update unified_handler.py for multi-intent and ambiguous parsing
+- [x] 6. Update unified_handler.py for multi-intent and ambiguous parsing
   - [x] 6.1 Modify `handle_with_llm` in `fortress/src/services/unified_handler.py`
     - After JSON parsing, if `intent == "multi_intent"`, extract `sub_intents` from data and set `task_data = {"sub_intents": sub_intents}`
     - If `intent == "ambiguous"`, extract `options` from data and set `task_data = {"options": options}`
@@ -154,13 +154,13 @@ Incremental implementation of Sprint 2 features following the design document. E
 - [x] 11. Checkpoint — Run full test suite
   - Ensure all tests pass (existing 365 + all new Sprint 2 tests), ask the user if questions arise.
 
-- [-] 12. Update README roadmap
-  - [-] 12.1 Add Sprint 2 row to the roadmap table in `README.md`
+- [x] 12. Update README roadmap
+  - [x] 12.1 Add Sprint 2 row to the roadmap table in `README.md`
     - Add row: `| SPRINT-2 — Intent + Entity + UX | ✅ Complete | Priority intent classification, multi-intent, clarification, bulk ops, notifications | 400+ |`
     - Update test count in project structure section
     - _Requirements: 10.1_
 
-- [ ] 13. Final checkpoint — Full regression and push
+- [x] 13. Final checkpoint — Full regression and push
   - Ensure all tests pass, ask the user if questions arise.
 
 ## Notes

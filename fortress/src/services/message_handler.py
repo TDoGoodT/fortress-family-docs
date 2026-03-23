@@ -1,4 +1,4 @@
-"""Fortress 2.0 message handler — thin auth layer delegating to workflow engine."""
+"""Fortress message handler — auth → parse → execute → format."""
 
 import logging
 
@@ -7,7 +7,10 @@ from sqlalchemy.orm import Session
 from src.models.schema import Conversation
 from src.prompts.personality import TEMPLATES as PERSONALITY_TEMPLATES
 from src.services.auth import get_family_member_by_phone
-from src.services.workflow_engine import run_workflow
+from src.engine.command_parser import parse_command
+from src.engine.executor import execute
+from src.engine.response_formatter import format_response
+from src.skills.registry import registry
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +24,7 @@ async def handle_incoming_message(
     has_media: bool = False,
     media_file_path: str | None = None,
 ) -> str:
-    """Authenticate sender and delegate to workflow engine."""
+    """Authenticate sender and process via Skills Engine or LLM fallback."""
     member = get_family_member_by_phone(db, phone)
 
     if member is None:
@@ -34,14 +37,28 @@ async def handle_incoming_message(
         _save_conversation(db, member.id, message_text, response, "inactive_member")
         return response
 
-    return await run_workflow(
-        db,
-        member,
-        phone,
-        message_text,
-        has_media=has_media,
-        media_file_path=media_file_path,
+    # Parse — deterministic, zero LLM
+    command = parse_command(
+        message_text, registry, has_media=has_media, media_file_path=media_file_path
     )
+
+    if command is not None:
+        # Skills Engine path
+        result = execute(db, member, command)
+        response = format_response(result)
+        intent = f"{command.skill}.{command.action}"
+    else:
+        # LLM fallback — delegate to existing workflow engine
+        from src.services.workflow_engine import run_workflow
+
+        response = await run_workflow(
+            db, member, phone, message_text,
+            has_media=has_media, media_file_path=media_file_path,
+        )
+        intent = "llm_fallback"
+
+    _save_conversation(db, member.id, message_text, response, intent)
+    return response
 
 
 def _save_conversation(

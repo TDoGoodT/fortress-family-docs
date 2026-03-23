@@ -131,6 +131,7 @@ Private — Family use only.
 | STABLE-6 — Early Production | ✅ Complete | Bug tracker, memory fix, session resilience, media logging, admin dashboard | 318 |
 | SPRINT-1 — State + Time + Verification | ✅ Complete | Conversation state, time injection, action verification, confirmations | 365 |
 | SPRINT-2 — Intent + Entity + UX | ✅ Complete | Priority intent classification, multi-intent, clarification, bulk ops, notifications | 420+ |
+| R1 — Skills Engine Core | ✅ Complete | BaseSkill ABC, Registry, deterministic Command Parser, Executor, State integration, Response Formatter | 478 |
 | 5A — OCR | 📋 Planned | Document intelligence, invoice scanning | — |
 | 5C — RAG | 📋 Planned | pgvector, document Q&A, contract analysis | — |
 | 6.0 — NAS + Backup | 📋 Planned | NAS storage, Restic → Backblaze B2 | — |
