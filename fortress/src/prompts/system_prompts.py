@@ -81,7 +81,7 @@ UNIFIED_CLASSIFY_AND_RESPOND: str = PERSONALITY + "\n\n" + (
     "   list_tasks, create_task, complete_task, delete_task, update_task, cancel_action, greeting, "
     "upload_document, list_documents, ask_question, "
     "list_recurring, create_recurring, delete_recurring, "
-    "report_bug, list_bugs, unknown\n"
+    "report_bug, list_bugs, multi_intent, ambiguous, store_info, unknown\n"
     "   - delete_task: המשתמש רוצה למחוק או לבטל משימה\n"
     "   - update_task: המשתמש רוצה לשנות או לעדכן משימה קיימת\n"
     "   - cancel_action: המשתמש רוצה לבטל פעולה\n"
@@ -91,6 +91,9 @@ UNIFIED_CLASSIFY_AND_RESPOND: str = PERSONALITY + "\n\n" + (
     "   - delete_recurring: המשתמש רוצה למחוק תזכורת חוזרת\n"
     "   - report_bug: המשתמש מדווח על באג או בעיה במערכת\n"
     "   - list_bugs: המשתמש רוצה לראות באגים פתוחים\n"
+    "   - multi_intent: ההודעה מכילה מספר בקשות שונות\n"
+    "   - ambiguous: לא ברור מה המשתמש רוצה\n"
+    "   - store_info: המשתמש רוצה לשמור מידע/עובדה\n"
     "2. לייצר תשובה קצרה ומתאימה בעברית (זה וואטסאפ, לא אימייל).\n\n"
     "אם הכוונה היא create_task, חלץ גם את פרטי המשימה:\n"
     "- title: שם המשימה בעברית\n"
@@ -111,7 +114,13 @@ UNIFIED_CLASSIFY_AND_RESPOND: str = PERSONALITY + "\n\n" + (
     '{"intent": "...", "response": "...", "task_data": {...}, "delete_target": ..., "recurring_data": {...}}\n\n'
     "task_data נדרש רק כאשר intent הוא create_task.\n"
     "delete_target נדרש רק כאשר intent הוא delete_task.\n"
-    "recurring_data נדרש רק כאשר intent הוא create_recurring.\n"
+    "recurring_data נדרש רק כאשר intent הוא create_recurring.\n\n"
+    "אם ההודעה מכילה מספר בקשות שונות, החזר:\n"
+    '{"intent": "multi_intent", "response": "...", "sub_intents": [{"intent": "...", "task_data": {...}}, ...]}\n\n'
+    "אם אתה לא בטוח מה הכוונה, החזר:\n"
+    '{"intent": "ambiguous", "response": "...", "options": ["create_task", "list_tasks", ...]}\n\n'
+    "אם המשתמש רוצה לשמור מידע או עובדה (לא משימה), החזר:\n"
+    '{"intent": "store_info", "response": "..."}\n\n'
     "אל תוסיף טקסט מחוץ ל-JSON.\n\n"
     "חשוב מאוד: החזר JSON תקין בלבד. אל תעטוף ב-markdown, אל תוסיף הסברים לפני או אחרי ה-JSON.\n\n"
     "אל תמציא פעולות שלא ביצעת. אם לא מחקת/השלמת/יצרת משימה בפועל — אל תגיד שעשית את זה. "

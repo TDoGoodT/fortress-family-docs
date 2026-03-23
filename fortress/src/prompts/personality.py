@@ -74,6 +74,16 @@ TEMPLATES: dict[str, str] = {
     "task_updated": "משימה עודכנה: {title} ✅{changes}",
     "task_update_which": "איזו משימה לעדכן? 🤔\n{task_list}",
     "verification_failed": "משהו השתבש בשמירה 😅 אפשר לנסות שוב?",
+    "multi_intent_summary": "ביצעתי כמה דברים:\n\n{responses}",
+    "clarify": "לא הייתי בטוח מה התכוונת 🤔\nבחר אפשרות:\n{options}",
+    "clarify_option": "{number}. {label}",
+    "bulk_delete_confirm": "למחוק את כל {count} המשימות? 😮\n{task_list}\n\n(כן/לא)",
+    "bulk_deleted": "{count} משימות נמחקו ✅",
+    "bulk_range_confirm": "למחוק משימות {start}-{end}?\n{task_list}\n\n(כן/לא)",
+    "task_assigned_notification": "📋 {sender_name} הקצה לך משימה: {title}",
+    "need_list_first": "שלח 'משימות' קודם כדי לראות את הרשימה, ואז תוכל לבחור לפי מספר 📋",
+    "task_similar_exists": "כבר יש משימה דומה: '{similar_title}'\nליצור בכל זאת את '{title}'? (כן/לא)",
+    "info_stored": "שמרתי את המידע ✅\n{content}",
 }
 
 _PRIORITY_EMOJI: dict[str, str] = {

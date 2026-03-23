@@ -60,6 +60,16 @@ REQUIRED_TEMPLATE_KEYS = {
     "task_updated",
     "task_update_which",
     "verification_failed",
+    "multi_intent_summary",
+    "clarify",
+    "clarify_option",
+    "bulk_delete_confirm",
+    "bulk_deleted",
+    "bulk_range_confirm",
+    "task_assigned_notification",
+    "need_list_first",
+    "task_similar_exists",
+    "info_stored",
 }
 
 

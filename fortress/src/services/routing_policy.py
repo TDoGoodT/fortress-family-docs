@@ -23,6 +23,11 @@ SENSITIVITY_MAP: dict[str, SensitivityLevel] = {
     "list_bugs": "medium",
     "cancel_action": "low",
     "update_task": "medium",
+    "multi_intent": "medium",
+    "ambiguous": "medium",
+    "bulk_delete_tasks": "medium",
+    "bulk_delete_range": "medium",
+    "store_info": "medium",
 }
 
 ROUTE_MAP: dict[SensitivityLevel, list[Provider]] = {

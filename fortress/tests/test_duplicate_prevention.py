@@ -39,9 +39,12 @@ def _mock_db_with_duplicate():
     db = MagicMock()
     existing_task = MagicMock()
     existing_task.id = uuid4()
+    existing_task.title = "לקנות חלב"
+    existing_task.status = "open"
     mock_query = MagicMock()
     mock_query.filter.return_value = mock_query
     mock_query.first.return_value = existing_task
+    mock_query.all.return_value = [existing_task]
     db.query.return_value = mock_query
     return db
 
@@ -52,6 +55,7 @@ def _mock_db_no_duplicate():
     mock_query = MagicMock()
     mock_query.filter.return_value = mock_query
     mock_query.first.return_value = None
+    mock_query.all.return_value = []
     db.query.return_value = mock_query
     return db
 

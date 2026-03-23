@@ -161,7 +161,7 @@ Adds conversation state tracking, deterministic Israel-timezone time injection, 
   - Add Sprint 1 row to the roadmap table with status, description, and test count
   - _Requirements: 13.1_
 
-- [-] 14. Final checkpoint — Run all tests and push
+- [x] 14. Final checkpoint — Run all tests and push
   - Ensure all tests pass (existing 318 + new tests), ask the user if questions arise.
   - Push to origin main when all tests pass.
 

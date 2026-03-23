@@ -76,6 +76,23 @@ _PERMISSION_MAP: dict[str, tuple[str, str] | None] = {
     "report_bug": ("tasks", "write"),
     "list_bugs": ("tasks", "read"),
     "update_task": ("tasks", "write"),
+    "bulk_delete_tasks": ("tasks", "write"),
+    "bulk_delete_range": ("tasks", "write"),
+    "store_info": None,
+    "multi_intent": None,
+    "ambiguous": None,
+}
+
+# Hebrew intent labels for clarification display
+_INTENT_LABELS_HE: dict[str, str] = {
+    "create_task": "ליצור משימה",
+    "list_tasks": "להציג משימות",
+    "delete_task": "למחוק משימה",
+    "complete_task": "לסיים משימה",
+    "update_task": "לעדכן משימה",
+    "store_info": "לשמור מידע",
+    "create_recurring": "ליצור תזכורת חוזרת",
+    "ask_question": "לשאול שאלה",
 }
 
 
@@ -148,12 +165,18 @@ def resolve_reference(
                 return conv_state.last_entity_id
             break
 
-    # 2. Index check: "משימה N"
+    # 2. Index check: "משימה N" or bare number (e.g., "מחק 2" or just "2")
     index_match = re.search(r"משימה\s+(\d+)", message)
+    if index_match is None:
+        # Try bare number
+        bare_match = re.search(r"\b(\d+)\b", message)
+        if bare_match:
+            index_match = bare_match
+
     if index_match:
         index = int(index_match.group(1))
         context = conv_state.context or {}
-        task_ids = context.get("task_ids", [])
+        task_ids = context.get("task_list_order", context.get("task_ids", []))
         if 1 <= index <= len(task_ids):
             try:
                 return UUID(task_ids[index - 1])
@@ -240,6 +263,29 @@ async def confirmation_check_node(state: WorkflowState) -> dict:
                         result["response"] = PERSONALITY_TEMPLATES["error_fallback"]
                 else:
                     result["response"] = PERSONALITY_TEMPLATES["error_fallback"]
+            elif action_type == "bulk_delete":
+                task_ids = action_data.get("task_ids", [])
+                count = 0
+                for tid_str in task_ids:
+                    try:
+                        archived = archive_task(db, UUID(tid_str))
+                        if archived:
+                            count += 1
+                    except (ValueError, TypeError):
+                        pass
+                result["response"] = PERSONALITY_TEMPLATES["bulk_deleted"].format(count=count)
+                result["intent"] = "bulk_delete_tasks"
+            elif action_type == "create_task_similar":
+                task = create_task(
+                    db, action_data["title"], member.id,
+                    assigned_to=UUID(action_data["assigned_to"]),
+                    due_date=action_data.get("due_date"),
+                    category=action_data.get("category"),
+                    priority=action_data.get("priority", "normal"),
+                )
+                result["response"] = format_task_created(action_data["title"], action_data.get("due_date"))
+                result["created_task_id"] = task.id
+                result["intent"] = "create_task"
             else:
                 result["response"] = PERSONALITY_TEMPLATES["error_fallback"]
         else:
@@ -251,6 +297,33 @@ async def confirmation_check_node(state: WorkflowState) -> dict:
         clear_state(db, member.id)
         result["response"] = PERSONALITY_TEMPLATES["action_cancelled"]
         return result
+
+    # Check for clarification number selection (pending clarification + number)
+    if conv_state.pending_action:
+        pending_type = conv_state.pending_action.get("type")
+        if pending_type == "clarification":
+            num_match = re.search(r"\d+", message)
+            if num_match:
+                options = conv_state.pending_action.get("data", {}).get("options", [])
+                idx = int(num_match.group())
+                if 1 <= idx <= len(options):
+                    selected_intent = options[idx - 1]
+                    resolve_pending(db, member.id)
+                    result["intent"] = selected_intent
+                    return result
+                # Invalid number — re-present options
+                resolve_pending(db, member.id)
+                option_lines = []
+                for i, opt in enumerate(options, 1):
+                    label = _INTENT_LABELS_HE.get(opt, opt)
+                    option_lines.append(
+                        PERSONALITY_TEMPLATES["clarify_option"].format(number=i, label=label)
+                    )
+                set_pending_confirmation(db, member.id, "clarification", {"options": options})
+                result["response"] = PERSONALITY_TEMPLATES["clarify"].format(
+                    options="\n".join(option_lines)
+                )
+                return result
 
     # Other message — clear pending, fall through to intent_node
     conv_state.pending_confirmation = False
@@ -301,7 +374,7 @@ async def unified_llm_node(state: WorkflowState) -> dict:
 
 
 async def task_create_node(state: WorkflowState) -> dict:
-    """Create a task from task_data stored in state, with duplicate check and owner resolution."""
+    """Create a task from task_data stored in state, with 3-strategy duplicate detection and owner resolution."""
     task_data = state.get("task_data") or {}
     title = task_data.get("title", "").strip()
     if not title:
@@ -320,22 +393,58 @@ async def task_create_node(state: WorkflowState) -> dict:
         else:
             logger.warning("task_create_node: name '%s' not found, falling back to sender", assigned_to_name)
 
-    # Duplicate check: same title (case-insensitive), same assigned_to, open, within 5 min
+    # 3-strategy duplicate detection on open tasks
     try:
-        five_min_ago = datetime.now(timezone.utc) - timedelta(minutes=5)
-        existing = (
+        open_tasks = (
             db.query(Task)
-            .filter(
-                func.lower(Task.title) == title.lower(),
-                Task.assigned_to == assigned_to_id,
-                Task.status == "open",
-                Task.created_at > five_min_ago,
-            )
-            .first()
+            .filter(Task.status == "open", Task.assigned_to == assigned_to_id)
+            .all()
         )
-        if existing:
-            logger.info("task_create_node: duplicate detected for '%s'", title)
-            return {"response": PERSONALITY_TEMPLATES["task_duplicate"]}
+
+        # Strategy 1: Exact title match (case-insensitive) → reject
+        for t in open_tasks:
+            if t.title.lower() == title.lower():
+                logger.info("task_create_node: exact duplicate detected for '%s'", title)
+                return {"response": PERSONALITY_TEMPLATES["task_duplicate"]}
+
+        # Strategy 2: Substring match → confirm
+        for t in open_tasks:
+            if title.lower() in t.title.lower() or t.title.lower() in title.lower():
+                set_pending_confirmation(db, member.id, "create_task_similar", {
+                    "title": title, "similar_title": t.title,
+                    "assigned_to": str(assigned_to_id),
+                    "due_date": str(task_data.get("due_date")) if task_data.get("due_date") else None,
+                    "category": task_data.get("category"),
+                    "priority": task_data.get("priority", "normal"),
+                })
+                return {"response": PERSONALITY_TEMPLATES["task_similar_exists"].format(
+                    title=title, similar_title=t.title
+                )}
+
+        # Strategy 3: Normalized match (strip Hebrew prefixes ל/ה) → confirm
+        def _normalize(s: str) -> str:
+            words = s.strip().split()
+            normalized = []
+            for w in words:
+                if len(w) > 1 and w[0] in "לה":
+                    normalized.append(w[1:])
+                else:
+                    normalized.append(w)
+            return " ".join(normalized).lower()
+
+        norm_title = _normalize(title)
+        for t in open_tasks:
+            if _normalize(t.title) == norm_title:
+                set_pending_confirmation(db, member.id, "create_task_similar", {
+                    "title": title, "similar_title": t.title,
+                    "assigned_to": str(assigned_to_id),
+                    "due_date": str(task_data.get("due_date")) if task_data.get("due_date") else None,
+                    "category": task_data.get("category"),
+                    "priority": task_data.get("priority", "normal"),
+                })
+                return {"response": PERSONALITY_TEMPLATES["task_similar_exists"].format(
+                    title=title, similar_title=t.title
+                )}
     except Exception:
         logger.exception("task_create_node: duplicate check failed, proceeding with creation")
 
@@ -362,24 +471,31 @@ async def delete_task_node(state: WorkflowState) -> dict:
     db = state["db"]
     member = state["member"]
     message = state["message_text"].strip()
-    delete_target = state.get("delete_target")
+    conv_state = state.get("conv_state")
 
-    tasks = list_tasks(db, status="open", assigned_to=member.id)
+    # Try to resolve via task_list_order first
+    task_list_order = None
+    if conv_state and conv_state.context:
+        task_list_order = conv_state.context.get("task_list_order")
 
-    # Try to extract task number from message or delete_target
+    # Try to extract task number from message
     number = None
-    if delete_target:
-        num_match = re.search(r"\d+", str(delete_target))
-        if num_match:
-            number = int(num_match.group())
-
-    if number is None:
-        num_match = re.search(r"\d+", message)
-        if num_match:
-            number = int(num_match.group())
+    num_match = re.search(r"\d+", message)
+    if num_match:
+        number = int(num_match.group())
 
     task = None
-    if number is not None:
+    if number is not None and task_list_order:
+        if 1 <= number <= len(task_list_order):
+            try:
+                task = get_task(db, UUID(task_list_order[number - 1]))
+            except (ValueError, TypeError):
+                pass
+        else:
+            return {"response": PERSONALITY_TEMPLATES["task_not_found"]}
+    elif number is not None and not task_list_order:
+        # Fall back to listing tasks by position (backward compat)
+        tasks = list_tasks(db, status="open", assigned_to=member.id)
         if 1 <= number <= len(tasks):
             task = tasks[number - 1]
         else:
@@ -387,6 +503,7 @@ async def delete_task_node(state: WorkflowState) -> dict:
 
     if task is None:
         # Try title match
+        tasks = list_tasks(db, status="open", assigned_to=member.id)
         title_candidate = message
         for kw in ["מחק משימה", "הסר משימה", "בטל משימה", "מחק", "delete task"]:
             title_candidate = title_candidate.replace(kw, "").strip()
@@ -398,6 +515,7 @@ async def delete_task_node(state: WorkflowState) -> dict:
                     break
 
     if task is None:
+        tasks = list_tasks(db, status="open", assigned_to=member.id)
         if not tasks:
             return {"response": PERSONALITY_TEMPLATES["task_not_found"]}
         task_lines = "\n".join(f"{i}. {t.title}" for i, t in enumerate(tasks, 1))
@@ -901,6 +1019,187 @@ _ACTION_HANDLERS: dict = {
 
 
 # ---------------------------------------------------------------------------
+# Task 8.1: multi_intent_node
+# ---------------------------------------------------------------------------
+
+
+async def multi_intent_node(state: WorkflowState) -> dict:
+    """Process each sub-intent and combine responses."""
+    task_data = state.get("task_data") or {}
+    sub_intents = task_data.get("sub_intents", [])
+    db = state["db"]
+    member = state["member"]
+    dispatcher = ModelDispatcher()
+
+    responses = []
+    for sub in sub_intents:
+        sub_intent = sub.get("intent", "unknown")
+        handler = _ACTION_HANDLERS.get(sub_intent)
+        if handler:
+            resp = await handler(db, member, state["message_text"], dispatcher, None, sub_intent)
+            responses.append(resp)
+
+    if not responses:
+        return {"response": state.get("response", PERSONALITY_TEMPLATES["error_fallback"])}
+
+    combined = PERSONALITY_TEMPLATES["multi_intent_summary"].format(
+        responses="\n\n".join(responses)
+    )
+    return {"response": combined}
+
+
+# ---------------------------------------------------------------------------
+# Task 8.2: clarification_node
+# ---------------------------------------------------------------------------
+
+
+async def clarification_node(state: WorkflowState) -> dict:
+    """Present numbered options and store in conversation state."""
+    task_data = state.get("task_data") or {}
+    options = task_data.get("options", [])
+    db = state["db"]
+    member = state["member"]
+
+    if not options:
+        return {"response": PERSONALITY_TEMPLATES["cant_understand"].format(name=member.name)}
+
+    option_lines = []
+    for i, opt in enumerate(options, 1):
+        label = _INTENT_LABELS_HE.get(opt, opt)
+        option_lines.append(
+            PERSONALITY_TEMPLATES["clarify_option"].format(number=i, label=label)
+        )
+
+    set_pending_confirmation(db, member.id, "clarification", {"options": options})
+
+    return {
+        "response": PERSONALITY_TEMPLATES["clarify"].format(
+            options="\n".join(option_lines)
+        )
+    }
+
+
+# ---------------------------------------------------------------------------
+# Task 8.4: bulk_delete_node
+# ---------------------------------------------------------------------------
+
+
+async def bulk_delete_node(state: WorkflowState) -> dict:
+    """Handle bulk_delete_tasks and bulk_delete_range intents."""
+    db = state["db"]
+    member = state["member"]
+    message = state["message_text"].strip()
+    intent = state["intent"]
+
+    tasks = list_tasks(db, status="open", assigned_to=member.id)
+    if not tasks:
+        return {"response": PERSONALITY_TEMPLATES["task_list_empty"]}
+
+    if intent == "bulk_delete_tasks":
+        task_lines = "\n".join(f"{i}. {t.title}" for i, t in enumerate(tasks, 1))
+        set_pending_confirmation(db, member.id, "bulk_delete", {
+            "task_ids": [str(t.id) for t in tasks],
+            "titles": [t.title for t in tasks],
+        })
+        return {"response": PERSONALITY_TEMPLATES["bulk_delete_confirm"].format(
+            count=len(tasks), task_list=task_lines
+        )}
+
+    # bulk_delete_range
+    range_match = re.search(r"(\d+)\s*[-–עד]\s*(\d+)", message)
+    if not range_match:
+        range_match = re.search(r"(\d+)\s*[-–to]\s*(\d+)", message.lower())
+    if not range_match:
+        return {"response": PERSONALITY_TEMPLATES["error_fallback"]}
+
+    start_idx = int(range_match.group(1))
+    end_idx = int(range_match.group(2))
+    if start_idx < 1 or end_idx > len(tasks) or start_idx > end_idx:
+        return {"response": PERSONALITY_TEMPLATES["task_not_found"]}
+
+    selected = tasks[start_idx - 1 : end_idx]
+    task_lines = "\n".join(f"{i}. {t.title}" for i, t in enumerate(selected, start_idx))
+    set_pending_confirmation(db, member.id, "bulk_delete", {
+        "task_ids": [str(t.id) for t in selected],
+        "titles": [t.title for t in selected],
+    })
+    return {"response": PERSONALITY_TEMPLATES["bulk_range_confirm"].format(
+        start=start_idx, end=end_idx, task_list=task_lines
+    )}
+
+
+# ---------------------------------------------------------------------------
+# Task 8.5: store_info_node
+# ---------------------------------------------------------------------------
+
+
+async def store_info_node(state: WorkflowState) -> dict:
+    """Save factual information as a permanent memory."""
+    db = state["db"]
+    member = state["member"]
+    message = state["message_text"].strip()
+    response_text = state.get("response", "")
+
+    # Use the LLM response as the content if available, otherwise use the raw message
+    content = response_text if response_text and response_text != PERSONALITY_TEMPLATES["error_fallback"] else message
+
+    memory = await save_memory(
+        db,
+        family_member_id=member.id,
+        content=content,
+        category="fact",
+        memory_type="permanent",
+        source="user_input",
+        confidence=1.0,
+    )
+
+    if memory:
+        return {"response": PERSONALITY_TEMPLATES["info_stored"].format(content=content[:100])}
+    return {"response": PERSONALITY_TEMPLATES["error_fallback"]}
+
+
+# ---------------------------------------------------------------------------
+# Task 8.6: assignee_notify_node
+# ---------------------------------------------------------------------------
+
+
+async def assignee_notify_node(state: WorkflowState) -> dict:
+    """Send WhatsApp notification to assignee if different from sender."""
+    created_id = state.get("created_task_id")
+    if not created_id:
+        return {}
+
+    db = state["db"]
+    member = state["member"]
+    task = get_task(db, created_id)
+    if not task or not task.assigned_to or task.assigned_to == member.id:
+        return {}
+
+    assignee = db.query(FamilyMember).filter(FamilyMember.id == task.assigned_to).first()
+    if not assignee:
+        logger.warning("assignee_notify: assignee %s not found", task.assigned_to)
+        return {}
+
+    notification = PERSONALITY_TEMPLATES["task_assigned_notification"].format(
+        title=task.title,
+        sender_name=member.name,
+    )
+
+    try:
+        from src.services.whatsapp_client import send_text_message
+        phone = assignee.phone.lstrip("+")
+        success = await send_text_message(phone, notification)
+        if success:
+            logger.info("assignee_notify: sent to %s for task '%s'", assignee.id, task.title)
+        else:
+            logger.warning("assignee_notify: failed to send to %s for task '%s'", assignee.id, task.title)
+    except Exception:
+        logger.exception("assignee_notify: error sending to %s", assignee.id)
+
+    return {}
+
+
+# ---------------------------------------------------------------------------
 # Task 8.5: verification_node
 # ---------------------------------------------------------------------------
 
@@ -973,7 +1272,7 @@ async def update_state_node(state: WorkflowState) -> dict:
                 db, member.id,
                 intent="list_tasks",
                 action="listed",
-                context={"task_ids": task_ids},
+                context={"task_list_order": task_ids},
             )
         elif intent == "cancel_action":
             clear_state(db, member.id)
@@ -1080,7 +1379,8 @@ def _confirmation_router(state: WorkflowState) -> str:
 
 
 def _intent_router(state: WorkflowState) -> str:
-    """Conditional edge: needs_llm → unified_llm_node, cancel_action → cancel_action_node, otherwise → permission_node."""
+    """Conditional edge: needs_llm → unified_llm_node, cancel_action → cancel_action_node,
+    bulk_delete_* → permission_node, otherwise → permission_node."""
     intent = state.get("intent", "")
     if intent == "needs_llm":
         return "unified_llm_node"
@@ -1095,6 +1395,10 @@ def _permission_router(state: WorkflowState) -> str:
     - denied → response_node
     - granted + delete_task → delete_task_node
     - granted + update_task → update_task_node
+    - granted + multi_intent → multi_intent_node
+    - granted + ambiguous → clarification_node
+    - granted + bulk_delete_* → bulk_delete_node
+    - granted + store_info → store_info_node
     - granted + from_unified + task_data → task_create_node
     - granted + from_unified (no task_data) → response_node (skip action_node)
     - granted + keyword origin → memory_load_node (existing behavior)
@@ -1109,6 +1413,18 @@ def _permission_router(state: WorkflowState) -> str:
 
     if intent == "update_task":
         return "update_task_node"
+
+    if intent == "multi_intent":
+        return "multi_intent_node"
+
+    if intent == "ambiguous":
+        return "clarification_node"
+
+    if intent in ("bulk_delete_tasks", "bulk_delete_range"):
+        return "bulk_delete_node"
+
+    if intent == "store_info":
+        return "store_info_node"
 
     if state.get("from_unified", False):
         if state.get("task_data"):
@@ -1138,6 +1454,12 @@ def _build_graph() -> StateGraph:
     graph.add_node("update_task_node", update_task_node)
     graph.add_node("verification_node", verification_node)
     graph.add_node("update_state_node", update_state_node)
+    # New Sprint 2 nodes
+    graph.add_node("multi_intent_node", multi_intent_node)
+    graph.add_node("clarification_node", clarification_node)
+    graph.add_node("bulk_delete_node", bulk_delete_node)
+    graph.add_node("store_info_node", store_info_node)
+    graph.add_node("assignee_notify_node", assignee_notify_node)
 
     # Set entry point — confirmation_check_node runs first
     graph.set_entry_point("confirmation_check_node")
@@ -1174,17 +1496,27 @@ def _build_graph() -> StateGraph:
             "task_create_node": "task_create_node",
             "delete_task_node": "delete_task_node",
             "update_task_node": "update_task_node",
+            "multi_intent_node": "multi_intent_node",
+            "clarification_node": "clarification_node",
+            "bulk_delete_node": "bulk_delete_node",
+            "store_info_node": "store_info_node",
         },
     )
 
     # Action paths → verification → response
     graph.add_edge("memory_load_node", "action_node")
     graph.add_edge("action_node", "verification_node")
-    graph.add_edge("task_create_node", "verification_node")
+    graph.add_edge("task_create_node", "assignee_notify_node")
+    graph.add_edge("assignee_notify_node", "verification_node")
     graph.add_edge("delete_task_node", "response_node")
     graph.add_edge("update_task_node", "verification_node")
     graph.add_edge("cancel_action_node", "response_node")
     graph.add_edge("verification_node", "response_node")
+    # New Sprint 2 edges
+    graph.add_edge("multi_intent_node", "response_node")
+    graph.add_edge("clarification_node", "response_node")
+    graph.add_edge("bulk_delete_node", "response_node")
+    graph.add_edge("store_info_node", "verification_node")
 
     # Response → memory_save → conversation_save → update_state → END
     graph.add_edge("response_node", "memory_save_node")

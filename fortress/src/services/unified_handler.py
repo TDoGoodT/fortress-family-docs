@@ -132,6 +132,18 @@ async def handle_with_llm(
             recurring_data = data.get("recurring_data") if intent == "create_recurring" else None
             delete_target = data.get("delete_target") if intent == "delete_task" else None
 
+            # Multi-intent: extract sub_intents into task_data
+            if intent == "multi_intent":
+                sub_intents = data.get("sub_intents", [])
+                task_data = {"sub_intents": sub_intents}
+
+            # Ambiguous: extract options into task_data
+            if intent == "ambiguous":
+                options = data.get("options", [])
+                task_data = {"options": options}
+
+            # store_info: pass through normally (no special extraction needed)
+
             if intent not in VALID_INTENTS:
                 logger.warning("Unified handler: invalid intent '%s', defaulting to unknown", intent)
                 intent = "unknown"

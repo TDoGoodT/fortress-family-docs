@@ -68,7 +68,7 @@ fortress/
 ├── src/           # Application code
 ├── migrations/    # Database schema (6 migration files, 11 tables)
 ├── scripts/       # Deployment & setup scripts
-├── tests/         # Test suite (365 tests)
+├── tests/         # Test suite (420+ tests)
 ├── docs/          # Architecture & setup documentation
 └── docker-compose.yml
 ```
@@ -93,7 +93,7 @@ fortress/
 
 **Phase STABLE-6 Complete — Early Production**
 
-- ✅ 365 passing tests
+- ✅ 420+ passing tests
 - ✅ 11 database tables
 - ✅ 4 Docker services
 - ✅ WhatsApp integration
@@ -130,6 +130,7 @@ Private — Family use only.
 | STABLE-5 — Recurring Scheduler | ✅ Complete | Recurring task scheduler, WhatsApp notifications, pattern management | 254+ |
 | STABLE-6 — Early Production | ✅ Complete | Bug tracker, memory fix, session resilience, media logging, admin dashboard | 318 |
 | SPRINT-1 — State + Time + Verification | ✅ Complete | Conversation state, time injection, action verification, confirmations | 365 |
+| SPRINT-2 — Intent + Entity + UX | ✅ Complete | Priority intent classification, multi-intent, clarification, bulk ops, notifications | 420+ |
 | 5A — OCR | 📋 Planned | Document intelligence, invoice scanning | — |
 | 5C — RAG | 📋 Planned | pgvector, document Q&A, contract analysis | — |
 | 6.0 — NAS + Backup | 📋 Planned | NAS storage, Restic → Backblaze B2 | — |

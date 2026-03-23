@@ -377,3 +377,73 @@ async def test_handle_list_bugs_with_bugs() -> None:
         db, member, "באגים", MagicMock(), None, "list_bugs",
     )
     assert "תמונה לא נשמרת" in result
+
+
+# ── store_info intent and node (Sprint 2 — Req 8.1, 8.3, 8.4) ──
+
+
+from src.services.intent_detector import VALID_INTENTS
+from src.services.workflow_engine import store_info_node
+
+
+def test_store_info_in_valid_intents() -> None:
+    """store_info should be a recognized intent."""
+    assert "store_info" in VALID_INTENTS
+
+
+@pytest.mark.asyncio
+@patch("src.services.workflow_engine.save_memory", new_callable=AsyncMock)
+async def test_store_info_node_saves_permanent_fact(mock_save) -> None:
+    """store_info_node should save memory with category='fact' and memory_type='permanent'."""
+    mock_memory = MagicMock()
+    mock_memory.id = uuid4()
+    mock_save.return_value = mock_memory
+
+    state = _make_state(
+        intent="store_info",
+        message_text="הקוד לכספת הוא 1234",
+        response="",
+    )
+    result = await store_info_node(state)
+
+    mock_save.assert_called_once()
+    call_kwargs = mock_save.call_args
+    assert call_kwargs[1]["category"] == "fact"
+    assert call_kwargs[1]["memory_type"] == "permanent"
+
+
+@pytest.mark.asyncio
+@patch("src.services.workflow_engine.save_memory", new_callable=AsyncMock)
+async def test_store_info_node_uses_info_stored_template(mock_save) -> None:
+    """store_info_node should return info_stored template on success."""
+    from src.prompts.personality import TEMPLATES as PT
+
+    mock_memory = MagicMock()
+    mock_save.return_value = mock_memory
+
+    state = _make_state(
+        intent="store_info",
+        message_text="הקוד לכספת הוא 1234",
+        response="",
+    )
+    result = await store_info_node(state)
+
+    assert "שמרתי את המידע" in result["response"]
+
+
+@pytest.mark.asyncio
+@patch("src.services.workflow_engine.save_memory", new_callable=AsyncMock)
+async def test_store_info_node_fallback_on_exclusion(mock_save) -> None:
+    """store_info_node should return error_fallback when memory is excluded."""
+    from src.prompts.personality import TEMPLATES as PT
+
+    mock_save.return_value = None  # excluded
+
+    state = _make_state(
+        intent="store_info",
+        message_text="excluded content",
+        response="",
+    )
+    result = await store_info_node(state)
+
+    assert result["response"] == PT["error_fallback"]
