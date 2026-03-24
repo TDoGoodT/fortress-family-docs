@@ -117,7 +117,7 @@ Create 7 end-to-end test files validating the full Skills Engine pipeline throug
   - All existing R1 + R2 tests plus ~62 new R3 tests must pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [-] 11. Merge rebuild/skills-engine to main and push
+- [x] 11. Merge rebuild/skills-engine to main and push
   - `git checkout main`
   - `git merge rebuild/skills-engine` (standard merge, not squash)
   - If conflicts: keep rebuild/skills-engine version
@@ -125,20 +125,20 @@ Create 7 end-to-end test files validating the full Skills Engine pipeline throug
   - `git push origin main`
   - _Requirements: 9.1–9.3_
 
-- [ ] 12. Update README.md roadmap
+- [x] 12. Update README.md roadmap
   - Add row for "R2 — Core Skills Migration" with "✅ Complete"
   - Add row for "R3 — Wire + Test + Deploy" with "✅ Complete"
   - Update "Current Version" line to "Phase R3 — Skills Engine"
   - Update test count in status section to reflect final count
   - _Requirements: 10.1–10.4_
 
-- [ ] 13. Update docs/setup.md with Skills Engine documentation
+- [x] 13. Update docs/setup.md with Skills Engine documentation
   - Add "Skills Engine Architecture" section describing CommandParser → Executor → Skill pipeline
   - Add "Available Skills" table listing all 8 skills (system, task, recurring, document, bug, chat, memory, morning) with one-line Hebrew descriptions
   - Add "How to Add a New Skill" section with step-by-step instructions
   - _Requirements: 11.1–11.3_
 
-- [ ] 14. Final checkpoint — Ensure all tests pass on main
+- [-] 14. Final checkpoint — Ensure all tests pass on main
   - Ensure all tests pass, ask the user if questions arise.
 
 ## Notes

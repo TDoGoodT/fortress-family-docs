@@ -194,3 +194,48 @@ Use rsync or Restic to back up `~/fortress_storage/` to Backblaze B2
 or another remote target.
 
 Full backup automation coming in a future phase.
+
+## Skills Engine Architecture
+
+The Skills Engine is the core message processing pipeline. It handles 90% of messages deterministically (regex → DB → template) with zero LLM calls. Only unrecognized messages fall back to the LLM.
+
+### Message Flow
+
+```
+1. WhatsApp → WAHA → webhook → message_handler
+2. message_handler → auth (phone lookup)
+3. CommandParser → regex match → Command
+4. Executor → Skill.execute → DB operation → verify
+5. Response → personality template → WhatsApp
+```
+
+### LLM Fallback (only when no regex match)
+
+```
+1. CommandParser returns None
+2. ChatSkill.respond → LLM → response
+```
+
+## Available Skills
+
+| Skill | Commands | Description |
+|-------|----------|-------------|
+| System | עזרה, ביטול, אישור | פקודות מערכת: עזרה, ביטול פעולה, אישור פעולה |
+| Tasks | משימה חדשה, משימות, מחק, סיים, עדכן | ניהול משימות — יצירה, רשימה, מחיקה, השלמה, עדכון |
+| Recurring | תזכורת חדשה, תזכורות, מחק תזכורת | ניהול תזכורות חוזרות — יצירה, רשימה, ביטול |
+| Documents | מסמכים, שלח תמונה/קובץ | שמירת מסמכים ותמונות |
+| Bugs | באג:, באגים | דיווח ומעקב באגים |
+| Chat | שלום, שיחה חופשית | שיחה חופשית וברכות |
+| Memory | זכרונות | ניהול זיכרונות — שמירה, שליפה, רשימה |
+| Morning | בוקר, סיכום, דוח | סיכום בוקר ודוחות |
+
+## How to Add a New Skill
+
+1. Create `src/skills/my_skill.py`
+2. Extend `BaseSkill` — implement `name`, `description`, `commands`, `execute`, `verify`, `get_help`
+3. Define commands as a list of `(re.Pattern, action_name)` tuples
+4. Implement `execute(db, member, command) → Result` with action dispatch
+5. Implement `verify(db, result) → bool` to confirm DB state after execution
+6. Register in `src/skills/__init__.py`: `registry.register(MySkill())`
+7. Add personality templates to `src/prompts/personality.py` if needed
+8. Add tests in `tests/test_my_skill.py`

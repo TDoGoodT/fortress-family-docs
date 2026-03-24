@@ -9,11 +9,14 @@ encrypted API calls.
 
 ## Architecture
 
+**Skills Engine Architecture** — 90% deterministic (regex → DB → template), 10% LLM fallback (free chat). Zero LLM calls for CRUD operations.
+
 ```
-WhatsApp → WAHA → FastAPI → LangGraph Workflow
-                    ├── Unified LLM (classify + respond)
-                    ├── AWS Bedrock (Hebrew AI)
-                    ├── Ollama (last-resort fallback)
+WhatsApp → WAHA → FastAPI → message_handler
+                    ├── CommandParser (regex → Command)
+                    ├── Executor → Skill.execute → DB → verify
+                    ├── ResponseFormatter → personality template
+                    ├── ChatSkill (LLM fallback only)
                     ├── PostgreSQL (data + memory)
                     └── NAS (document storage)
 ```
@@ -68,7 +71,7 @@ fortress/
 ├── src/           # Application code
 ├── migrations/    # Database schema (6 migration files, 11 tables)
 ├── scripts/       # Deployment & setup scripts
-├── tests/         # Test suite (420+ tests)
+├── tests/         # Test suite (689 tests)
 ├── docs/          # Architecture & setup documentation
 └── docker-compose.yml
 ```
@@ -91,18 +94,18 @@ fortress/
 
 ## Status
 
-**Phase STABLE-6 Complete — Early Production**
+**Phase R3 — Skills Engine**
 
-- ✅ 420+ passing tests
+- ✅ 689 passing tests
 - ✅ 11 database tables
 - ✅ 4 Docker services
 - ✅ WhatsApp integration
-- ✅ AI-powered intent routing
-- ✅ Hebrew responses via Bedrock
+- ✅ Skills Engine — deterministic command parsing
+- ✅ Hebrew responses via personality templates
 - ✅ Memory system with PII exclusions
 - ✅ Permission-based access control
-- ✅ Ollama removed from critical path — unified classify+respond
-- ✅ JSON healing — resilient to imperfect LLM output
+- ✅ E2E integration tests for all skills
+- ✅ LLM fallback for free chat only
 
 ## License
 
@@ -110,7 +113,7 @@ Private — Family use only.
 
 ## Roadmap & Version History
 
-### Current Version: Phase STABLE-6
+### Current Version: Phase R3 — Skills Engine
 
 | Phase | Status | Description | Tests |
 |-------|--------|-------------|-------|
@@ -132,6 +135,8 @@ Private — Family use only.
 | SPRINT-1 — State + Time + Verification | ✅ Complete | Conversation state, time injection, action verification, confirmations | 365 |
 | SPRINT-2 — Intent + Entity + UX | ✅ Complete | Priority intent classification, multi-intent, clarification, bulk ops, notifications | 420+ |
 | R1 — Skills Engine Core | ✅ Complete | BaseSkill ABC, Registry, deterministic Command Parser, Executor, State integration, Response Formatter | 478 |
+| R2 — Core Skills Migration | ✅ Complete | Task, Recurring, Document, Bug, Chat, Memory, Morning skills | 627 |
+| R3 — Wire + Test + Deploy | ✅ Complete | E2E tests, permissions, confirmations, regression, personality, merge to main | 689 |
 | 5A — OCR | 📋 Planned | Document intelligence, invoice scanning | — |
 | 5C — RAG | 📋 Planned | pgvector, document Q&A, contract analysis | — |
 | 6.0 — NAS + Backup | 📋 Planned | NAS storage, Restic → Backblaze B2 | — |
