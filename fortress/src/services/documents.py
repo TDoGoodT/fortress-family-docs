@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from src.config import STORAGE_PATH
 from src.models.schema import Document
+from src.services.text_extractor import extract_text
 
 logger = logging.getLogger(__name__)
 
@@ -68,4 +69,16 @@ async def process_document(
     db.add(doc)
     db.commit()
     db.refresh(doc)
+
+    # Extract text from the document (PDF, DOCX, images via OCR)
+    try:
+        raw_text = extract_text(storage_path)
+        if raw_text:
+            doc.raw_text = raw_text
+            db.commit()
+            db.refresh(doc)
+            logger.info("Extracted %d chars from %s", len(raw_text), original_filename)
+    except Exception:
+        logger.exception("Text extraction failed for %s", original_filename)
+
     return doc
