@@ -138,7 +138,7 @@ Create 7 end-to-end test files validating the full Skills Engine pipeline throug
   - Add "How to Add a New Skill" section with step-by-step instructions
   - _Requirements: 11.1–11.3_
 
-- [-] 14. Final checkpoint — Ensure all tests pass on main
+- [x] 14. Final checkpoint — Ensure all tests pass on main
   - Ensure all tests pass, ask the user if questions arise.
 
 ## Notes

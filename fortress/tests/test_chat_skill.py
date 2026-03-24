@@ -113,37 +113,29 @@ def test_greet_night(mock_time, skill, db, member):
 # ------------------------------------------------------------------
 
 @pytest.mark.asyncio
-@patch("src.skills.chat_skill.ModelDispatcher")
+@patch.object(ChatSkill, "_dispatch_llm", new_callable=AsyncMock, return_value="שלום! מה שלומך?")
 @patch("src.skills.chat_skill.load_memories")
-async def test_respond_calls_llm(mock_load_memories, mock_dispatcher_cls, skill, db, member):
-    """respond() builds prompt with memories and calls dispatcher."""
+async def test_respond_calls_llm(mock_load_memories, mock_dispatch, skill, db, member):
+    """respond() builds prompt with memories and calls dispatch."""
     mock_mem = MagicMock()
     mock_mem.content = "אוהב קפה"
     mock_load_memories.return_value = [mock_mem]
-
-    mock_dispatcher = MagicMock()
-    mock_dispatcher.dispatch = AsyncMock(return_value="שלום! מה שלומך?")
-    mock_dispatcher_cls.return_value = mock_dispatcher
 
     result = await skill.respond(db, member, "מה קורה?")
 
     assert result == "שלום! מה שלומך?"
     mock_load_memories.assert_called_once_with(db, member.id)
-    mock_dispatcher.dispatch.assert_called_once()
-    call_kwargs = mock_dispatcher.dispatch.call_args
+    mock_dispatch.assert_called_once()
+    call_kwargs = mock_dispatch.call_args
     assert "מה קורה?" in call_kwargs.kwargs["prompt"] or "מה קורה?" in call_kwargs[1].get("prompt", call_kwargs[0][0] if call_kwargs[0] else "")
 
 
 @pytest.mark.asyncio
-@patch("src.skills.chat_skill.ModelDispatcher")
+@patch.object(ChatSkill, "_dispatch_llm", new_callable=AsyncMock, return_value=HEBREW_FALLBACK)
 @patch("src.skills.chat_skill.load_memories")
-async def test_respond_fallback_on_llm_failure(mock_load_memories, mock_dispatcher_cls, skill, db, member):
+async def test_respond_fallback_on_llm_failure(mock_load_memories, mock_dispatch, skill, db, member):
     """respond() returns error_fallback when LLM returns HEBREW_FALLBACK."""
     mock_load_memories.return_value = []
-
-    mock_dispatcher = MagicMock()
-    mock_dispatcher.dispatch = AsyncMock(return_value=HEBREW_FALLBACK)
-    mock_dispatcher_cls.return_value = mock_dispatcher
 
     result = await skill.respond(db, member, "ספר לי בדיחה")
 
@@ -151,9 +143,8 @@ async def test_respond_fallback_on_llm_failure(mock_load_memories, mock_dispatch
 
 
 @pytest.mark.asyncio
-@patch("src.skills.chat_skill.ModelDispatcher")
 @patch("src.skills.chat_skill.load_memories")
-async def test_respond_fallback_on_exception(mock_load_memories, mock_dispatcher_cls, skill, db, member):
+async def test_respond_fallback_on_exception(mock_load_memories, skill, db, member):
     """respond() returns error_fallback when an exception is raised."""
     mock_load_memories.side_effect = Exception("DB down")
 
