@@ -42,3 +42,6 @@ SCHEDULER_HOUR: int = int(os.getenv("SCHEDULER_HOUR", "7"))
 
 # Phone identity
 SYSTEM_PHONE: str = os.getenv("SYSTEM_PHONE", "")
+
+# Editable personality file
+SOUL_MD_PATH: str = os.getenv("SOUL_MD_PATH", "config/SOUL.md")

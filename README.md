@@ -144,13 +144,15 @@ class MySkill(BaseSkill):
 | R2 — Core Skills Migration | ✅ Complete | Task, Recurring, Document, Bug, Chat, Memory, Morning skills | 627 |
 | R3 — Wire + Test + Deploy | ✅ Complete | E2E tests, permissions, confirmations, regression, merge to main | 689 |
 | R4 — Trim + Document + Organize | ✅ Complete | Delete old pipeline, clean deps, rewrite docs | 428 |
+| S1 — PII Guard + Intent Logging | ✅ Complete | Regex PII stripping, restore, intent audit logging | 450 |
+| S2 — SOUL.md + SKILL.md + Nudges | ✅ Complete | Editable personality file, skill docs, memory nudges | 479 |
 | SMART-1 — OCR | 📋 Planned | Document intelligence, invoice scanning | — |
 | SMART-2 — RAG | 📋 Planned | pgvector, document Q&A, contract analysis | — |
 | SMART-3 — NAS + Backup | 📋 Planned | NAS storage, Backblaze B2 backup | — |
 | SMART-4 — Email | 📋 Planned | IMAP polling, auto-ingest from email | — |
 | Hardening | 📋 Planned | Monitoring, auto-restart, rate limiting | — |
 
-Current: **Phase R4** — Trim + Document + Organize (428 tests)
+Current: **Phase S2** — SOUL.md + SKILL.md + Memory Nudges (479 tests)
 
 ## Dashboard
 

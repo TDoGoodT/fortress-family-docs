@@ -1,6 +1,15 @@
-"""Fortress Agent Personality — the soul of the system."""
+"""Fortress Agent Personality — the soul of the system.
 
-PERSONALITY: str = (
+Loads personality from ``config/SOUL.md`` when available, falling back to
+the hardcoded default below.
+"""
+
+import logging
+import os
+
+logger = logging.getLogger(__name__)
+
+_DEFAULT_PERSONALITY: str = (
     "# מי אני\n"
     "אני פורטרס, העוזר המשפחתי. אני חלק מהמשפחה.\n"
     "\n"
@@ -31,6 +40,33 @@ PERSONALITY: str = (
     '- "אין משימות פתוחות 🎉" ולא "לא נמצאו משימות במצב פתוח"\n'
     '- "לא הצלחתי להבין, אפשר לנסח אחרת?" ולא "שגיאה בעיבוד הבקשה"'
 )
+
+
+def _load_soul() -> str:
+    """Load personality from SOUL.md file, falling back to hardcoded default."""
+    from src.config import SOUL_MD_PATH
+
+    # Try relative to the fortress/ directory (where the app runs)
+    candidates = [
+        SOUL_MD_PATH,
+        os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), SOUL_MD_PATH),
+    ]
+    for path in candidates:
+        try:
+            with open(path, encoding="utf-8") as f:
+                content = f.read().strip()
+                if content:
+                    logger.info("Loaded personality from %s", path)
+                    return content
+        except FileNotFoundError:
+            continue
+        except Exception:
+            logger.exception("Error loading SOUL.md from %s", path)
+    logger.info("SOUL.md not found, using default personality")
+    return _DEFAULT_PERSONALITY
+
+
+PERSONALITY: str = _load_soul()
 
 GREETINGS: dict[str, str] = {
     "morning": "בוקר טוב {name}! ☀️ מה נעשה היום?",

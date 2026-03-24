@@ -10,6 +10,7 @@ from src.services.auth import get_family_member_by_phone
 from src.engine.command_parser import parse_command
 from src.engine.executor import execute
 from src.engine.response_formatter import format_response
+from src.services.memory_nudge import maybe_save_nudge
 from src.services.pii_guard import strip_pii
 from src.skills.registry import registry
 
@@ -63,6 +64,12 @@ async def handle_incoming_message(
         chat = registry.get("chat")
         response = await chat.respond(db, member, message_text)
         intent = "chat.respond"
+
+        # Memory nudge — proactive fact extraction after free-form chat
+        try:
+            await maybe_save_nudge(db, member.id, message_text, response)
+        except Exception:
+            logger.exception("Memory nudge failed for member %s", member.name)
 
     _save_conversation(db, member.id, message_text, response, intent)
     return response
