@@ -92,6 +92,7 @@ TEMPLATES: dict[str, str] = {
     "briefing_bugs": "🐛 {count} באגים פתוחים",
     "no_report_yet": "אין דוח מוכן עדיין. הדוח הבא ב-15 לחודש 📊",
     # Memory
+    "pii_detected": "זיהיתי מידע אישי רגיש בהודעה שלך והגנתי עליו 🔒",
     "memory_excluded": "אני לא שומר מידע מסוג זה 🔒",
     "memory_list_empty": "אין זכרונות שמורים",
     "memory_list_header": "🧠 זכרונות:\n",

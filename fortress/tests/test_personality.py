@@ -80,6 +80,8 @@ REQUIRED_TEMPLATE_KEYS = {
     "memory_excluded",
     "memory_list_empty",
     "memory_list_header",
+    # PII Guard
+    "pii_detected",
 }
 
 

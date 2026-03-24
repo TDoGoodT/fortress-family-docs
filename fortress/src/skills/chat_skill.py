@@ -17,6 +17,7 @@ from src.services.bedrock_client import HEBREW_FALLBACK, BedrockClient
 from src.services.llm_client import OllamaClient
 from src.services.memory_service import load_memories
 from src.services.openrouter_client import OpenRouterClient
+from src.services.pii_guard import restore_pii, strip_pii
 from src.skills.base_skill import BaseSkill, Command, Result
 from src.utils.time_context import format_time_for_prompt, get_time_context
 
@@ -89,6 +90,13 @@ class ChatSkill(BaseSkill):
         Returns the response string, or error_fallback template if all LLM calls fail.
         """
         try:
+            # Strip PII before building the LLM prompt
+            try:
+                cleaned_text, pii_records = strip_pii(message_text)
+            except Exception:
+                logger.exception("strip_pii failed, using original text")
+                cleaned_text, pii_records = message_text, []
+
             memories = load_memories(db, member.id)
 
             memory_context = ""
@@ -102,7 +110,7 @@ class ChatSkill(BaseSkill):
                 f"{time_context}\n\n"
                 f"שם המשתמש: {member.name}\n"
                 f"{memory_context}\n"
-                f"הודעת המשתמש: {message_text}\n\n"
+                f"הודעת המשתמש: {cleaned_text}\n\n"
                 f"חשוב: ענה בעברית בצורה חמה וקצרה. זה וואטסאפ."
             )
 
@@ -114,6 +122,10 @@ class ChatSkill(BaseSkill):
 
             if not raw or raw == HEBREW_FALLBACK:
                 return TEMPLATES["error_fallback"]
+
+            # Restore PII in the LLM response
+            if pii_records:
+                raw = restore_pii(raw, pii_records)
 
             return raw
 

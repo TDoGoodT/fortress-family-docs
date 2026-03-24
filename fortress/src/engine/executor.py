@@ -19,9 +19,28 @@ from src.skills.registry import registry
 
 logger = logging.getLogger(__name__)
 
+_MAX_MESSAGE_LENGTH = 200
+
+
+def _truncate_message(message: str, pii_stripped: bool) -> str:
+    """Truncate *message* for audit logging.
+
+    If *pii_stripped* is ``True`` the message is truncated shorter and
+    ``[PII removed]`` is appended.  Otherwise it is simply capped at
+    :data:`_MAX_MESSAGE_LENGTH` characters.
+    """
+    suffix = "[PII removed]"
+    if pii_stripped:
+        limit = _MAX_MESSAGE_LENGTH - len(suffix)
+        return message[:limit] + suffix
+    return message[:_MAX_MESSAGE_LENGTH]
+
 
 def execute(db: Session, member: FamilyMember, command: Command) -> Result:
     """Execute a parsed command through the skill pipeline."""
+    original_message = command.params.get("_original_message", "")
+    pii_stripped = command.params.get("_pii_stripped", False)
+
     try:
         # 1. Look up skill
         skill = registry.get(command.skill)
@@ -66,15 +85,21 @@ def execute(db: Session, member: FamilyMember, command: Command) -> Result:
                 action=result.action,
             )
 
-        # 7. Audit (if entity_id)
-        if result.success and result.entity_id is not None:
-            log_action(
-                db,
-                actor_id=member.id,
-                action=result.action or command.action,
-                resource_type=result.entity_type,
-                resource_id=result.entity_id,
-            )
+        # 7. Audit — always log with structured details
+        details = {
+            "original_message": _truncate_message(original_message, pii_stripped),
+            "detected_intent": f"{command.skill}.{command.action}",
+            "success": result.success,
+            "pii_stripped": pii_stripped,
+        }
+        log_action(
+            db,
+            actor_id=member.id,
+            action=result.action or command.action,
+            resource_type=result.entity_type,
+            resource_id=result.entity_id,
+            details=details,
+        )
 
         return result
 

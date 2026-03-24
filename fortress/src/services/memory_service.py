@@ -183,11 +183,15 @@ async def extract_memories_from_message(
     Returns a list of saved Memory objects (may be empty).
     """
     from src.services.bedrock_client import BedrockClient  # noqa: F811
+    from src.services.pii_guard import strip_pii
 
-    prompt = (
-        f"User message: {message_in}\n"
-        f"Assistant response: {message_out}"
-    )
+    combined = f"User message: {message_in}\nAssistant response: {message_out}"
+    try:
+        prompt, _ = strip_pii(combined)
+    except Exception:
+        logger.exception("strip_pii failed in memory extraction, using original text")
+        prompt = combined
+
     raw = await bedrock.generate(prompt=prompt, system_prompt=MEMORY_EXTRACTOR)
 
     try:

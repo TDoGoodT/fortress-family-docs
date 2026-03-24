@@ -10,6 +10,7 @@ from src.services.auth import get_family_member_by_phone
 from src.engine.command_parser import parse_command
 from src.engine.executor import execute
 from src.engine.response_formatter import format_response
+from src.services.pii_guard import strip_pii
 from src.skills.registry import registry
 
 logger = logging.getLogger(__name__)
@@ -42,8 +43,18 @@ async def handle_incoming_message(
         message_text, registry, has_media=has_media, media_file_path=media_file_path
     )
 
+    # Determine PII status for audit logging
+    try:
+        _, pii_records = strip_pii(message_text)
+        pii_stripped = len(pii_records) > 0
+    except Exception:
+        logger.exception("strip_pii failed in message handler")
+        pii_stripped = False
+
     if command is not None:
-        # Skills Engine path
+        # Skills Engine path — inject PII metadata for executor audit logging
+        command.params["_original_message"] = message_text
+        command.params["_pii_stripped"] = pii_stripped
         result = execute(db, member, command)
         response = format_response(result)
         intent = f"{command.skill}.{command.action}"
