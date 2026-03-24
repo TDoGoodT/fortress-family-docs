@@ -70,6 +70,16 @@ REQUIRED_TEMPLATE_KEYS = {
     "need_list_first",
     "task_similar_exists",
     "info_stored",
+    # Sprint R2: morning briefing + memory templates
+    "morning_briefing",
+    "briefing_tasks",
+    "briefing_recurring",
+    "briefing_docs",
+    "briefing_bugs",
+    "no_report_yet",
+    "memory_excluded",
+    "memory_list_empty",
+    "memory_list_header",
 }
 
 

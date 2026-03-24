@@ -83,3 +83,74 @@ def sample_family_member() -> MagicMock:
 def sample_permission() -> MagicMock:
     """A sample Permission granting read+write on finance for the parent role."""
     return _make_permission()
+
+
+# ── E2E helper fixtures (Sprint R3) ──────────────────────────────
+
+from src.models.schema import (  # noqa: E402
+    BugReport,
+    ConversationState,
+    Document,
+    RecurringPattern,
+    Task,
+)
+
+
+def _make_task(**overrides) -> MagicMock:
+    """Build a mock Task with sensible defaults."""
+    t = MagicMock(spec=Task)
+    t.id = overrides.get("id", uuid.uuid4())
+    t.title = overrides.get("title", "Test Task")
+    t.status = overrides.get("status", "open")
+    t.priority = overrides.get("priority", "normal")
+    t.due_date = overrides.get("due_date", None)
+    t.assigned_to = overrides.get("assigned_to", None)
+    t.created_by = overrides.get("created_by", None)
+    t.created_at = overrides.get("created_at", None)
+    return t
+
+
+def _make_recurring(**overrides) -> MagicMock:
+    """Build a mock RecurringPattern with sensible defaults."""
+    r = MagicMock(spec=RecurringPattern)
+    r.id = overrides.get("id", uuid.uuid4())
+    r.title = overrides.get("title", "Test Recurring")
+    r.frequency = overrides.get("frequency", "monthly")
+    r.next_due_date = overrides.get("next_due_date", None)
+    r.is_active = overrides.get("is_active", True)
+    return r
+
+
+def _make_bug(**overrides) -> MagicMock:
+    """Build a mock BugReport with sensible defaults."""
+    b = MagicMock(spec=BugReport)
+    b.id = overrides.get("id", uuid.uuid4())
+    b.description = overrides.get("description", "Test Bug")
+    b.status = overrides.get("status", "open")
+    b.reported_by = overrides.get("reported_by", None)
+    b.created_at = overrides.get("created_at", None)
+    return b
+
+
+def _make_document(**overrides) -> MagicMock:
+    """Build a mock Document with sensible defaults."""
+    d = MagicMock(spec=Document)
+    d.id = overrides.get("id", uuid.uuid4())
+    d.original_filename = overrides.get("original_filename", "test.pdf")
+    d.doc_type = overrides.get("doc_type", "document")
+    d.created_at = overrides.get("created_at", None)
+    return d
+
+
+def _make_conversation_state(**overrides) -> MagicMock:
+    """Build a mock ConversationState with sensible defaults."""
+    s = MagicMock(spec=ConversationState)
+    s.family_member_id = overrides.get("family_member_id", uuid.uuid4())
+    s.last_intent = overrides.get("last_intent", None)
+    s.last_entity_type = overrides.get("last_entity_type", None)
+    s.last_entity_id = overrides.get("last_entity_id", None)
+    s.last_action = overrides.get("last_action", None)
+    s.pending_confirmation = overrides.get("pending_confirmation", False)
+    s.pending_action = overrides.get("pending_action", None)
+    s.context = overrides.get("context", {})
+    return s

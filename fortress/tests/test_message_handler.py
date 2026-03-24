@@ -132,17 +132,20 @@ async def test_router_receives_correct_text(mock_auth, mock_parse, mock_exec, mo
 
 @pytest.mark.asyncio
 @patch("src.services.message_handler._save_conversation")
-@patch("src.services.workflow_engine.run_workflow", new_callable=AsyncMock)
+@patch("src.services.message_handler.registry")
 @patch("src.services.message_handler.parse_command", return_value=None)
 @patch("src.services.message_handler.get_family_member_by_phone")
-async def test_llm_fallback_when_no_match(mock_auth, mock_parse, mock_workflow, mock_conv, mock_db) -> None:
-    """Unmatched messages should fall back to LLM workflow engine."""
+async def test_llm_fallback_when_no_match(mock_auth, mock_parse, mock_registry, mock_conv, mock_db) -> None:
+    """Unmatched messages should fall back to ChatSkill.respond."""
     member = _make_member()
     mock_auth.return_value = member
-    mock_workflow.return_value = "llm response"
+    mock_chat = MagicMock()
+    mock_chat.respond = AsyncMock(return_value="llm response")
+    mock_registry.get.return_value = mock_chat
 
     result = await handle_incoming_message(mock_db, "972501234567", "מה המצב?", "msg1")
     assert result == "llm response"
+    mock_registry.get.assert_called_with("chat")
 
 
 # ── Conversation saving tests ────────────────────────────────────

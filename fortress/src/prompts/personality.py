@@ -84,6 +84,17 @@ TEMPLATES: dict[str, str] = {
     "need_list_first": "שלח 'משימות' קודם כדי לראות את הרשימה, ואז תוכל לבחור לפי מספר 📋",
     "task_similar_exists": "כבר יש משימה דומה: '{similar_title}'\nליצור בכל זאת את '{title}'? (כן/לא)",
     "info_stored": "שמרתי את המידע ✅\n{content}",
+    # Morning briefing
+    "morning_briefing": "בוקר טוב {name}! ☀️\n\n{items}\n\nמה תרצה לעשות?",
+    "briefing_tasks": "📋 {count} משימות פתוחות",
+    "briefing_recurring": "🔄 {next_title} בעוד {days} ימים",
+    "briefing_docs": "📄 {count} מסמכים חדשים",
+    "briefing_bugs": "🐛 {count} באגים פתוחים",
+    "no_report_yet": "אין דוח מוכן עדיין. הדוח הבא ב-15 לחודש 📊",
+    # Memory
+    "memory_excluded": "אני לא שומר מידע מסוג זה 🔒",
+    "memory_list_empty": "אין זכרונות שמורים",
+    "memory_list_header": "🧠 זכרונות:\n",
 }
 
 _PRIORITY_EMOJI: dict[str, str] = {

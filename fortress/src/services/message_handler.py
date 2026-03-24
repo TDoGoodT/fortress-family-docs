@@ -48,14 +48,10 @@ async def handle_incoming_message(
         response = format_response(result)
         intent = f"{command.skill}.{command.action}"
     else:
-        # LLM fallback — delegate to existing workflow engine
-        from src.services.workflow_engine import run_workflow
-
-        response = await run_workflow(
-            db, member, phone, message_text,
-            has_media=has_media, media_file_path=media_file_path,
-        )
-        intent = "llm_fallback"
+        # LLM fallback — delegate to ChatSkill
+        chat = registry.get("chat")
+        response = await chat.respond(db, member, message_text)
+        intent = "chat.respond"
 
     _save_conversation(db, member.id, message_text, response, intent)
     return response

@@ -28,4 +28,4 @@
   - [x] 10.6 Create `tests/test_system_skill.py`
 - [x] 11. Run all tests — verify new + existing tests pass
 - [x] 12. Update README.md roadmap with R1 row
-- [-] 13. Git operations — branch, commit, push to rebuild/skills-engine
+- [x] 13. Git operations — branch, commit, push to rebuild/skills-engine
