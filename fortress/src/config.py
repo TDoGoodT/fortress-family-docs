@@ -43,5 +43,9 @@ SCHEDULER_HOUR: int = int(os.getenv("SCHEDULER_HOUR", "7"))
 # Phone identity
 SYSTEM_PHONE: str = os.getenv("SYSTEM_PHONE", "")
 
+# Deploy Listener
+DEPLOY_SECRET: str = os.getenv("DEPLOY_SECRET", "")
+DEPLOY_LISTENER_URL: str = os.getenv("DEPLOY_LISTENER_URL", "http://host.docker.internal:9111")
+
 # Editable personality file
 SOUL_MD_PATH: str = os.getenv("SOUL_MD_PATH", "config/SOUL.md")

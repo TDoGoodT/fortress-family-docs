@@ -132,6 +132,14 @@ TEMPLATES: dict[str, str] = {
     "memory_excluded": "אני לא שומר מידע מסוג זה 🔒",
     "memory_list_empty": "אין זכרונות שמורים",
     "memory_list_header": "🧠 זכרונות:\n",
+    # Deploy
+    "deploy_started": "מתחיל עדכון מערכת... ⏳",
+    "deploy_success": "המערכת עודכנה בהצלחה ✅\n{details}",
+    "deploy_failed": "העדכון נכשל ❌\n{details}",
+    "deploy_status": "סטטוס מערכת:\n{status}",
+    "deploy_restarted": "המערכת הופעלה מחדש ✅",
+    "deploy_not_configured": "Deploy secret לא מוגדר. הגדר DEPLOY_SECRET ב-.env",
+    "deploy_rate_limited": "יותר מדי בקשות. נסה שוב בעוד 10 דקות ⏰",
 }
 
 _PRIORITY_EMOJI: dict[str, str] = {

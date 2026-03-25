@@ -35,3 +35,6 @@ Thumbs.db
 
 # Kiro
 .kiro/
+
+# Deploy listener launchd plist (machine-specific paths)
+*.plist

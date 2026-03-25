@@ -31,3 +31,46 @@
 - [ ] "עזרה" shows skill list
 - [ ] "באג: test" creates bug report
 - [ ] Dashboard shows activity
+
+
+## Deploy from WhatsApp
+
+Allows parent-role users to trigger git pull + rebuild from WhatsApp.
+
+### Setup
+
+1. Generate secret: `openssl rand -hex 32`
+2. Add to `.env`:
+   ```
+   DEPLOY_SECRET=<generated-secret>
+   ```
+3. Update the plist template with your paths:
+   ```bash
+   cp scripts/com.fortress.deploy-listener.plist ~/Library/LaunchAgents/
+   # Edit the file: replace YOUR_USER and REPLACE_ME_WITH_GENERATED_SECRET
+   ```
+4. Start the listener:
+   ```bash
+   launchctl load ~/Library/LaunchAgents/com.fortress.deploy-listener.plist
+   ```
+5. Verify it's running:
+   ```bash
+   curl -X POST http://127.0.0.1:9111 \
+     -H "Content-Type: application/json" \
+     -d '{"token":"<your-secret>","action":"status"}'
+   ```
+
+### WhatsApp Commands (parent only)
+
+| Command | Action |
+|---------|--------|
+| עדכן מערכת | git pull + docker build + restart |
+| ריסטארט | restart fortress container |
+| סטטוס מערכת | show container status |
+
+### Security
+
+- Listener binds to 127.0.0.1 only (no external access)
+- Token from .env, never hardcoded
+- Rate limit: 3 requests per 10 minutes
+- Parent role required

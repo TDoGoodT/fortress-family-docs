@@ -6,6 +6,7 @@ from src.skills.task_skill import TaskSkill
 from src.skills.document_skill import DocumentSkill
 from src.skills.bug_skill import BugSkill
 from src.skills.chat_skill import ChatSkill
+from src.skills.deploy_skill import DeploySkill
 
 # MVP skills — deterministic, zero LLM
 registry.register(SystemSkill())    # MVP ✅
@@ -17,6 +18,7 @@ registry._skills["media"] = doc_skill  # dual registration: "document" + "media"
 
 registry.register(BugSkill())       # MVP ✅
 registry.register(ChatSkill())      # MVP ✅ (greet only — deterministic)
+registry.register(DeploySkill())    # Remote deploy from WhatsApp (parent only)
 
 # TEMPORARILY DISABLED — re-enable after MVP is stable
 # from src.skills.recurring_skill import RecurringSkill

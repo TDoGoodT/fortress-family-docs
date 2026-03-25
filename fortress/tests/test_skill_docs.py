@@ -16,6 +16,7 @@ _EXPECTED_SKILLS = [
     "SKILL_memory.md",
     "SKILL_morning.md",
     "SKILL_system.md",
+    "SKILL_deploy.md",
 ]
 
 

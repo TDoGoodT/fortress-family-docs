@@ -82,6 +82,14 @@ REQUIRED_TEMPLATE_KEYS = {
     "memory_list_header",
     # PII Guard
     "pii_detected",
+    # Deploy
+    "deploy_started",
+    "deploy_success",
+    "deploy_failed",
+    "deploy_status",
+    "deploy_restarted",
+    "deploy_not_configured",
+    "deploy_rate_limited",
 }
 
 
