@@ -129,6 +129,11 @@ def _handle_confirm(
     pending_type = pending.get("type", "")
     pending_data = pending.get("data", {})
 
+    logger.info(
+        "Confirm re-dispatch: member=%s type=%s data_keys=%s",
+        member.name, pending_type, list(pending_data.keys()),
+    )
+
     # Find the target skill from the pending action type
     parts = pending_type.split(".", 1)
     target_skill_name = parts[0] if parts else pending_type
@@ -136,6 +141,7 @@ def _handle_confirm(
 
     target_skill = registry.get(target_skill_name)
     if target_skill is None:
+        logger.error("Confirm re-dispatch: skill '%s' not found", target_skill_name)
         return Result(
             success=False,
             message=PERSONALITY_TEMPLATES["error_fallback"],

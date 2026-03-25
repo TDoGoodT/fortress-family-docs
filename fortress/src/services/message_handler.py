@@ -10,11 +10,19 @@ from src.services.auth import get_family_member_by_phone
 from src.engine.command_parser import parse_command
 from src.engine.executor import execute
 from src.engine.response_formatter import format_response
-from src.services.memory_nudge import maybe_save_nudge
 from src.services.pii_guard import strip_pii
 from src.skills.registry import registry
 
 logger = logging.getLogger(__name__)
+
+
+def _sanitize_response(response: str) -> str:
+    """Never return raw JSON to user."""
+    stripped = response.strip()
+    if stripped.startswith("{") or stripped.startswith("["):
+        logger.error("Raw JSON in response: %s", stripped[:200])
+        return PERSONALITY_TEMPLATES["error_fallback"]
+    return response
 
 
 async def handle_incoming_message(
@@ -26,7 +34,7 @@ async def handle_incoming_message(
     has_media: bool = False,
     media_file_path: str | None = None,
 ) -> str:
-    """Authenticate sender and process via Skills Engine or LLM fallback."""
+    """Authenticate sender and process via Skills Engine or deterministic fallback."""
     member = get_family_member_by_phone(db, phone)
 
     if member is None:
@@ -39,40 +47,49 @@ async def handle_incoming_message(
         _save_conversation(db, member.id, message_text, response, "inactive_member")
         return response
 
-    # Parse — deterministic, zero LLM
-    command = parse_command(
-        message_text, registry, has_media=has_media, media_file_path=media_file_path
-    )
-
-    # Determine PII status for audit logging
     try:
-        _, pii_records = strip_pii(message_text)
-        pii_stripped = len(pii_records) > 0
-    except Exception:
-        logger.exception("strip_pii failed in message handler")
-        pii_stripped = False
+        # Parse — deterministic, zero LLM
+        command = parse_command(
+            message_text, registry, has_media=has_media, media_file_path=media_file_path
+        )
 
-    if command is not None:
-        # Skills Engine path — inject PII metadata for executor audit logging
-        command.params["_original_message"] = message_text
-        command.params["_pii_stripped"] = pii_stripped
-        result = execute(db, member, command)
-        response = format_response(result)
-        intent = f"{command.skill}.{command.action}"
-    else:
-        # LLM fallback — delegate to ChatSkill
-        chat = registry.get("chat")
-        response = await chat.respond(db, member, message_text)
-        intent = "chat.respond"
-
-        # Memory nudge — proactive fact extraction after free-form chat
+        # Determine PII status for audit logging
         try:
-            await maybe_save_nudge(db, member.id, message_text, response)
+            _, pii_records = strip_pii(message_text)
+            pii_stripped = len(pii_records) > 0
         except Exception:
-            logger.exception("Memory nudge failed for member %s", member.name)
+            logger.exception("strip_pii failed in message handler")
+            pii_stripped = False
 
-    _save_conversation(db, member.id, message_text, response, intent)
-    return response
+        if command is not None:
+            # Skills Engine path — inject PII metadata for executor audit logging
+            command.params["_original_message"] = message_text
+            command.params["_pii_stripped"] = pii_stripped
+            result = execute(db, member, command)
+            response = format_response(result)
+            intent = f"{command.skill}.{command.action}"
+        else:
+            # MVP mode — deterministic fallback, zero LLM
+            response = PERSONALITY_TEMPLATES["cant_understand"].format(name=member.name)
+            intent = "mvp.cant_understand"
+
+        # Guard against empty/None responses
+        if not response or not response.strip():
+            logger.error("Empty response for: %s", message_text[:100])
+            response = PERSONALITY_TEMPLATES["error_fallback"]
+
+        response = _sanitize_response(response)
+        _save_conversation(db, member.id, message_text, response, intent)
+        return response
+
+    except Exception:
+        logger.exception("Fatal error in message handler")
+        response = PERSONALITY_TEMPLATES["error_fallback"]
+        try:
+            _save_conversation(db, member.id, message_text, response, "error")
+        except Exception:
+            logger.exception("Failed to save error conversation")
+        return response
 
 
 def _save_conversation(

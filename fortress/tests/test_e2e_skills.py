@@ -238,26 +238,23 @@ async def test_morning_briefing_e2e(mock_auth, mock_parse, mock_exec, mock_fmt, 
     assert "משימות" in result
 
 
-# ── 11. LLM fallback ────────────────────────────────────────────
+# ── 11. MVP deterministic fallback ───────────────────────────────
 
 @pytest.mark.asyncio
 @patch("src.services.message_handler._save_conversation")
-@patch("src.services.message_handler.registry")
 @patch("src.services.message_handler.parse_command", return_value=None)
 @patch("src.services.message_handler.get_family_member_by_phone")
-async def test_llm_fallback_e2e(mock_auth, mock_parse, mock_registry, mock_conv, mock_db):
+async def test_llm_fallback_e2e(mock_auth, mock_parse, mock_conv, mock_db):
     member = _parent()
     mock_auth.return_value = member
-    mock_chat = MagicMock()
-    mock_chat.respond = AsyncMock(return_value="אני לא בטוח מה התכוונת 🤔")
-    mock_registry.get.return_value = mock_chat
 
     result = await handle_incoming_message(mock_db, PARENT_PHONE, "מה המצב עם הדברים?", "msg1")
-    assert result == "אני לא בטוח מה התכוונת 🤔"
+    expected = TEMPLATES["cant_understand"].format(name="Segev")
+    assert result == expected
     mock_conv.assert_called_once()
-    # Verify intent saved as chat.respond
+    # Verify intent saved as mvp.cant_understand
     call_args = mock_conv.call_args[0]
-    assert call_args[4] == "chat.respond"
+    assert call_args[4] == "mvp.cant_understand"
 
 
 # ── 12. Unknown phone ───────────────────────────────────────────

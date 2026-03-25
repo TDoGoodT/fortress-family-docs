@@ -127,25 +127,22 @@ async def test_router_receives_correct_text(mock_auth, mock_parse, mock_exec, mo
     assert call_args[0][0] == "משימה חדשה: קניות"
 
 
-# ── LLM fallback tests ──────────────────────────────────────────
+# ── MVP deterministic fallback tests ─────────────────────────────
 
 
 @pytest.mark.asyncio
 @patch("src.services.message_handler._save_conversation")
-@patch("src.services.message_handler.registry")
 @patch("src.services.message_handler.parse_command", return_value=None)
 @patch("src.services.message_handler.get_family_member_by_phone")
-async def test_llm_fallback_when_no_match(mock_auth, mock_parse, mock_registry, mock_conv, mock_db) -> None:
-    """Unmatched messages should fall back to ChatSkill.respond."""
+async def test_llm_fallback_when_no_match(mock_auth, mock_parse, mock_conv, mock_db) -> None:
+    """Unmatched messages should return deterministic cant_understand template."""
     member = _make_member()
     mock_auth.return_value = member
-    mock_chat = MagicMock()
-    mock_chat.respond = AsyncMock(return_value="llm response")
-    mock_registry.get.return_value = mock_chat
 
     result = await handle_incoming_message(mock_db, "972501234567", "מה המצב?", "msg1")
-    assert result == "llm response"
-    mock_registry.get.assert_called_with("chat")
+    from src.prompts.personality import TEMPLATES
+    expected = TEMPLATES["cant_understand"].format(name=member.name)
+    assert result == expected
 
 
 # ── Conversation saving tests ────────────────────────────────────

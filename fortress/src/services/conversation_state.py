@@ -1,11 +1,14 @@
 """Fortress 2.0 conversation state service — per-member conversational context."""
 
+import logging
 from datetime import datetime, timezone
 from uuid import UUID
 
 from sqlalchemy.orm import Session
 
 from src.models.schema import ConversationState
+
+logger = logging.getLogger(__name__)
 
 
 def get_state(db: Session, member_id: UUID) -> ConversationState:
@@ -76,6 +79,10 @@ def set_pending_confirmation(
     db: Session, member_id: UUID, action_type: str, action_data: dict
 ) -> None:
     """Set pending_confirmation=True and store the action details."""
+    logger.info(
+        "Setting pending: member=%s type=%s data_keys=%s",
+        member_id, action_type, list(action_data.keys()),
+    )
     state = get_state(db, member_id)
     state.pending_confirmation = True
     state.pending_action = {"type": action_type, "data": action_data}
@@ -86,6 +93,11 @@ def set_pending_confirmation(
 def resolve_pending(db: Session, member_id: UUID) -> dict | None:
     """Return pending_action and clear pending state, or None if nothing pending."""
     state = get_state(db, member_id)
+    logger.info(
+        "Resolving pending: member=%s pending=%s type=%s",
+        member_id, state.pending_confirmation,
+        state.pending_action.get("type") if state.pending_action else None,
+    )
     if not state.pending_confirmation:
         return None
 

@@ -113,20 +113,16 @@ async def test_unknown_phone_conversation(mock_auth, mock_db):
     assert conv_obj.family_member_id is None
 
 
-# ── 6. LLM fallback → intent "chat.respond" ────────────────────
+# ── 6. MVP deterministic fallback → intent "mvp.cant_understand" ─
 
 @pytest.mark.asyncio
-@patch("src.services.message_handler.registry")
+@patch("src.services.message_handler._save_conversation")
 @patch("src.services.message_handler.parse_command", return_value=None)
 @patch("src.services.message_handler.get_family_member_by_phone")
-async def test_llm_fallback_conversation_intent(mock_auth, mock_parse, mock_registry, mock_db):
+async def test_llm_fallback_conversation_intent(mock_auth, mock_parse, mock_conv, mock_db):
     member = _parent()
     mock_auth.return_value = member
-    mock_chat = MagicMock()
-    mock_chat.respond = AsyncMock(return_value="תשובה חופשית")
-    mock_registry.get.return_value = mock_chat
 
     await handle_incoming_message(mock_db, PHONE, "מה המצב?", "msg1")
-    conv_obj = mock_db.add.call_args[0][0]
-    assert isinstance(conv_obj, Conversation)
-    assert conv_obj.intent == "chat.respond"
+    conv_args = mock_conv.call_args[0]
+    assert conv_args[4] == "mvp.cant_understand"

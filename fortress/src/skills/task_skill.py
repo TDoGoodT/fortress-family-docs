@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
@@ -18,6 +19,8 @@ from src.services.conversation_state import (
 )
 from src.skills.base_skill import BaseSkill, Command, Result
 from src.skills.permissions import check_perm
+
+logger = logging.getLogger(__name__)
 
 
 class TaskSkill(BaseSkill):
@@ -185,21 +188,26 @@ class TaskSkill(BaseSkill):
         if denied:
             return denied
 
+        # Confirmed re-dispatch: params contain task_ids — skip re-query
+        if "task_ids" in params:
+            archived = 0
+            for tid in params["task_ids"]:
+                task = tasks.get_task(db, UUID(tid))
+                if task and task.status == "open":
+                    tasks.archive_task(db, UUID(tid))
+                    archived += 1
+            logger.info("Delete all confirmed: archived %d tasks", archived)
+            return Result(
+                success=True,
+                message=TEMPLATES["bulk_deleted"].format(count=archived),
+            )
+
+        # First-time request: query open tasks and ask for confirmation
         open_tasks = tasks.list_tasks(db, status="open", assigned_to=member.id)
 
         if not open_tasks:
             return Result(success=True, message=TEMPLATES["task_list_empty"])
 
-        # Confirmed re-dispatch: params contain task_ids
-        if "task_ids" in params:
-            for tid in params["task_ids"]:
-                tasks.archive_task(db, UUID(tid))
-            return Result(
-                success=True,
-                message=TEMPLATES["bulk_deleted"].format(count=len(params["task_ids"])),
-            )
-
-        # First-time request: ask for confirmation
         task_list_text = format_task_list(open_tasks)
         set_pending_confirmation(
             db,
@@ -227,6 +235,7 @@ class TaskSkill(BaseSkill):
         if task is None:
             return Result(success=False, message=TEMPLATES["task_not_found"])
 
+        logger.info("Task completed: %s (%s)", task.title, task.id)
         return Result(
             success=True,
             message=TEMPLATES["task_completed"].format(title=task.title),
@@ -311,7 +320,16 @@ class TaskSkill(BaseSkill):
             if index < 1 or index > len(task_list_order):
                 return Result(success=False, message=TEMPLATES["task_not_found"])
 
-            return UUID(task_list_order[index - 1])
+            task_id = UUID(task_list_order[index - 1])
+
+            # Validate task exists and is open
+            task = tasks.get_task(db, task_id)
+            if task is None or task.status != "open":
+                logger.warning("Stale index %d → task %s not open", index, task_id)
+                return Result(success=False, message=TEMPLATES["task_not_found"])
+
+            logger.info("Index %d resolved to task %s: %s", index, task.id, task.title)
+            return task_id
 
         # Fallback: last_entity_id
         state = get_state(db, member.id)

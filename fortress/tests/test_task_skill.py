@@ -356,14 +356,17 @@ class TestDeleteAll:
 # ---------------------------------------------------------------------------
 
 class TestComplete:
+    @patch("src.skills.task_skill.tasks.get_task")
     @patch("src.skills.task_skill.tasks.complete_task")
     @patch("src.skills.task_skill.get_state")
     @patch("src.skills.task_skill.check_perm", return_value=None)
-    def test_complete_by_index(self, _perm, mock_state, mock_complete, mock_db: MagicMock):
+    def test_complete_by_index(self, _perm, mock_state, mock_complete, mock_get_task, mock_db: MagicMock):
         tid = uuid.uuid4()
         mock_state.return_value = _state(context={"task_list_order": [str(tid)]})
-        task = _task(id=tid, title="לקנות חלב", status="done")
-        mock_complete.return_value = task
+        open_task = _task(id=tid, title="לקנות חלב", status="open")
+        done_task = _task(id=tid, title="לקנות חלב", status="done")
+        mock_get_task.return_value = open_task
+        mock_complete.return_value = done_task
 
         skill = TaskSkill()
         member = _member()
