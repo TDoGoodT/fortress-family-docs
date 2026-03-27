@@ -20,7 +20,8 @@ from pathlib import Path
 
 PORT = int(os.getenv("DEPLOY_LISTENER_PORT", "9111"))
 SECRET = os.getenv("DEPLOY_SECRET", "")
-DEPLOY_SCRIPT = Path(__file__).parent / "deploy.sh"
+REPO_DIR = os.getenv("FORTRESS_REPO_DIR", str(Path(__file__).parent.parent.parent))
+DEPLOY_SCRIPT = Path(REPO_DIR) / "fortress" / "scripts" / "deploy.sh"
 VALID_ACTIONS = ("deploy", "restart", "status")
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
