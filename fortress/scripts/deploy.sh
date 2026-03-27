@@ -4,7 +4,7 @@
 set -euo pipefail
 
 REPO_DIR="${FORTRESS_REPO_DIR:-$(dirname "$(dirname "$(dirname "$(realpath "$0")")")")}"
-LOG_FILE="${REPO_DIR}/fortress/storage/deploy.log"
+LOG_FILE="${HOME}/fortress-scripts/deploy.log"
 COMPOSE_FILE="${REPO_DIR}/fortress/docker-compose.yml"
 
 ACTION="${1:-deploy}"
