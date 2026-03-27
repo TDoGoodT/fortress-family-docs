@@ -3,8 +3,8 @@
 # Runs on the Mac Mini host (NOT inside Docker)
 set -euo pipefail
 
-REPO_DIR="${FORTRESS_REPO_DIR:-$(dirname "$(dirname "$(realpath "$0")")")}"
-LOG_FILE="${REPO_DIR}/storage/deploy.log"
+REPO_DIR="${FORTRESS_REPO_DIR:-$(dirname "$(dirname "$(dirname "$(realpath "$0")")")")}"
+LOG_FILE="${REPO_DIR}/fortress/storage/deploy.log"
 COMPOSE_FILE="${REPO_DIR}/fortress/docker-compose.yml"
 
 ACTION="${1:-deploy}"

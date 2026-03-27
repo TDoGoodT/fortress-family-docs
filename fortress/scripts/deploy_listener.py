@@ -119,7 +119,7 @@ class DeployHandler(http.server.BaseHTTPRequestHandler):
                 "message": f"{action} started",
             }).encode())
 
-    def _reject(self, reason: str, *, client_ip: str | None = None):
+    def _reject(self, reason: str, *, client_ip=None):
         """Return generic 403 and log the internal reason."""
         ip = client_ip or self.client_address[0]
         logger.warning("Deploy request REJECTED: ip=%s reason=%s", ip, reason)
