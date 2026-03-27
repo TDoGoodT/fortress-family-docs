@@ -18,21 +18,20 @@ log "=== Starting ${ACTION} ==="
 case "$ACTION" in
     deploy)
         log "Pulling latest code..."
-        cd "$REPO_DIR"
-        git pull origin main 2>&1 | tee -a "$LOG_FILE"
+        git -C "$REPO_DIR" pull origin main >> "$LOG_FILE" 2>&1
 
         log "Building fortress container..."
-        docker compose -f "$COMPOSE_FILE" build --no-cache fortress 2>&1 | tee -a "$LOG_FILE"
+        docker compose --env-file "$REPO_DIR/fortress/.env" -f "$COMPOSE_FILE" build --no-cache fortress >> "$LOG_FILE" 2>&1
 
         log "Restarting services..."
-        docker compose -f "$COMPOSE_FILE" up -d 2>&1 | tee -a "$LOG_FILE"
+        docker compose --env-file "$REPO_DIR/fortress/.env" -f "$COMPOSE_FILE" up -d >> "$LOG_FILE" 2>&1
 
         log "=== Deploy complete ==="
         ;;
 
     restart)
         log "Restarting fortress container..."
-        docker compose -f "$COMPOSE_FILE" restart fortress 2>&1 | tee -a "$LOG_FILE"
+        docker compose --env-file "$REPO_DIR/fortress/.env" -f "$COMPOSE_FILE" restart fortress >> "$LOG_FILE" 2>&1
         log "=== Restart complete ==="
         ;;
 
