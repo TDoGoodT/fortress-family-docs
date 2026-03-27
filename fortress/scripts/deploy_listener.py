@@ -21,7 +21,8 @@ from pathlib import Path
 PORT = int(os.getenv("DEPLOY_LISTENER_PORT", "9111"))
 SECRET = os.getenv("DEPLOY_SECRET", "")
 REPO_DIR = os.getenv("FORTRESS_REPO_DIR", str(Path(__file__).parent.parent.parent))
-DEPLOY_SCRIPT = Path(REPO_DIR) / "fortress" / "scripts" / "deploy.sh"
+# deploy.sh lives next to this script (in ~/fortress-scripts/)
+DEPLOY_SCRIPT = Path(__file__).parent / "deploy.sh"
 VALID_ACTIONS = ("deploy", "restart", "status")
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -152,19 +153,20 @@ class DeployHandler(http.server.BaseHTTPRequestHandler):
             self._notify(f"❌ {action} קרסה")
 
     def _sync_self(self):
-        """Copy updated deploy_listener.py from repo to ~/fortress-scripts/."""
+        """Copy updated scripts from repo to ~/fortress-scripts/ after deploy."""
         try:
             repo_dir = os.getenv("FORTRESS_REPO_DIR", "")
             if not repo_dir:
                 return
-            src = os.path.join(repo_dir, "fortress", "scripts", "deploy_listener.py")
-            dst = os.path.expanduser("~/fortress-scripts/deploy_listener.py")
-            if os.path.exists(src):
-                import shutil
-                shutil.copy2(src, dst)
-                logger.info("Synced deploy_listener.py from repo")
+            import shutil
+            scripts_dir = Path(__file__).parent
+            for script in ["deploy_listener.py", "deploy.sh"]:
+                src = Path(repo_dir) / "fortress" / "scripts" / script
+                if src.exists():
+                    shutil.copy2(src, scripts_dir / script)
+                    logger.info("Synced %s from repo", script)
         except Exception:
-            logger.exception("Failed to sync deploy_listener.py")
+            logger.exception("Failed to sync scripts")
 
     def _notify(self, message: str):
         """Send WhatsApp notification via fortress-app."""
