@@ -38,6 +38,7 @@ class TaskSkill(BaseSkill):
     def commands(self) -> list[tuple[re.Pattern, str]]:
         return [
             (re.compile(r"^משימה חדשה[:\s]+(?P<title>.+)$", re.IGNORECASE), "create"),
+            (re.compile(r"^משימה[:\s\-]+(?P<title>.+)$", re.IGNORECASE), "create"),
             (re.compile(r"^new task[:\s]+(?P<title>.+)$", re.IGNORECASE), "create"),
             (re.compile(r"^מחק משימה\s+(?P<index>\d+)$", re.IGNORECASE), "delete"),
             (re.compile(r"^מחק משימה[:\s]+(?P<title_query>.+)$", re.IGNORECASE), "delete"),
