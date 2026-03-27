@@ -36,6 +36,7 @@ class FamilyMember(Base):
     phone: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
     role: Mapped[str] = mapped_column(Text, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, server_default=text("true"))
+    is_admin: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
     created_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=text("now()")
     )

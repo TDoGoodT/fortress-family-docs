@@ -54,8 +54,8 @@ class DeploySkill(BaseSkill):
         ]
 
     def execute(self, db: Session, member: FamilyMember, command: Command) -> Result:
-        if member.role != "parent":
-            return Result(success=False, message="רק הורים יכולים לעדכן את המערכת 🔒")
+        if not member.is_admin:
+            return Result(success=False, message="רק מנהל המערכת יכול לעדכן את המערכת 🔒")
 
         if not config.DEPLOY_SECRET:
             return Result(success=False, message=TEMPLATES["deploy_not_configured"])
