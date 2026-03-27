@@ -139,10 +139,37 @@ class DeployHandler(http.server.BaseHTTPRequestHandler):
             )
             if result.returncode == 0:
                 logger.info("%s completed successfully", action)
+                self._notify(f"✅ {action} הושלם בהצלחה")
             else:
                 logger.error("%s failed: %s", action, result.stderr)
+                self._notify(f"❌ {action} נכשל:\n{result.stderr[-200:]}")
         except Exception:
             logger.exception("%s crashed", action)
+            self._notify(f"❌ {action} קרסה")
+
+    def _notify(self, message: str):
+        """Send WhatsApp notification via fortress-app."""
+        import urllib.request
+        try:
+            admin_phone = os.getenv("ADMIN_PHONE", "")
+            waha_url = os.getenv("WAHA_URL", "http://localhost:3000")
+            waha_key = os.getenv("WAHA_API_KEY", "")
+            if not admin_phone:
+                return
+            payload = json.dumps({
+                "chatId": f"{admin_phone}@c.us",
+                "text": message,
+                "session": "default",
+            }).encode()
+            req = urllib.request.Request(
+                f"{waha_url}/api/sendText",
+                data=payload,
+                headers={"Content-Type": "application/json", "X-Api-Key": waha_key},
+                method="POST",
+            )
+            urllib.request.urlopen(req, timeout=10)
+        except Exception:
+            logger.exception("Failed to send deploy notification")
 
     def log_message(self, format, *args):
         """Suppress default BaseHTTPRequestHandler logging (we use our own)."""
