@@ -154,7 +154,7 @@ class DeployHandler(http.server.BaseHTTPRequestHandler):
             self._notify(f"❌ {action} קרסה")
 
     def _sync_self(self):
-        """Copy updated scripts from repo to ~/fortress-scripts/ after deploy."""
+        """Copy updated scripts from repo to scripts dir after deploy."""
         try:
             repo_dir = os.getenv("FORTRESS_REPO_DIR", "")
             if not repo_dir:
@@ -163,8 +163,9 @@ class DeployHandler(http.server.BaseHTTPRequestHandler):
             scripts_dir = Path(__file__).parent
             for script in ["deploy_listener.py", "deploy.sh"]:
                 src = Path(repo_dir) / "fortress" / "scripts" / script
-                if src.exists():
-                    shutil.copy2(src, scripts_dir / script)
+                dst = scripts_dir / script
+                if src.exists() and src.resolve() != dst.resolve():
+                    shutil.copy2(src, dst)
                     logger.info("Synced %s from repo", script)
         except Exception:
             logger.exception("Failed to sync scripts")
@@ -209,7 +210,7 @@ if __name__ == "__main__":
         import shutil
         src = Path(repo_dir) / "fortress" / "scripts" / "deploy.sh"
         dst = Path(__file__).parent / "deploy.sh"
-        if src.exists():
+        if src.exists() and src.resolve() != dst.resolve():
             shutil.copy2(src, dst)
             logger.info("Synced deploy.sh from repo on startup")
 
