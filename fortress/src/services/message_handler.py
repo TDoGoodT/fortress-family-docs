@@ -28,13 +28,16 @@ def _sanitize_response(response: str) -> str:
 async def handle_incoming_message(
     db: Session,
     phone: str,
-    message_text: str,
+    message_text: str | None,
     message_id: str,
     *,
     has_media: bool = False,
     media_file_path: str | None = None,
 ) -> str:
     """Authenticate sender and process via Skills Engine or deterministic fallback."""
+    if not message_text and not has_media:
+        return ""
+    message_text = message_text or ""
     member = get_family_member_by_phone(db, phone)
 
     if member is None:

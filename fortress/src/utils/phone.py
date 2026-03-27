@@ -17,6 +17,44 @@ def normalize_phone(raw: str) -> str:
     return phone
 
 
+def phone_lookup_candidates(raw: str) -> list[str]:
+    """Return normalized variants that may match the same person.
+
+    This helps bridge WAHA/NOWEB identifiers such as ``@lid`` and stored DB
+    values that may be saved with or without ``+`` or local ``05X`` format.
+    """
+    if not raw:
+        return []
+
+    normalized = normalize_phone(raw)
+    if not normalized:
+        return []
+
+    candidates: list[str] = []
+    for candidate in (
+        raw,
+        raw.split("@")[0],
+        normalized,
+        f"+{normalized}",
+    ):
+        if candidate and candidate not in candidates:
+            candidates.append(candidate)
+
+    if normalized.startswith("972") and len(normalized) == 12:
+        local = f"0{normalized[3:]}"
+        for candidate in (local, f"+{local}"):
+            if candidate not in candidates:
+                candidates.append(candidate)
+
+    if normalized.startswith("0") and len(normalized) == 10:
+        international = f"972{normalized[1:]}"
+        for candidate in (international, f"+{international}"):
+            if candidate not in candidates:
+                candidates.append(candidate)
+
+    return candidates
+
+
 def is_valid_israeli_phone(phone: str) -> bool:
     """Return True if *phone* looks like a valid Israeli number.
 

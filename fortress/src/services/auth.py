@@ -3,11 +3,15 @@
 from sqlalchemy.orm import Session
 
 from src.models.schema import FamilyMember, Permission
+from src.utils.phone import phone_lookup_candidates
 
 
 def get_family_member_by_phone(db: Session, phone: str) -> FamilyMember | None:
     """Return the family member matching *phone*, or None."""
-    return db.query(FamilyMember).filter(FamilyMember.phone == phone).first()
+    candidates = phone_lookup_candidates(phone)
+    if not candidates:
+        return None
+    return db.query(FamilyMember).filter(FamilyMember.phone.in_(candidates)).first()
 
 
 def get_permissions_for_role(db: Session, role: str) -> list[Permission]:

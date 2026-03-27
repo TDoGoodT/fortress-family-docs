@@ -11,11 +11,87 @@ from src.database import get_db
 from src.services.message_handler import handle_incoming_message
 from src.services.whatsapp_client import send_text_message
 from src.utils.media import download_media, save_media
-from src.utils.phone import normalize_phone
+from src.utils.phone import is_valid_israeli_phone, normalize_phone
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+def _get_nested_value(data: dict[str, Any], *path: str) -> Any:
+    current: Any = data
+    for key in path:
+        if not isinstance(current, dict):
+            return None
+        current = current.get(key)
+    return current
+
+
+def _iter_text_candidates(value: Any) -> list[str]:
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, dict):
+        candidates: list[str] = []
+        for key in ("body", "text", "caption", "conversation", "contentText", "selectedDisplayText"):
+            item = value.get(key)
+            if isinstance(item, str):
+                candidates.append(item)
+        for nested in value.values():
+            if isinstance(nested, (dict, list)):
+                candidates.extend(_iter_text_candidates(nested))
+        return candidates
+    if isinstance(value, list):
+        candidates: list[str] = []
+        for item in value:
+            if isinstance(item, (dict, list, str)):
+                candidates.extend(_iter_text_candidates(item))
+        return candidates
+    return []
+
+
+def _extract_message_text(payload: dict[str, Any]) -> str | None:
+    for candidate in _iter_text_candidates(payload.get("body")):
+        text = candidate.strip()
+        if text:
+            return text
+
+    for key in ("caption", "text"):
+        value = payload.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+
+    for candidate in _iter_text_candidates(_get_nested_value(payload, "_data", "message")):
+        text = candidate.strip()
+        if text:
+            return text
+
+    return None
+
+
+def _extract_sender_phone(payload: dict[str, Any]) -> str:
+    candidates = [
+        _get_nested_value(payload, "_data", "key", "remoteJidAlt"),
+        _get_nested_value(payload, "_data", "participantPn"),
+        _get_nested_value(payload, "_data", "key", "participantPn"),
+        payload.get("from"),
+        payload.get("participant"),
+        payload.get("author"),
+        _get_nested_value(payload, "_data", "key", "remoteJid"),
+        _get_nested_value(payload, "_data", "key", "participant"),
+    ]
+
+    fallback = ""
+    for raw in candidates:
+        if not isinstance(raw, str) or not raw:
+            continue
+        phone = normalize_phone(raw)
+        if not phone:
+            continue
+        if is_valid_israeli_phone(phone):
+            return phone
+        if not fallback:
+            fallback = phone
+    return fallback
 
 
 @router.post("/webhook/whatsapp")
@@ -33,16 +109,24 @@ async def whatsapp_webhook(
             return {"status": "ignored", "reason": "non-message event"}
 
         payload = body.get("payload", {})
-        from_raw = payload.get("from", "")
-        phone = normalize_phone(from_raw)
 
         # Echo prevention: ignore messages sent by the bot itself
-        if payload.get("fromMe", False):
+        if payload.get("fromMe", False) or payload.get("source") == "app":
             return {"status": "ignored", "reason": "echo"}
 
+        phone = _extract_sender_phone(payload)
+        if not phone:
+            logger.info("Ignoring message without resolvable sender: %s", payload.get("id"))
+            return {"status": "ignored", "reason": "missing sender"}
+
         message_id = payload.get("id", "")
-        message_text = payload.get("body", "")
+        message_text = _extract_message_text(payload)
         has_media = payload.get("hasMedia", False)
+
+        if not message_text and not has_media:
+            logger.info("Ignoring non-text message from %s: %s", phone, message_id)
+            return {"status": "ignored", "reason": "non-text message"}
+
         logger.info("Incoming message from %s: %s", phone, message_text)
 
         media_file_path: str | None = None
@@ -68,7 +152,8 @@ async def whatsapp_webhook(
             media_file_path=media_file_path,
         )
         logger.info("Response: %s", response_text)
-        await send_text_message(phone, response_text)
+        if response_text:
+            await send_text_message(phone, response_text)
         return {"status": "processed"}
 
     except Exception:

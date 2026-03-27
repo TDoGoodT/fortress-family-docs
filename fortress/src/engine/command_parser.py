@@ -19,7 +19,7 @@ CONFIRM_PATTERNS: list[re.Pattern] = [
 
 
 def parse_command(
-    message: str,
+    message: str | None,
     skill_registry: SkillRegistry,
     *,
     has_media: bool = False,
@@ -41,6 +41,9 @@ def parse_command(
             action="save",
             params={"media_file_path": media_file_path},
         )
+
+    if not isinstance(message, str):
+        return None
 
     stripped = message.strip()
 
