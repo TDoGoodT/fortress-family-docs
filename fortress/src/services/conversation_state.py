@@ -52,7 +52,10 @@ def update_state(
     if context is not None:
         state.context = context
 
-    state.pending_confirmation = pending_confirmation
+    # Only update pending_confirmation if explicitly passed as True,
+    # or if pending_action is also being set — never silently reset it
+    if pending_confirmation or pending_action is not None:
+        state.pending_confirmation = pending_confirmation
     if pending_action is not None:
         state.pending_action = pending_action
 

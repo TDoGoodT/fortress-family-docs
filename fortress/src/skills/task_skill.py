@@ -40,9 +40,11 @@ class TaskSkill(BaseSkill):
             (re.compile(r"^משימה חדשה[:\s]+(?P<title>.+)$", re.IGNORECASE), "create"),
             (re.compile(r"^new task[:\s]+(?P<title>.+)$", re.IGNORECASE), "create"),
             (re.compile(r"^מחק משימה\s+(?P<index>\d+)$", re.IGNORECASE), "delete"),
+            (re.compile(r"^מחק משימה[:\s]+(?P<title_query>.+)$", re.IGNORECASE), "delete"),
             (re.compile(r"^מחק\s+(?P<index>\d+)$", re.IGNORECASE), "delete"),
             (re.compile(r"^(מחק הכל|נקה הכל|delete all)$", re.IGNORECASE), "delete_all"),
-            (re.compile(r"^(סיים|סיום|בוצע)\s*(משימה)?\s*(?P<index>\d+)?$", re.IGNORECASE), "complete"),
+            (re.compile(r"^(סיים|סיום|בוצע|סיימתי)\s*(משימה)?\s*(?P<index>\d+)?$", re.IGNORECASE), "complete"),
+            (re.compile(r"^(סיים|סיום|בוצע|סיימתי)[:\s]+(?P<title_query>.+)$", re.IGNORECASE), "complete"),
             (re.compile(r"^done\s*(?P<index>\d+)?$", re.IGNORECASE), "complete"),
             (re.compile(r"^(עדכן|שנה|תעדכן|תשנה)\s*(משימה)?\s*(?P<index>\d+)?\s*(?P<changes>.*)$", re.IGNORECASE), "update"),
             (re.compile(r"^משימות$", re.IGNORECASE), "list"),
@@ -163,14 +165,20 @@ class TaskSkill(BaseSkill):
         context = state.context or {}
         task_list_order = context.get("task_list_order")
 
-        if not task_list_order:
+        if not task_list_order and "title_query" not in params:
             return Result(success=False, message=TEMPLATES["need_list_first"])
 
-        index = int(params.get("index", 0))
-        if index < 1 or index > len(task_list_order):
-            return Result(success=False, message=TEMPLATES["task_not_found"])
-
-        task_id = UUID(task_list_order[index - 1])
+        # Resolve by title_query if provided
+        if "title_query" in params:
+            resolved = self._resolve_task_id(db, member, params)
+            if isinstance(resolved, Result):
+                return resolved
+            task_id = resolved
+        else:
+            index = int(params.get("index", 0))
+            if index < 1 or index > len(task_list_order):
+                return Result(success=False, message=TEMPLATES["task_not_found"])
+            task_id = UUID(task_list_order[index - 1])
         task = tasks.get_task(db, task_id)
         if task is None:
             return Result(success=False, message=TEMPLATES["task_not_found"])
@@ -302,10 +310,7 @@ class TaskSkill(BaseSkill):
     def _resolve_task_id(
         self, db: Session, member: FamilyMember, params: dict
     ) -> UUID | Result:
-        """Resolve a task UUID from index param or last_entity_id fallback.
-
-        Returns a UUID on success, or a Result on error.
-        """
+        """Resolve a task UUID from index, title_query, or last_entity_id fallback."""
         index_str = params.get("index")
 
         if index_str is not None:
@@ -321,8 +326,6 @@ class TaskSkill(BaseSkill):
                 return Result(success=False, message=TEMPLATES["task_not_found"])
 
             task_id = UUID(task_list_order[index - 1])
-
-            # Validate task exists and is open
             task = tasks.get_task(db, task_id)
             if task is None or task.status != "open":
                 logger.warning("Stale index %d → task %s not open", index, task_id)
@@ -330,6 +333,20 @@ class TaskSkill(BaseSkill):
 
             logger.info("Index %d resolved to task %s: %s", index, task.id, task.title)
             return task_id
+
+        # Title search
+        title_query = params.get("title_query")
+        if title_query:
+            open_tasks = tasks.list_tasks(db, status="open", assigned_to=member.id)
+            query_lower = title_query.strip().lower()
+            matches = [t for t in open_tasks if query_lower in t.title.lower()]
+            if len(matches) == 1:
+                logger.info("Title query '%s' resolved to task %s", title_query, matches[0].id)
+                return matches[0].id
+            if len(matches) > 1:
+                titles = ", ".join(f"'{t.title}'" for t in matches[:3])
+                return Result(success=False, message=f"מצאתי כמה משימות דומות: {titles}. אפשר להיות יותר מדויק?")
+            return Result(success=False, message=TEMPLATES["task_not_found"])
 
         # Fallback: last_entity_id
         state = get_state(db, member.id)
