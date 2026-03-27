@@ -66,21 +66,20 @@ services:
           memory: 6G
 
   waha:
-    image: devlikeapro/waha:noweb-arm-2026.3.2
+    image: devlikeapro/waha:arm
     container_name: fortress-waha
-    restart: unless-stopped
+    restart: "no"
+    profiles: ["waha"]
     ports:
       - "3000:3000"
     environment:
-      - WHATSAPP_DEFAULT_ENGINE=NOWEB
+      - WHATSAPP_DEFAULT_ENGINE=WEBJS
       - WAHA_DASHBOARD_ENABLED=true
       - WAHA_DASHBOARD_USERNAME=${WAHA_DASHBOARD_USERNAME}
       - WAHA_DASHBOARD_PASSWORD=${WAHA_DASHBOARD_PASSWORD}
       - WAHA_API_KEY=${WAHA_API_KEY}
       - WHATSAPP_RESTART_ALL_SESSIONS=true
       - WHATSAPP_START_SESSION=default
-      - WAHA_NOWEB_STORE_ENABLED=true
-      - WAHA_NOWEB_STORE_FULL_SYNC=true
       - WAHA_LOG_LEVEL=info
       - WHATSAPP_API_HOSTNAME=http://fortress-app:8000
       - WHATSAPP_HOOK_URL=http://fortress-app:8000/webhook/whatsapp
