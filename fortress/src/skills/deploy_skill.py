@@ -5,6 +5,12 @@ Architecture:
 - A lightweight deploy_listener.py runs on the Mac Mini HOST (127.0.0.1:9111).
 - This skill sends HTTP requests to the listener, which runs git pull / docker compose.
 - Parent role required. Token from config, never hardcoded.
+
+Security model:
+- Exact trigger phrase required (no fuzzy matching)
+- Token-based auth to the listener
+- Cooldown enforced on the listener side (1 deploy / 10 min)
+- Sender identity logged on every request
 """
 
 from __future__ import annotations
@@ -22,6 +28,11 @@ from src.skills.base_skill import BaseSkill, Command, Result
 
 logger = logging.getLogger(__name__)
 
+# Exact trigger phrases — no fuzzy matching, no LLM interpretation
+_DEPLOY_TRIGGER  = re.compile(r"^פורטרס שדרג מערכת$")
+_RESTART_TRIGGER = re.compile(r"^פורטרס הפעל מחדש$")
+_STATUS_TRIGGER  = re.compile(r"^פורטרס סטטוס$")
+
 
 class DeploySkill(BaseSkill):
     """Parent-only skill to pull, rebuild, and restart Fortress from WhatsApp."""
@@ -37,39 +48,37 @@ class DeploySkill(BaseSkill):
     @property
     def commands(self) -> list[tuple[re.Pattern, str]]:
         return [
-            (re.compile(r"^(עדכן מערכת|עדכון מערכת|deploy|עדכון|פרוס)$", re.IGNORECASE), "deploy"),
-            (re.compile(r"^(ריסטארט|restart|הפעל מחדש)$", re.IGNORECASE), "restart"),
-            (re.compile(r"^(סטטוס מערכת|status)$", re.IGNORECASE), "status"),
+            (_DEPLOY_TRIGGER,  "deploy"),
+            (_RESTART_TRIGGER, "restart"),
+            (_STATUS_TRIGGER,  "status"),
         ]
 
     def execute(self, db: Session, member: FamilyMember, command: Command) -> Result:
-        # Parent-only check
         if member.role != "parent":
             return Result(success=False, message="רק הורים יכולים לעדכן את המערכת 🔒")
 
-        # Fail closed if secret not configured
         if not config.DEPLOY_SECRET:
             return Result(success=False, message=TEMPLATES["deploy_not_configured"])
 
-        action = command.action
-        return self._call_listener(action)
+        logger.info("Deploy action=%s requested by member=%s phone=%s", command.action, member.name, member.phone)
+        return self._call_listener(command.action, sender=member.name)
 
     def verify(self, db: Session, result: Result) -> bool:
         return result.success
 
     def get_help(self) -> str:
         return (
-            "עדכן מערכת — git pull + rebuild + restart\n"
-            "ריסטארט — הפעלה מחדש של פורטרס\n"
-            "סטטוס מערכת — בדיקת סטטוס הקונטיינרים"
+            "פורטרס שדרג מערכת — git pull + rebuild + restart\n"
+            "פורטרס הפעל מחדש — הפעלה מחדש של פורטרס\n"
+            "פורטרס סטטוס — בדיקת סטטוס הקונטיינרים"
         )
 
-    def _call_listener(self, action: str) -> Result:
+    def _call_listener(self, action: str, sender: str = "") -> Result:
         """Send HTTP request to the deploy listener on the host."""
         try:
             resp = httpx.post(
                 config.DEPLOY_LISTENER_URL,
-                json={"token": config.DEPLOY_SECRET, "action": action},
+                json={"token": config.DEPLOY_SECRET, "action": action, "sender": sender},
                 headers={"Content-Type": "application/json"},
                 timeout=20.0,
             )
@@ -101,7 +110,6 @@ class DeploySkill(BaseSkill):
                     data={"async": True},
                 )
 
-            # deploy
             return Result(
                 success=True,
                 message=TEMPLATES["deploy_started"],

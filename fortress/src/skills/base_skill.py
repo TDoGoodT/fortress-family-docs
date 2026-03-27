@@ -20,6 +20,7 @@ class Command:
     skill: str
     action: str
     params: dict[str, Any] = field(default_factory=dict)
+    raw_text: str = ""
 
 
 @dataclass

@@ -62,7 +62,7 @@ def parse_command(
         m = pattern.search(stripped)
         if m:
             params = {k: v for k, v in m.groupdict().items() if v is not None}
-            return Command(skill=skill.name, action=action_name, params=params)
+            return Command(skill=skill.name, action=action_name, params=params, raw_text=stripped)
 
     # 5. LLM fallback
     return None

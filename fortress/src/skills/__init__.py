@@ -9,6 +9,7 @@ from src.skills.chat_skill import ChatSkill
 from src.skills.deploy_skill import DeploySkill
 
 # MVP skills — deterministic, zero LLM
+registry.register(DeploySkill())    # Remote deploy — must be before TaskSkill (exact trigger priority)
 registry.register(SystemSkill())    # MVP ✅
 registry.register(TaskSkill())      # MVP ✅
 
