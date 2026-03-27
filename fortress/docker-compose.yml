@@ -10,7 +10,7 @@ services:
       POSTGRES_USER: fortress
       POSTGRES_PASSWORD: ${DB_PASSWORD:-fortress_dev}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - fortress_data:/var/lib/postgresql/data
     healthcheck:
@@ -57,7 +57,7 @@ services:
     container_name: fortress-ollama
     restart: unless-stopped
     ports:
-      - "11434:11434"
+      - "127.0.0.1:11434:11434"
     volumes:
       - ollama_data:/root/.ollama
     deploy:
@@ -83,6 +83,7 @@ services:
       - WHATSAPP_API_HOSTNAME=http://fortress-app:8000
       - WHATSAPP_HOOK_URL=http://fortress-app:8000/webhook/whatsapp
       - WHATSAPP_HOOK_EVENTS=message,message.any
+      - WHATSAPP_HOOK_HEADERS=X-Api-Key:${WAHA_API_KEY:-}
       - WAHA_DASHBOARD_USERNAME=${WAHA_DASHBOARD_USERNAME:-admin}
       - WAHA_DASHBOARD_PASSWORD=${WAHA_DASHBOARD_PASSWORD:-fortress}
       - WHATSAPP_API_KEY=${WAHA_API_KEY:-}
