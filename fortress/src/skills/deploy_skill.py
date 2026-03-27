@@ -37,7 +37,7 @@ class DeploySkill(BaseSkill):
     @property
     def commands(self) -> list[tuple[re.Pattern, str]]:
         return [
-            (re.compile(r"^(עדכן מערכת|deploy|עדכון|פרוס)$", re.IGNORECASE), "deploy"),
+            (re.compile(r"^(עדכן מערכת|עדכון מערכת|deploy|עדכון|פרוס)$", re.IGNORECASE), "deploy"),
             (re.compile(r"^(ריסטארט|restart|הפעל מחדש)$", re.IGNORECASE), "restart"),
             (re.compile(r"^(סטטוס מערכת|status)$", re.IGNORECASE), "status"),
         ]
