@@ -3,12 +3,9 @@
 # Runs on the Mac Mini host (NOT inside Docker)
 set -euo pipefail
 
-REPO_DIR="${FORTRESS_REPO_DIR:-$(dirname "$(dirname "$(dirname "$(realpath "$0")")")")}"
-LOG_FILE="${HOME}/fortress-scripts/deploy.log"
-COMPOSE_FILE="${REPO_DIR}/fortress/docker-compose.yml"
-
-# Ensure a valid working directory (launchd may start with a non-existent cwd)
-cd /private/tmp
+REPO_DIR="${FORTRESS_REPO_DIR:-$(dirname "$(dirname "$(realpath "$0")")")}"
+LOG_FILE="${REPO_DIR}/storage/deploy.log"
+COMPOSE_FILE="${REPO_DIR}/docker-compose.yml"
 
 ACTION="${1:-deploy}"
 
@@ -21,20 +18,21 @@ log "=== Starting ${ACTION} ==="
 case "$ACTION" in
     deploy)
         log "Pulling latest code..."
-        git -C "$REPO_DIR" pull origin main >> "$LOG_FILE" 2>&1
+        cd "$REPO_DIR"
+        git pull origin main 2>&1 | tee -a "$LOG_FILE"
 
         log "Building fortress container..."
-        docker compose --env-file "$REPO_DIR/fortress/.env" -f "$COMPOSE_FILE" build --no-cache fortress >> "$LOG_FILE" 2>&1
+        docker compose -f "$COMPOSE_FILE" build --no-cache fortress 2>&1 | tee -a "$LOG_FILE"
 
-        log "Restarting fortress service..."
-        docker compose --env-file "$REPO_DIR/fortress/.env" -f "$COMPOSE_FILE" up -d fortress >> "$LOG_FILE" 2>&1
+        log "Restarting services..."
+        docker compose -f "$COMPOSE_FILE" up -d 2>&1 | tee -a "$LOG_FILE"
 
         log "=== Deploy complete ==="
         ;;
 
     restart)
         log "Restarting fortress container..."
-        docker compose --env-file "$REPO_DIR/fortress/.env" -f "$COMPOSE_FILE" restart fortress >> "$LOG_FILE" 2>&1
+        docker compose -f "$COMPOSE_FILE" restart fortress 2>&1 | tee -a "$LOG_FILE"
         log "=== Restart complete ==="
         ;;
 
