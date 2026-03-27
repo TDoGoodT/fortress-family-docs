@@ -26,8 +26,8 @@ case "$ACTION" in
         log "Building fortress container..."
         docker compose --env-file "$REPO_DIR/fortress/.env" -f "$COMPOSE_FILE" build --no-cache fortress >> "$LOG_FILE" 2>&1
 
-        log "Restarting services..."
-        docker compose --env-file "$REPO_DIR/fortress/.env" -f "$COMPOSE_FILE" up -d >> "$LOG_FILE" 2>&1
+        log "Restarting fortress service..."
+        docker compose --env-file "$REPO_DIR/fortress/.env" -f "$COMPOSE_FILE" up -d fortress >> "$LOG_FILE" 2>&1
 
         log "=== Deploy complete ==="
         ;;

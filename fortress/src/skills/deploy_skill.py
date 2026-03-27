@@ -29,7 +29,7 @@ from src.skills.base_skill import BaseSkill, Command, Result
 logger = logging.getLogger(__name__)
 
 # Exact trigger phrases — no fuzzy matching, no LLM interpretation
-_DEPLOY_TRIGGER  = re.compile(r"^פורטרס שדרג מערכת$")
+_DEPLOY_TRIGGER  = re.compile(r"^פורטרס תתחדש$")
 _RESTART_TRIGGER = re.compile(r"^פורטרס הפעל מחדש$")
 _STATUS_TRIGGER  = re.compile(r"^פורטרס סטטוס$")
 
