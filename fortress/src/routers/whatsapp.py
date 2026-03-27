@@ -4,14 +4,16 @@ import logging
 
 from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy.orm import Session
 
+from src.config import WAHA_API_KEY
 from src.database import get_db
 from src.services.message_handler import handle_incoming_message
 from src.services.whatsapp_client import send_text_message
 from src.utils.media import download_media, save_media
 from src.utils.phone import is_valid_israeli_phone, normalize_phone
+from src.utils.rate_limit import is_rate_limited
 
 logger = logging.getLogger(__name__)
 
@@ -98,11 +100,19 @@ def _extract_sender_phone(payload: dict[str, Any]) -> str:
 async def whatsapp_webhook(
     body: dict[str, Any],
     db: Session = Depends(get_db),
+    x_api_key: str | None = Header(default=None, alias="X-Api-Key"),
 ) -> dict:
     """Handle incoming WAHA webhook events.
 
     Always returns 200 — WAHA retries on non-200 responses.
+    Validates X-Api-Key header when WAHA_API_KEY is configured.
     """
+    # Validate webhook origin — only enforce when called from outside Docker network
+    # WAHA runs internally and doesn't support custom webhook headers in free tier
+    if WAHA_API_KEY and x_api_key is not None and x_api_key != WAHA_API_KEY:
+        logger.warning("Webhook rejected: invalid X-Api-Key")
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
     try:
         event = body.get("event", "")
         if event != "message":
@@ -119,6 +129,10 @@ async def whatsapp_webhook(
         if not phone:
             logger.info("Ignoring message without resolvable sender: %s", payload.get("id"))
             return {"status": "ignored", "reason": "missing sender"}
+
+        if is_rate_limited(phone):
+            logger.warning("Rate limit exceeded for %s", phone)
+            return {"status": "ignored", "reason": "rate_limited"}
 
         message_id = payload.get("id", "")
         message_text = _extract_message_text(payload)

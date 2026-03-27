@@ -20,10 +20,7 @@ registry.register(BugSkill())       # MVP ✅
 registry.register(ChatSkill())      # MVP ✅ (greet only — deterministic)
 registry.register(DeploySkill())    # Remote deploy from WhatsApp (parent only)
 
-# TEMPORARILY DISABLED — re-enable after MVP is stable
-# from src.skills.recurring_skill import RecurringSkill
-# from src.skills.memory_skill import MemorySkill
-# from src.skills.morning_skill import MorningSkill
-# registry.register(RecurringSkill())
-# registry.register(MemorySkill())
-# registry.register(MorningSkill())
+from src.skills.recurring_skill import RecurringSkill
+from src.skills.morning_skill import MorningSkill
+registry.register(RecurringSkill())
+registry.register(MorningSkill())
