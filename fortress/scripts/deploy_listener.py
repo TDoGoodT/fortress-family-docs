@@ -201,6 +201,16 @@ if __name__ == "__main__":
         logger.error("DEPLOY_SECRET not set. Exiting.")
         raise SystemExit(1)
 
+    # Sync deploy.sh from repo on startup
+    repo_dir = os.getenv("FORTRESS_REPO_DIR", "")
+    if repo_dir:
+        import shutil
+        src = Path(repo_dir) / "fortress" / "scripts" / "deploy.sh"
+        dst = Path(__file__).parent / "deploy.sh"
+        if src.exists():
+            shutil.copy2(src, dst)
+            logger.info("Synced deploy.sh from repo on startup")
+
     server = http.server.HTTPServer(("127.0.0.1", PORT), DeployHandler)
     logger.info("Deploy listener running on 127.0.0.1:%d repo=%s", PORT, REPO_DIR)
     try:
