@@ -13,6 +13,14 @@ from src.config import OPENROUTER_API_KEY
 from src.models.schema import FamilyMember
 from src.prompts.personality import TEMPLATES, get_greeting
 from src.prompts.system_prompts import UNIFIED_CLASSIFY_AND_RESPOND
+
+CHAT_SYSTEM_PROMPT = (
+    "אתה פורטרס, עוזר משפחתי חכם וחם. אתה מדבר עברית בלבד.\n"
+    "ענה בצורה קצרה, חמה וטבעית — זה וואטסאפ, לא מייל.\n"
+    "השתמש באימוג'י במידה. פנה למשתמש בשמו הפרטי.\n"
+    "אל תמציא מידע שאין לך. אם אתה לא יודע — תגיד בכנות.\n"
+    "החזר טקסט רגיל בלבד — ללא JSON, ללא markdown."
+)
 from src.services.bedrock_client import HEBREW_FALLBACK, BedrockClient
 from src.services.llm_client import OllamaClient
 from src.services.memory_service import load_memories
@@ -116,7 +124,7 @@ class ChatSkill(BaseSkill):
 
             raw = await self._dispatch_llm(
                 prompt=prompt,
-                system_prompt=UNIFIED_CLASSIFY_AND_RESPOND,
+                system_prompt=CHAT_SYSTEM_PROMPT,
                 intent="needs_llm",
             )
 

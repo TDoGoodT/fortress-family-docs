@@ -72,9 +72,15 @@ async def handle_incoming_message(
             response = format_response(result)
             intent = f"{command.skill}.{command.action}"
         else:
-            # MVP mode — deterministic fallback, zero LLM
-            response = PERSONALITY_TEMPLATES["cant_understand"].format(name=member.name)
-            intent = "mvp.cant_understand"
+            # Free-form chat — route to ChatSkill LLM
+            from src.skills.registry import registry as _registry
+            chat_skill = _registry.get("chat")
+            if chat_skill is not None:
+                response = await chat_skill.respond(db, member, message_text)
+                intent = "chat.llm"
+            else:
+                response = PERSONALITY_TEMPLATES["cant_understand"].format(name=member.name)
+                intent = "mvp.cant_understand"
 
         # Guard against empty/None responses
         if not response or not response.strip():
