@@ -111,7 +111,8 @@ async def whatsapp_webhook(
         payload = body.get("payload", {})
 
         # Echo prevention: ignore messages sent by the bot itself
-        if payload.get("fromMe", False) or payload.get("source") == "app":
+        # Note: source="app" means sent from phone (not bot) — do NOT filter it
+        if payload.get("fromMe", False):
             return {"status": "ignored", "reason": "echo"}
 
         phone = _extract_sender_phone(payload)

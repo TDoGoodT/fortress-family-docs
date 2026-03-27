@@ -48,7 +48,7 @@ services:
     ports:
       - "8000:8000"  # Dashboard: http://localhost:8000/dashboard
     volumes:
-      - ${STORAGE_PATH:-./storage}:/data/documents
+      - ${STORAGE_PATH:-./storage}:/data/documents:cached
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
