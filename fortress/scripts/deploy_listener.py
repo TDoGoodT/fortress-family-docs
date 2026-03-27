@@ -139,6 +139,9 @@ class DeployHandler(http.server.BaseHTTPRequestHandler):
             )
             if result.returncode == 0:
                 logger.info("%s completed successfully", action)
+                # After deploy, sync self from repo
+                if action == "deploy":
+                    self._sync_self()
                 self._notify(f"✅ {action} הושלם בהצלחה")
             else:
                 logger.error("%s failed: %s", action, result.stderr)
@@ -146,6 +149,21 @@ class DeployHandler(http.server.BaseHTTPRequestHandler):
         except Exception:
             logger.exception("%s crashed", action)
             self._notify(f"❌ {action} קרסה")
+
+    def _sync_self(self):
+        """Copy updated deploy_listener.py from repo to ~/fortress-scripts/."""
+        try:
+            repo_dir = os.getenv("FORTRESS_REPO_DIR", "")
+            if not repo_dir:
+                return
+            src = os.path.join(repo_dir, "fortress", "scripts", "deploy_listener.py")
+            dst = os.path.expanduser("~/fortress-scripts/deploy_listener.py")
+            if os.path.exists(src):
+                import shutil
+                shutil.copy2(src, dst)
+                logger.info("Synced deploy_listener.py from repo")
+        except Exception:
+            logger.exception("Failed to sync deploy_listener.py")
 
     def _notify(self, message: str):
         """Send WhatsApp notification via fortress-app."""
