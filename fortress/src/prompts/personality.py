@@ -220,6 +220,15 @@ def format_document_list(documents: list) -> str:
     return "\n".join(lines)
 
 
+# Hebrew frequency display map
+_FREQUENCY_HEBREW: dict[str, str] = {
+    "daily": "יומי",
+    "weekly": "שבועי",
+    "monthly": "חודשי",
+    "yearly": "שנתי",
+}
+
+
 def format_recurring_list(patterns: list) -> str:
     """Return a formatted Hebrew recurring-pattern list, or the empty-list template."""
     if not patterns:
@@ -229,10 +238,11 @@ def format_recurring_list(patterns: list) -> str:
     for i, pattern in enumerate(patterns, 1):
         title = getattr(pattern, "title", None) or (pattern.get("title", "") if isinstance(pattern, dict) else "")
         frequency = getattr(pattern, "frequency", None) or (pattern.get("frequency", "") if isinstance(pattern, dict) else "")
+        frequency_heb = _FREQUENCY_HEBREW.get(frequency, frequency)
         next_due_date = getattr(pattern, "next_due_date", None) or (pattern.get("next_due_date") if isinstance(pattern, dict) else None)
         lines.append(
             TEMPLATES["recurring_list_item"].format(
-                index=i, title=title, frequency=frequency, next_due_date=next_due_date,
+                index=i, title=title, frequency=frequency_heb, next_due_date=next_due_date,
             )
         )
 

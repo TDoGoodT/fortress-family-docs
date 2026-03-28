@@ -28,8 +28,11 @@ FREQUENCY_MAP: dict[str, str] = {
 }
 
 
-def _next_due_date(frequency: str, today: date | None = None) -> date:
-    """Calculate the next due date from *today* based on frequency."""
+def _next_due_date(frequency: str, today: date | None = None, day_of_month: int | None = None) -> date:
+    """Calculate the next due date from *today* based on frequency.
+
+    If *day_of_month* is provided for monthly/yearly, use that specific day.
+    """
     today = today or date.today()
     if frequency == "daily":
         return today + timedelta(days=1)
@@ -38,16 +41,16 @@ def _next_due_date(frequency: str, today: date | None = None) -> date:
     if frequency == "monthly":
         month = today.month % 12 + 1
         year = today.year + (1 if today.month == 12 else 0)
-        day = min(today.day, _days_in_month(year, month))
+        day = min(day_of_month or today.day, _days_in_month(year, month))
         return date(year, month, day)
     if frequency == "yearly":
         year = today.year + 1
-        day = min(today.day, _days_in_month(year, today.month))
+        day = min(day_of_month or today.day, _days_in_month(year, today.month))
         return date(year, today.month, day)
     # Default: monthly
     month = today.month % 12 + 1
     year = today.year + (1 if today.month == 12 else 0)
-    day = min(today.day, _days_in_month(year, month))
+    day = min(day_of_month or today.day, _days_in_month(year, month))
     return date(year, month, day)
 
 
@@ -107,26 +110,38 @@ class RecurringSkill(BaseSkill):
 
         details = params.get("title", "").strip()
 
-        # Parse "title, frequency" — e.g. "ארנונה, חודשי"
+        # Parse "title, frequency" — e.g. "ארנונה, חודשי" or "ארנונה, חודשי, 10"
+        day_of_month = None
         if "," in details:
-            parts = details.rsplit(",", 1)
-            title = parts[0].strip()
-            freq_text = parts[1].strip()
+            parts = [p.strip() for p in details.split(",")]
+            title = parts[0]
+            freq_text = parts[1] if len(parts) > 1 else ""
+            # Optional 3rd part: day number e.g. "10"
+            if len(parts) > 2 and parts[2].isdigit():
+                day_of_month = int(parts[2])
         else:
             title = details
             freq_text = ""
 
+        # Also try to extract day from Hebrew text like "ב-10 בחודש"
+        if day_of_month is None:
+            import re as _re
+            day_match = _re.search(r'ב[־\-](\d{1,2})', title + " " + freq_text)
+            if day_match:
+                day_of_month = int(day_match.group(1))
+
         frequency = FREQUENCY_MAP.get(freq_text, "monthly")
-        next_due = _next_due_date(frequency)
+        next_due = _next_due_date(frequency, day_of_month=day_of_month)
 
         pattern = recurring.create_pattern(
             db, title, frequency, next_due, assigned_to=member.id
         )
 
+        freq_heb = {v: k for k, v in FREQUENCY_MAP.items()}.get(frequency, frequency)
         return Result(
             success=True,
             message=TEMPLATES["recurring_created"].format(
-                title=title, frequency=frequency, next_due_date=next_due,
+                title=title, frequency=freq_heb, next_due_date=next_due,
             ),
             entity_type="recurring_pattern",
             entity_id=pattern.id,

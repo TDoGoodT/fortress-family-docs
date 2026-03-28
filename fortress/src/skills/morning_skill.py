@@ -110,10 +110,7 @@ class MorningSkill(BaseSkill):
                     days=days_until,
                 )
             )
-        else:
-            sections.append(
-                TEMPLATES["briefing_recurring"].format(next_title="—", days=0)
-            )
+        # B3 fix: hide recurring line entirely when there are no active patterns
 
         sections.append(TEMPLATES["briefing_docs"].format(count=doc_count))
 
