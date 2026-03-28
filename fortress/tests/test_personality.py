@@ -84,6 +84,12 @@ REQUIRED_TEMPLATE_KEYS = {
     "pii_detected",
     # Deploy
     "deploy_started",
+    "deploy_app_started",
+    "deploy_app_success",
+    "deploy_db_started",
+    "deploy_db_success",
+    "deploy_all_started",
+    "deploy_all_success",
     "deploy_success",
     "deploy_failed",
     "deploy_status",

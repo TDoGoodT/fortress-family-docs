@@ -29,7 +29,7 @@ Skills registered in `src/skills/__init__.py`:
 
 | Skill | Name | Commands | Notes |
 |-------|------|----------|-------|
-| DeploySkill | `deploy` | `פורטרס תתחדש`, `פורטרס הפעל מחדש`, `פורטרס סטטוס` | Registered twice (first for priority, second normally). Parent-only, rate-limited. |
+| DeploySkill | `deploy` | `פורטרס תתחדש [APP/DB/ALL]`, `פורטרס הפעל מחדש` / `restart`, `פורטרס סטטוס` / `status` | Parent-only, rate-limited. No suffix defaults to ALL (backward compatible). |
 | SystemSkill | `system` | `עזרה` / `help` / `פקודות` | Help menu |
 | TaskSkill | `task` | `משימה חדשה:`, `מחק משימה`, `מחק הכל`, `סיים/בוצע`, `עדכן`, `משימות` / `tasks` | Full CRUD. Supports index and title-based operations. |
 | DocumentSkill | `document` | `מסמכים` / `documents` | List documents. Also registered as `media` (dual registration for WhatsApp media handling). |
@@ -126,8 +126,8 @@ Fortress speaks Hebrew, short and warm — WhatsApp style, not email style. Pers
 ## Test Coverage
 
 ```
-572 tests collected
-572 passed, 0 failed
+588 tests collected
+588 passed, 0 failed
 48 test files
 ```
 

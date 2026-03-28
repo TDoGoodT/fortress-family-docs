@@ -28,9 +28,12 @@ from src.skills.base_skill import BaseSkill, Command, Result
 logger = logging.getLogger(__name__)
 
 # Exact trigger phrases — no fuzzy matching, no LLM interpretation
-_DEPLOY_TRIGGER  = re.compile(r"^פורטרס תתחדש$")
-_RESTART_TRIGGER = re.compile(r"^פורטרס הפעל מחדש$")
-_STATUS_TRIGGER  = re.compile(r"^פורטרס סטטוס$")
+_DEPLOY_APP_TRIGGER = re.compile(r"^פורטרס תתחדש\s*APP$", re.IGNORECASE)
+_DEPLOY_DB_TRIGGER  = re.compile(r"^פורטרס תתחדש\s*DB$", re.IGNORECASE)
+_DEPLOY_ALL_TRIGGER = re.compile(r"^פורטרס תתחדש\s*ALL$", re.IGNORECASE)
+_DEPLOY_TRIGGER     = re.compile(r"^פורטרס תתחדש$")
+_RESTART_TRIGGER    = re.compile(r"^(פורטרס הפעל מחדש|restart)$", re.IGNORECASE)
+_STATUS_TRIGGER     = re.compile(r"^(פורטרס סטטוס|status)$", re.IGNORECASE)
 
 
 class DeploySkill(BaseSkill):
@@ -47,9 +50,12 @@ class DeploySkill(BaseSkill):
     @property
     def commands(self) -> list[tuple[re.Pattern, str]]:
         return [
-            (_DEPLOY_TRIGGER,  "deploy"),
-            (_RESTART_TRIGGER, "restart"),
-            (_STATUS_TRIGGER,  "status"),
+            (_DEPLOY_APP_TRIGGER, "deploy_app"),
+            (_DEPLOY_DB_TRIGGER,  "deploy_db"),
+            (_DEPLOY_ALL_TRIGGER, "deploy_all"),
+            (_DEPLOY_TRIGGER,     "deploy_all"),
+            (_RESTART_TRIGGER,    "restart"),
+            (_STATUS_TRIGGER,     "status"),
         ]
 
     def execute(self, db: Session, member: FamilyMember, command: Command) -> Result:
@@ -67,13 +73,21 @@ class DeploySkill(BaseSkill):
 
     def get_help(self) -> str:
         return (
-            "פורטרס שדרג מערכת — git pull + rebuild + restart\n"
+            "פורטרס תתחדש — עדכון מלא (קוד + DB)\n"
+            "פורטרס תתחדש APP — עדכון קוד בלבד (~30 שניות)\n"
+            "פורטרס תתחדש DB — הרצת migrations בלבד\n"
+            "פורטרס תתחדש ALL — עדכון מלא\n"
             "פורטרס הפעל מחדש — הפעלה מחדש של פורטרס\n"
             "פורטרס סטטוס — בדיקת סטטוס הקונטיינרים"
         )
 
     def _call_listener(self, action: str, sender: str = "") -> Result:
         """Send HTTP request to the deploy listener on the host."""
+        _STARTED_TEMPLATES = {
+            "deploy_app": "deploy_app_started",
+            "deploy_db": "deploy_db_started",
+            "deploy_all": "deploy_all_started",
+        }
         try:
             resp = httpx.post(
                 config.DEPLOY_LISTENER_URL,
@@ -109,10 +123,11 @@ class DeploySkill(BaseSkill):
                     data={"async": True},
                 )
 
+            template_key = _STARTED_TEMPLATES.get(action, "deploy_started")
             return Result(
                 success=True,
-                message=TEMPLATES["deploy_started"],
-                action="deploy",
+                message=TEMPLATES[template_key],
+                action=action,
                 data={"async": True},
             )
 

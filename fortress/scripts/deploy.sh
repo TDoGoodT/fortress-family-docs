@@ -11,7 +11,7 @@ ENV_FILE="${REPO_DIR}/fortress/.env"
 # Ensure a valid working directory (launchd may start with a non-existent cwd)
 cd /private/tmp
 
-ACTION="${1:-deploy}"
+ACTION="${1:-deploy_all}"
 
 log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG_FILE"
@@ -20,7 +20,7 @@ log() {
 log "=== Starting ${ACTION} ==="
 
 case "$ACTION" in
-    deploy)
+    deploy_app)
         log "Pulling latest code..."
         git -C "$REPO_DIR" pull origin main >> "$LOG_FILE" 2>&1
 
@@ -28,8 +28,35 @@ case "$ACTION" in
         docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" build --no-cache fortress >> "$LOG_FILE" 2>&1
 
         log "Restarting fortress service (WAHA excluded)..."
-        # --no-deps ensures only fortress restarts, never waha/db/ollama
         docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d --no-deps fortress >> "$LOG_FILE" 2>&1
+
+        log "=== APP UPDATE complete ==="
+        ;;
+
+    deploy_db)
+        log "Running migrations..."
+        for f in "$REPO_DIR"/fortress/migrations/*.sql; do
+            log "Applying $f..."
+            docker exec -i fortress-db psql -U fortress -d fortress < "$f" 2>&1 | tail -1 | tee -a "$LOG_FILE"
+        done
+        log "=== DB UPDATE complete ==="
+        ;;
+
+    deploy_all)
+        log "Pulling latest code..."
+        git -C "$REPO_DIR" pull origin main >> "$LOG_FILE" 2>&1
+
+        log "Building and restarting all services..."
+        docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d --build >> "$LOG_FILE" 2>&1
+
+        log "Waiting for services to stabilize..."
+        sleep 15
+
+        log "Running migrations..."
+        for f in "$REPO_DIR"/fortress/migrations/*.sql; do
+            log "Applying $f..."
+            docker exec -i fortress-db psql -U fortress -d fortress < "$f" 2>&1 | tail -1 | tee -a "$LOG_FILE"
+        done
 
         log "Verifying WAHA session..."
         WAHA_API_KEY="$(grep '^WAHA_API_KEY' "$ENV_FILE" | cut -d= -f2)"
@@ -39,7 +66,12 @@ case "$ACTION" in
             log "WARNING: WAHA session is $WAHA_STATUS — run: deploy.sh waha-restart"
         fi
 
-        log "=== Deploy complete ==="
+        log "=== FULL UPDATE complete ==="
+        ;;
+
+    deploy)
+        # Legacy alias for deploy_all
+        exec "$0" deploy_all
         ;;
 
     restart)
@@ -59,7 +91,7 @@ case "$ACTION" in
         ;;
 
     *)
-        echo "Usage: $0 {deploy|restart|waha-restart|status}"
+        echo "Usage: $0 {deploy_app|deploy_db|deploy_all|restart|waha-restart|status}"
         exit 1
         ;;
 esac

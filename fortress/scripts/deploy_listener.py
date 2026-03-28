@@ -22,7 +22,7 @@ PORT = int(os.getenv("DEPLOY_LISTENER_PORT", "9111"))
 SECRET = os.getenv("DEPLOY_SECRET", "")
 REPO_DIR = os.getenv("FORTRESS_REPO_DIR", str(Path(__file__).parent.parent.parent))
 DEPLOY_SCRIPT = Path(__file__).parent / "deploy.sh"
-VALID_ACTIONS = ("deploy", "restart", "status")
+VALID_ACTIONS = ("deploy_app", "deploy_db", "deploy_all", "deploy", "restart", "status")
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger("deploy-listener")

@@ -135,6 +135,12 @@ TEMPLATES: dict[str, str] = {
     "memory_list_header": "🧠 זכרונות:\n",
     # Deploy
     "deploy_started": "מתחיל עדכון מערכת... ⏳",
+    "deploy_app_started": "מעדכן קוד... ⏳ (~30 שניות)",
+    "deploy_app_success": "הקוד עודכן ✅",
+    "deploy_db_started": "מריץ migrations... ⏳",
+    "deploy_db_success": "מסד הנתונים עודכן ✅",
+    "deploy_all_started": "עדכון מלא... ⏳ (~2 דקות)",
+    "deploy_all_success": "המערכת עודכנה במלואה ✅",
     "deploy_success": "המערכת עודכנה בהצלחה ✅\n{details}",
     "deploy_failed": "העדכון נכשל ❌\n{details}",
     "deploy_status": "סטטוס מערכת:\n{status}",

@@ -35,10 +35,18 @@ def _member(role: str = "parent", name: str = "אבא") -> MagicMock:
 
 
 class TestPermissions:
-    def test_child_cannot_deploy(self, skill, mock_db):
-        result = skill.execute(mock_db, _member("child"), Command(skill="deploy", action="deploy"))
+    def test_child_cannot_deploy_app(self, skill, mock_db):
+        result = skill.execute(mock_db, _member("child"), Command(skill="deploy", action="deploy_app"))
         assert result.success is False
         assert "מנהל" in result.message or "הורים" in result.message
+
+    def test_child_cannot_deploy_db(self, skill, mock_db):
+        result = skill.execute(mock_db, _member("child"), Command(skill="deploy", action="deploy_db"))
+        assert result.success is False
+
+    def test_child_cannot_deploy_all(self, skill, mock_db):
+        result = skill.execute(mock_db, _member("child"), Command(skill="deploy", action="deploy_all"))
+        assert result.success is False
 
     def test_child_cannot_restart(self, skill, mock_db):
         result = skill.execute(mock_db, _member("child"), Command(skill="deploy", action="restart"))
@@ -53,7 +61,7 @@ class TestSecretConfig:
     def test_empty_secret_blocks_all(self, skill, mock_db):
         with patch("src.skills.deploy_skill.config") as cfg:
             cfg.DEPLOY_SECRET = ""
-            for action in ("deploy", "restart", "status"):
+            for action in ("deploy_app", "deploy_db", "deploy_all", "restart", "status"):
                 result = skill.execute(mock_db, _member("parent"), Command(skill="deploy", action=action))
                 assert result.success is False
                 assert result.message == TEMPLATES["deploy_not_configured"]
@@ -63,9 +71,17 @@ class TestExactTriggers:
     """Exact trigger phrases must match — no fuzzy, no partial."""
 
     @pytest.mark.parametrize("text,action", [
-        ("פורטרס תתחדש", "deploy"),
+        ("פורטרס תתחדש APP", "deploy_app"),
+        ("פורטרס תתחדש app", "deploy_app"),
+        ("פורטרס תתחדש DB", "deploy_db"),
+        ("פורטרס תתחדש db", "deploy_db"),
+        ("פורטרס תתחדש ALL", "deploy_all"),
+        ("פורטרס תתחדש all", "deploy_all"),
+        ("פורטרס תתחדש", "deploy_all"),
         ("פורטרס הפעל מחדש", "restart"),
+        ("restart", "restart"),
         ("פורטרס סטטוס", "status"),
+        ("status", "status"),
     ])
     def test_exact_match(self, skill, text, action):
         matched = any(p.match(text) for p, a in skill.commands if a == action)
@@ -75,10 +91,10 @@ class TestExactTriggers:
         "עדכן מערכת",
         "עדכן מערכת עכשיו",
         "deploy",
-        "restart",
         "סטטוס מערכת",
         "פורטרס שדרג מערכת בבקשה",
         " פורטרס שדרג מערכת",
+        "פורטרס תתחדש SOMETHING",
     ])
     def test_no_fuzzy_match(self, skill, text):
         matched = any(p.match(text) for p, _ in skill.commands)
@@ -96,11 +112,11 @@ class TestListenerForwarding:
             mock_resp.json.return_value = {"status": "accepted"}
             mock_httpx.post.return_value = mock_resp
 
-            skill.execute(mock_db, _member("parent"), Command(skill="deploy", action="deploy"))
+            skill.execute(mock_db, _member("parent"), Command(skill="deploy", action="deploy_all"))
 
             payload = mock_httpx.post.call_args[1]["json"]
             assert payload["token"] == "my-secret"
-            assert payload["action"] == "deploy"
+            assert payload["action"] == "deploy_all"
 
     def test_sends_sender_identity(self, skill, mock_db):
         with patch("src.skills.deploy_skill.config") as cfg, \
@@ -112,7 +128,7 @@ class TestListenerForwarding:
             mock_resp.json.return_value = {"status": "accepted"}
             mock_httpx.post.return_value = mock_resp
 
-            skill.execute(mock_db, _member("parent", name="שגב"), Command(skill="deploy", action="deploy"))
+            skill.execute(mock_db, _member("parent", name="שגב"), Command(skill="deploy", action="deploy_all"))
 
             payload = mock_httpx.post.call_args[1]["json"]
             assert payload["sender"] == "שגב"
@@ -142,7 +158,7 @@ class TestErrorHandling:
             mock_resp.status_code = 429
             mock_httpx.post.return_value = mock_resp
 
-            result = skill.execute(mock_db, _member("parent"), Command(skill="deploy", action="deploy"))
+            result = skill.execute(mock_db, _member("parent"), Command(skill="deploy", action="deploy_all"))
             assert result.success is False
             assert result.message == TEMPLATES["deploy_rate_limited"]
 
@@ -154,7 +170,7 @@ class TestErrorHandling:
             mock_httpx.post.side_effect = httpx.ConnectError("refused")
             mock_httpx.ConnectError = httpx.ConnectError
 
-            result = skill.execute(mock_db, _member("parent"), Command(skill="deploy", action="deploy"))
+            result = skill.execute(mock_db, _member("parent"), Command(skill="deploy", action="deploy_all"))
             assert result.success is False
             assert "נכשל" in result.message
 
@@ -163,6 +179,9 @@ class TestTemplatesExist:
     @pytest.mark.parametrize("key", [
         "deploy_started", "deploy_failed", "deploy_status",
         "deploy_restarted", "deploy_not_configured", "deploy_rate_limited",
+        "deploy_app_started", "deploy_app_success",
+        "deploy_db_started", "deploy_db_success",
+        "deploy_all_started", "deploy_all_success",
     ])
     def test_template_exists(self, key):
         assert key in TEMPLATES
@@ -173,10 +192,12 @@ class TestSkillMetadata:
         assert skill.name == "deploy"
 
     def test_commands_count(self, skill):
-        assert len(skill.commands) == 3
+        assert len(skill.commands) == 6
 
     def test_help_mentions_exact_phrases(self, skill):
         help_text = skill.get_help()
-        assert "פורטרס שדרג מערכת" in help_text
+        assert "פורטרס תתחדש" in help_text
         assert "פורטרס הפעל מחדש" in help_text
         assert "פורטרס סטטוס" in help_text
+        assert "APP" in help_text
+        assert "DB" in help_text
