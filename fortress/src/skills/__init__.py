@@ -19,9 +19,10 @@ registry._skills["media"] = doc_skill  # dual registration: "document" + "media"
 
 registry.register(BugSkill())       # MVP ✅
 registry.register(ChatSkill())      # MVP ✅ (greet only — deterministic)
-registry.register(DeploySkill())    # Remote deploy from WhatsApp (parent only)
 
 from src.skills.recurring_skill import RecurringSkill
 from src.skills.morning_skill import MorningSkill
+from src.skills.memory_skill import MemorySkill
 registry.register(RecurringSkill())
 registry.register(MorningSkill())
+registry.register(MemorySkill())

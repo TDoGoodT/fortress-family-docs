@@ -54,7 +54,7 @@ def test_description(skill):
 
 
 def test_commands_count(skill):
-    assert len(skill.commands) == 2
+    assert len(skill.commands) == 3
 
 
 def test_commands_briefing_patterns(skill):
@@ -64,8 +64,15 @@ def test_commands_briefing_patterns(skill):
         assert pattern.match(text), f"Pattern should match '{text}'"
 
 
-def test_commands_summary_patterns(skill):
+def test_commands_status_patterns(skill):
     pattern, action = skill.commands[1]
+    assert action == "status"
+    for text in ["סטטוס", "status"]:
+        assert pattern.match(text), f"Pattern should match '{text}'"
+
+
+def test_commands_summary_patterns(skill):
+    pattern, action = skill.commands[2]
     assert action == "summary"
     for text in ["דוח", "report", "סיכום"]:
         assert pattern.match(text), f"Pattern should match '{text}'"

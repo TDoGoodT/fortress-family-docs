@@ -238,54 +238,70 @@ class TestRequestValidation:
 
 
 class TestRateLimiting:
-    """R4: Max 3 requests per 10 minutes."""
+    """R4: Max 1 deploy/restart request per 10 minutes. Status is exempt."""
 
+    @patch("deploy_listener.threading")
     @patch("deploy_listener.subprocess")
-    def test_first_three_requests_allowed(self, mock_subprocess):
+    def test_first_deploy_allowed(self, mock_subprocess, mock_threading):
         mock_result = MagicMock()
         mock_result.stdout = "ok"
         mock_subprocess.run.return_value = mock_result
 
-        for _ in range(3):
-            handler = _make_handler(body={"token": TEST_SECRET, "action": "status"})
-            handler.do_POST()
-            assert 200 in handler._sent_codes
+        handler = _make_handler(body={"token": TEST_SECRET, "action": "deploy"})
+        handler.do_POST()
+        assert 202 in handler._sent_codes
 
+    @patch("deploy_listener.threading")
     @patch("deploy_listener.subprocess")
-    def test_fourth_request_returns_429(self, mock_subprocess):
+    def test_second_deploy_returns_429(self, mock_subprocess, mock_threading):
         mock_result = MagicMock()
         mock_result.stdout = "ok"
         mock_subprocess.run.return_value = mock_result
 
-        # Use up 3 requests
-        for _ in range(3):
-            handler = _make_handler(body={"token": TEST_SECRET, "action": "status"})
-            handler.do_POST()
+        # First deploy — allowed
+        handler = _make_handler(body={"token": TEST_SECRET, "action": "deploy"})
+        handler.do_POST()
+        assert 202 in handler._sent_codes
 
-        # 4th should be rate limited
-        handler = _make_handler(body={"token": TEST_SECRET, "action": "status"})
+        # Second deploy — rate limited
+        handler = _make_handler(body={"token": TEST_SECRET, "action": "deploy"})
         handler.do_POST()
         assert 429 in handler._sent_codes
         assert b"Too many" in handler._writable.data
 
-    @patch("deploy_listener.time")
     @patch("deploy_listener.subprocess")
-    def test_rate_limit_resets_after_window(self, mock_subprocess, mock_time):
+    def test_status_exempt_from_rate_limit(self, mock_subprocess):
+        """Status requests should never be rate limited."""
         mock_result = MagicMock()
         mock_result.stdout = "ok"
         mock_subprocess.run.return_value = mock_result
 
-        # Fill up rate limit at t=0
-        mock_time.time.return_value = 1000.0
-        deploy_listener._request_log.clear()
-        for _ in range(3):
-            deploy_listener._request_log.append(1000.0)
+        # Fill up rate limit with a deploy
+        deploy_listener._request_log.append(time.time())
 
-        # After 10 minutes, should be allowed again
-        mock_time.time.return_value = 1000.0 + 601
+        # Status should still work
         handler = _make_handler(body={"token": TEST_SECRET, "action": "status"})
         handler.do_POST()
         assert 200 in handler._sent_codes
+
+    @patch("deploy_listener.time")
+    @patch("deploy_listener.threading")
+    @patch("deploy_listener.subprocess")
+    def test_rate_limit_resets_after_window(self, mock_subprocess, mock_threading, mock_time):
+        mock_result = MagicMock()
+        mock_result.stdout = "ok"
+        mock_subprocess.run.return_value = mock_result
+
+        # Fill up rate limit at t=1000
+        mock_time.time.return_value = 1000.0
+        deploy_listener._request_log.clear()
+        deploy_listener._request_log.append(1000.0)
+
+        # After 10 minutes, should be allowed again
+        mock_time.time.return_value = 1000.0 + 601
+        handler = _make_handler(body={"token": TEST_SECRET, "action": "deploy"})
+        handler.do_POST()
+        assert 202 in handler._sent_codes
 
 
 class TestLocalhostBinding:
