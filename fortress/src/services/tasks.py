@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Fortress 2.0 task service — household task management."""
 
 from datetime import date, datetime, timezone

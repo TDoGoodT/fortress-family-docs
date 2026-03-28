@@ -130,20 +130,22 @@ class TestBugConditionExploration:
     async def test_bug6_unmatched_message_no_llm_fallback(
         self, mock_auth, mock_parse, mock_pii, mock_conv, mock_db
     ):
-        """Bug 6: Unmatched messages should return cant_understand, NOT call LLM.
+        """Bug 6 (fixed): Unmatched messages now route to ChatSkill LLM (Bedrock).
 
-        EXPECTED: Deterministic cant_understand template with member name.
-        ON UNFIXED CODE: FAILS — ChatSkill.respond (LLM) is called.
+        The old behavior (cant_understand) has been replaced with LLM-powered chat.
         """
         member = _parent()
         mock_auth.return_value = member
 
-        result = await handle_incoming_message(mock_db, PARENT_PHONE, "מה המצב עם הדברים?", "msg1")
+        with patch("src.skills.chat_skill.BedrockClient") as mock_bedrock_cls:
+            mock_bedrock = AsyncMock()
+            mock_bedrock.generate.return_value = "תשובה מהמודל"
+            mock_bedrock_cls.return_value = mock_bedrock
 
-        # Expected: deterministic template, NOT LLM response
-        expected = TEMPLATES["cant_understand"].format(name=member.name)
-        assert result == expected, (
-            f"Expected cant_understand template, got: {result[:100]}"
+            result = await handle_incoming_message(mock_db, PARENT_PHONE, "מה המצב עם הדברים?", "msg1")
+
+        assert result == "תשובה מהמודל", (
+            f"Expected LLM response, got: {result[:100]}"
         )
 
 

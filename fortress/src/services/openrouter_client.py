@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Fortress 2.0 OpenRouter client — async OpenRouter API communication."""
 
 import logging

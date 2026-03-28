@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Fortress Agent Personality — the soul of the system.
 
 Loads personality from ``config/SOUL.md`` when available, falling back to

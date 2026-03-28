@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Fortress 2.0 scheduler service — daily recurring task generation + notifications."""
 
 import logging

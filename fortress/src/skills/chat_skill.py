@@ -9,7 +9,6 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from src.config import OPENROUTER_API_KEY
 from src.models.schema import FamilyMember
 from src.prompts.personality import TEMPLATES, get_greeting
 from src.prompts.system_prompts import UNIFIED_CLASSIFY_AND_RESPOND
@@ -24,7 +23,6 @@ CHAT_SYSTEM_PROMPT = (
 from src.services.bedrock_client import HEBREW_FALLBACK, BedrockClient
 from src.services.llm_client import OllamaClient
 from src.services.memory_service import load_memories
-from src.services.openrouter_client import OpenRouterClient
 from src.services.pii_guard import restore_pii, strip_pii
 from src.skills.base_skill import BaseSkill, Command, Result
 from src.utils.time_context import format_time_for_prompt, get_time_context
@@ -32,20 +30,14 @@ from src.utils.time_context import format_time_for_prompt, get_time_context
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Sensitivity / routing (inlined from routing_policy.py)
+# Model routing by intent
 # ---------------------------------------------------------------------------
 
-_SENSITIVITY_MAP: dict[str, str] = {
-    "greeting": "low",
-    "needs_llm": "medium",
-    "ask_question": "high",
-    "unknown": "medium",
-}
-
-_ROUTE_MAP: dict[str, list[str]] = {
-    "low": ["openrouter", "bedrock", "ollama"],
-    "medium": ["openrouter", "bedrock", "ollama"],
-    "high": ["bedrock", "ollama"],
+_INTENT_MODEL_MAP: dict[str, str] = {
+    "greeting": "lite",
+    "needs_llm": "lite",
+    "ask_question": "haiku",   # complex questions need better Hebrew
+    "unknown": "lite",
 }
 
 
@@ -94,11 +86,10 @@ class ChatSkill(BaseSkill):
         """Generate a free-form LLM response with personality, time, and memory context.
 
         Called directly by message_handler when CommandParser returns None.
-        Uses inlined dispatch (Bedrock primary, OpenRouter fallback, Ollama last).
+        Uses Bedrock (Nova Lite for chat, Haiku for complex questions), Ollama as fallback.
         Returns the response string, or error_fallback template if all LLM calls fail.
         """
         try:
-            # Strip PII before building the LLM prompt
             try:
                 cleaned_text, pii_records = strip_pii(message_text)
             except Exception:
@@ -131,7 +122,6 @@ class ChatSkill(BaseSkill):
             if not raw or raw == HEBREW_FALLBACK:
                 return TEMPLATES["error_fallback"]
 
-            # Restore PII in the LLM response
             if pii_records:
                 raw = restore_pii(raw, pii_records)
 
@@ -142,7 +132,7 @@ class ChatSkill(BaseSkill):
             return TEMPLATES["error_fallback"]
 
     # ------------------------------------------------------------------
-    # LLM dispatch — inlined from model_dispatch.py + routing_policy.py
+    # LLM dispatch — Bedrock primary, Ollama fallback
     # ------------------------------------------------------------------
 
     async def _dispatch_llm(
@@ -152,56 +142,42 @@ class ChatSkill(BaseSkill):
         intent: str,
         context: dict[str, Any] | None = None,
     ) -> str:
-        """Try providers in routing order until one succeeds.
-
-        Returns HEBREW_FALLBACK if all fail.
-        """
-        route = self._get_provider_order(intent)
+        """Try Bedrock first, fall back to Ollama if unavailable."""
         start = time.monotonic()
+        model = _INTENT_MODEL_MAP.get(intent, "lite")
 
-        bedrock = BedrockClient()
-        openrouter = OpenRouterClient()
-        ollama = OllamaClient()
+        # Primary: Bedrock
+        try:
+            bedrock = BedrockClient()
+            result = await bedrock.generate(prompt, system_prompt, model=model)
+            if self._is_valid_response(result):
+                elapsed = time.monotonic() - start
+                logger.info("Dispatch: intent=%s provider=bedrock model=%s time=%.1fs",
+                            intent, model, elapsed)
+                return result
+            logger.warning("Dispatch: intent=%s bedrock returned fallback, trying ollama", intent)
+        except Exception as exc:
+            logger.error("Dispatch: intent=%s bedrock error=%s: %s",
+                         intent, type(exc).__name__, exc)
 
-        for provider in route:
-            try:
-                result = await self._try_provider(
-                    provider, prompt, system_prompt, intent,
-                    bedrock=bedrock, openrouter=openrouter, ollama=ollama,
-                )
-                if self._is_valid_response(result):
-                    elapsed = time.monotonic() - start
-                    logger.info(
-                        "Dispatch: intent=%s provider=%s time=%.1fs",
-                        intent, provider, elapsed,
-                    )
-                    return result
-                logger.warning(
-                    "Dispatch: intent=%s provider=%s returned fallback, trying next",
-                    intent, provider,
-                )
-            except Exception as exc:
-                logger.error(
-                    "Dispatch: intent=%s provider=%s error=%s: %s",
-                    intent, provider, type(exc).__name__, exc,
-                )
+        # Fallback: Ollama (local, offline)
+        try:
+            ollama = OllamaClient()
+            result = await ollama.generate(prompt, system_prompt)
+            if self._is_valid_response(result):
+                elapsed = time.monotonic() - start
+                logger.info("Dispatch: intent=%s provider=ollama time=%.1fs", intent, elapsed)
+                return result
+        except Exception as exc:
+            logger.error("Dispatch: intent=%s ollama error=%s: %s",
+                         intent, type(exc).__name__, exc)
 
         elapsed = time.monotonic() - start
-        logger.error(
-            "Dispatch: intent=%s all providers failed time=%.1fs",
-            intent, elapsed,
-        )
+        logger.error("Dispatch: intent=%s all providers failed time=%.1fs", intent, elapsed)
         return HEBREW_FALLBACK
 
     @staticmethod
-    def _get_provider_order(intent: str) -> list[str]:
-        """Return ordered provider list based on intent sensitivity."""
-        sensitivity = _SENSITIVITY_MAP.get(intent, "high")
-        return list(_ROUTE_MAP[sensitivity])
-
-    @staticmethod
     def _is_valid_response(result: str) -> bool:
-        """Check if LLM response is usable."""
         if not result or not result.strip():
             return False
         if result == HEBREW_FALLBACK:
@@ -209,31 +185,3 @@ class ChatSkill(BaseSkill):
         if len(result.strip()) < 2:
             return False
         return True
-
-    async def _try_provider(
-        self,
-        provider: str,
-        prompt: str,
-        system_prompt: str,
-        intent: str,
-        *,
-        bedrock: BedrockClient,
-        openrouter: OpenRouterClient,
-        ollama: OllamaClient,
-    ) -> str:
-        """Attempt generation with a single provider."""
-        if provider == "openrouter":
-            if not OPENROUTER_API_KEY:
-                logger.info("Dispatch: skipping openrouter (no API key)")
-                return HEBREW_FALLBACK
-            return await openrouter.generate(prompt, system_prompt)
-
-        if provider == "bedrock":
-            model = "sonnet" if intent == "ask_question" else "haiku"
-            return await bedrock.generate(prompt, system_prompt, model=model)
-
-        if provider == "ollama":
-            return await ollama.generate(prompt, system_prompt)
-
-        logger.error("Dispatch: unknown provider=%s", provider)
-        return HEBREW_FALLBACK

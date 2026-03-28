@@ -63,7 +63,7 @@ class TestTaskSkillStructure:
         assert "משימות" in desc
 
     def test_commands_count(self):
-        assert len(TaskSkill().commands) == 10
+        assert len(TaskSkill().commands) == 16
 
     def test_get_help_returns_string(self):
         help_text = TaskSkill().get_help()

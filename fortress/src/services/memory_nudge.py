@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Fortress Memory Nudge — proactive memory extraction after ChatSkill responses.
 
 After ChatSkill handles a free-form conversation, this module runs a

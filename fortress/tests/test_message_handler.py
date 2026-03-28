@@ -135,14 +135,19 @@ async def test_router_receives_correct_text(mock_auth, mock_parse, mock_exec, mo
 @patch("src.services.message_handler.parse_command", return_value=None)
 @patch("src.services.message_handler.get_family_member_by_phone")
 async def test_llm_fallback_when_no_match(mock_auth, mock_parse, mock_conv, mock_db) -> None:
-    """Unmatched messages should return deterministic cant_understand template."""
+    """Unmatched messages should route to ChatSkill LLM (Bedrock)."""
     member = _make_member()
     mock_auth.return_value = member
 
-    result = await handle_incoming_message(mock_db, "972501234567", "מה המצב?", "msg1")
-    from src.prompts.personality import TEMPLATES
-    expected = TEMPLATES["cant_understand"].format(name=member.name)
-    assert result == expected
+    with patch("src.skills.chat_skill.BedrockClient") as mock_bedrock_cls:
+        mock_bedrock = AsyncMock()
+        mock_bedrock.generate.return_value = "תשובה מהמודל"
+        mock_bedrock_cls.return_value = mock_bedrock
+
+        result = await handle_incoming_message(mock_db, "972501234567", "מה המצב?", "msg1")
+
+    assert result == "תשובה מהמודל"
+    mock_conv.assert_called_once()
 
 
 # ── Conversation saving tests ────────────────────────────────────

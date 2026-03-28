@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Fortress 2.0 dashboard router — admin monitoring endpoint."""
 
 import logging

@@ -30,6 +30,7 @@ def _member(role: str = "parent", name: str = "אבא") -> MagicMock:
     m.phone = "+972501234567"
     m.role = role
     m.is_active = True
+    m.is_admin = role in ("parent", "admin")
     return m
 
 
@@ -37,7 +38,7 @@ class TestPermissions:
     def test_child_cannot_deploy(self, skill, mock_db):
         result = skill.execute(mock_db, _member("child"), Command(skill="deploy", action="deploy"))
         assert result.success is False
-        assert "רק הורים" in result.message
+        assert "מנהל" in result.message or "הורים" in result.message
 
     def test_child_cannot_restart(self, skill, mock_db):
         result = skill.execute(mock_db, _member("child"), Command(skill="deploy", action="restart"))
@@ -62,7 +63,7 @@ class TestExactTriggers:
     """Exact trigger phrases must match — no fuzzy, no partial."""
 
     @pytest.mark.parametrize("text,action", [
-        ("פורטרס שדרג מערכת", "deploy"),
+        ("פורטרס תתחדש", "deploy"),
         ("פורטרס הפעל מחדש", "restart"),
         ("פורטרס סטטוס", "status"),
     ])

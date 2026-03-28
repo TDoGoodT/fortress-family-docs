@@ -248,13 +248,17 @@ async def test_llm_fallback_e2e(mock_auth, mock_parse, mock_conv, mock_db):
     member = _parent()
     mock_auth.return_value = member
 
-    result = await handle_incoming_message(mock_db, PARENT_PHONE, "מה המצב עם הדברים?", "msg1")
-    expected = TEMPLATES["cant_understand"].format(name="Segev")
-    assert result == expected
+    with patch("src.skills.chat_skill.BedrockClient") as mock_bedrock_cls:
+        mock_bedrock = AsyncMock()
+        mock_bedrock.generate.return_value = "תשובה מהמודל"
+        mock_bedrock_cls.return_value = mock_bedrock
+
+        result = await handle_incoming_message(mock_db, PARENT_PHONE, "מה המצב עם הדברים?", "msg1")
+
+    assert result == "תשובה מהמודל"
     mock_conv.assert_called_once()
-    # Verify intent saved as mvp.cant_understand
     call_args = mock_conv.call_args[0]
-    assert call_args[4] == "mvp.cant_understand"
+    assert call_args[4] == "chat.llm"
 
 
 # ── 12. Unknown phone ───────────────────────────────────────────

@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Fortress 2.0 audit service — append-only action logging."""
 
 from uuid import UUID

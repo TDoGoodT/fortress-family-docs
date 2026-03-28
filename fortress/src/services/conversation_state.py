@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Fortress 2.0 conversation state service — per-member conversational context."""
 
 import logging

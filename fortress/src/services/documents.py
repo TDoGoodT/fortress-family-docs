@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Fortress 2.0 document service — document ingestion and processing."""
 
 import logging

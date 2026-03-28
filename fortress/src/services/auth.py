@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Fortress 2.0 auth service — phone-based lookup and permission checks."""
 
 from sqlalchemy.orm import Session

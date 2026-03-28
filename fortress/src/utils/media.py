@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Fortress 2.0 media download and storage utilities."""
 
 import logging

@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Fortress Text Extractor — extract raw text from documents.
 
 Supports PDF (pdfplumber), Word (python-docx), and images (pytesseract OCR).

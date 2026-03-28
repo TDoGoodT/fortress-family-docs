@@ -1,4 +1,5 @@
-﻿"""Fortress 2.0 WhatsApp client - sends messages via WAHA API."""
+from __future__ import annotations
+"""Fortress 2.0 WhatsApp client - sends messages via WAHA API."""
 
 import logging
 

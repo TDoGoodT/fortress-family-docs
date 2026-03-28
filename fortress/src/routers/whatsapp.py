@@ -1,8 +1,7 @@
 """Fortress 2.0 WhatsApp router — WAHA webhook handler."""
 
 import logging
-
-from typing import Any
+from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy.orm import Session
@@ -20,7 +19,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-def _get_nested_value(data: dict[str, Any], *path: str) -> Any:
+def _get_nested_value(data: dict, *path: str) -> Any:
     current: Any = data
     for key in path:
         if not isinstance(current, dict):
@@ -29,11 +28,11 @@ def _get_nested_value(data: dict[str, Any], *path: str) -> Any:
     return current
 
 
-def _iter_text_candidates(value: Any) -> list[str]:
+def _iter_text_candidates(value: Any) -> list:
     if isinstance(value, str):
         return [value]
     if isinstance(value, dict):
-        candidates: list[str] = []
+        candidates = []
         for key in ("body", "text", "caption", "conversation", "contentText", "selectedDisplayText"):
             item = value.get(key)
             if isinstance(item, str):
@@ -43,7 +42,7 @@ def _iter_text_candidates(value: Any) -> list[str]:
                 candidates.extend(_iter_text_candidates(nested))
         return candidates
     if isinstance(value, list):
-        candidates: list[str] = []
+        candidates = []
         for item in value:
             if isinstance(item, (dict, list, str)):
                 candidates.extend(_iter_text_candidates(item))
@@ -51,7 +50,7 @@ def _iter_text_candidates(value: Any) -> list[str]:
     return []
 
 
-def _extract_message_text(payload: dict[str, Any]) -> str | None:
+def _extract_message_text(payload: dict) -> Optional[str]:
     for candidate in _iter_text_candidates(payload.get("body")):
         text = candidate.strip()
         if text:
@@ -70,7 +69,7 @@ def _extract_message_text(payload: dict[str, Any]) -> str | None:
     return None
 
 
-def _extract_sender_phone(payload: dict[str, Any]) -> str:
+def _extract_sender_phone(payload: dict) -> str:
     candidates = [
         _get_nested_value(payload, "_data", "key", "remoteJidAlt"),
         _get_nested_value(payload, "_data", "participantPn"),
@@ -98,17 +97,15 @@ def _extract_sender_phone(payload: dict[str, Any]) -> str:
 
 @router.post("/webhook/whatsapp")
 async def whatsapp_webhook(
-    body: dict[str, Any],
+    body: dict,
     db: Session = Depends(get_db),
-    x_api_key: str | None = Header(default=None, alias="X-Api-Key"),
+    x_api_key: Optional[str] = Header(default=None, alias="X-Api-Key"),
 ) -> dict:
     """Handle incoming WAHA webhook events.
 
     Always returns 200 — WAHA retries on non-200 responses.
     Validates X-Api-Key header when WAHA_API_KEY is configured.
     """
-    # Validate webhook origin — only enforce when called from outside Docker network
-    # WAHA runs internally and doesn't support custom webhook headers in free tier
     if WAHA_API_KEY and x_api_key is not None and x_api_key != WAHA_API_KEY:
         logger.warning("Webhook rejected: invalid X-Api-Key")
         raise HTTPException(status_code=401, detail="Unauthorized")
@@ -120,8 +117,6 @@ async def whatsapp_webhook(
 
         payload = body.get("payload", {})
 
-        # Echo prevention: ignore messages sent by the bot itself
-        # Note: source="app" means sent from phone (not bot) — do NOT filter it
         if payload.get("fromMe", False):
             return {"status": "ignored", "reason": "echo"}
 
@@ -144,7 +139,7 @@ async def whatsapp_webhook(
 
         logger.info("Incoming message from %s: %s", phone, message_text)
 
-        media_file_path: str | None = None
+        media_file_path: Optional[str] = None
         if has_media and message_id:
             logger.info(
                 "Media received: type=%s mimetype=%s filename=%s",

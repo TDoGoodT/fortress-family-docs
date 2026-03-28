@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Fortress 2.0 PII Guard — regex-based detection, stripping, and restoration of Israeli PII."""
 
 import logging

@@ -26,11 +26,15 @@ OLLAMA_API_URL: str = os.getenv("OLLAMA_API_URL", "http://localhost:11434")
 
 OLLAMA_MODEL: str = os.getenv("OLLAMA_MODEL", "llama3.1:8b")
 
-# AWS Bedrock
-AWS_REGION: str = os.getenv("AWS_REGION", "us-east-1")
-BEDROCK_HAIKU_MODEL: str = os.getenv("BEDROCK_HAIKU_MODEL", "anthropic.claude-3-haiku-20240307-v1:0")
-BEDROCK_HAIKU_PROFILE_ARN: str = os.getenv("BEDROCK_HAIKU_PROFILE_ARN", "")
-BEDROCK_SONNET_MODEL: str = os.getenv("BEDROCK_SONNET_MODEL", "anthropic.claude-3-5-sonnet-20241022-v2:0")
+# AWS Bedrock — OpenAI-compatible API
+BEDROCK_API_KEY: str = os.getenv("BEDROCK_API_KEY", "")
+BEDROCK_API_BASE_URL: str = os.getenv("BEDROCK_API_BASE_URL", "https://bedrock.us-east-1.amazonaws.com/v1")
+
+# Model tiers: cheap→expensive
+BEDROCK_MICRO_MODEL: str = os.getenv("BEDROCK_MICRO_MODEL", "amazon.nova-micro-v1:0")   # intent/classify
+BEDROCK_LITE_MODEL: str = os.getenv("BEDROCK_LITE_MODEL", "amazon.nova-lite-v1:0")      # chat/Hebrew
+BEDROCK_HAIKU_MODEL: str = os.getenv("BEDROCK_HAIKU_MODEL", "us.anthropic.claude-haiku-4-5-20251001-v1:0")   # complex Hebrew
+BEDROCK_SONNET_MODEL: str = os.getenv("BEDROCK_SONNET_MODEL", "us.anthropic.claude-sonnet-4-5-20251001-v1:0") # reasoning/code
 
 # OpenRouter
 OPENROUTER_API_KEY: str = os.getenv("OPENROUTER_API_KEY", "")

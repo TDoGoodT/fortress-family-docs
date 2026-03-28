@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Fortress 2.0 recurring service — recurring task pattern management."""
 
 from datetime import date, timedelta

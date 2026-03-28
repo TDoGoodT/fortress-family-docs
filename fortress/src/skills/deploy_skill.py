@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Fortress Skills Engine — deploy skill: remote update & restart via WhatsApp.
 
 Architecture:
@@ -12,8 +13,6 @@ Security model:
 - Cooldown enforced on the listener side (1 deploy / 10 min)
 - Sender identity logged on every request
 """
-
-from __future__ import annotations
 
 import logging
 import re

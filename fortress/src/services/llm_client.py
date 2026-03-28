@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Fortress 2.0 LLM client — async Ollama REST API communication."""
 
 import logging

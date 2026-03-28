@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Fortress message handler — auth → parse → execute → format."""
 
 import logging

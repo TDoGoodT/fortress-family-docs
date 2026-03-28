@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Fortress 2.0 Memory Service — save, load, filter, and expire memories."""
 
 import json

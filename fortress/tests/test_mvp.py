@@ -5,7 +5,7 @@ no LLM fallback, proper error handling, and correct confirmation flows.
 """
 
 import uuid
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -341,16 +341,20 @@ class TestSanitizeResponse:
 @patch("src.services.message_handler.parse_command", return_value=None)
 @patch("src.services.message_handler.get_family_member_by_phone")
 async def test_mvp_unmatched_returns_cant_understand(mock_auth, mock_parse, mock_conv, mock_db):
-    """Unmatched message returns cant_understand template — zero LLM calls."""
+    """Unmatched message routes to ChatSkill LLM (Bedrock)."""
     member = _parent()
     mock_auth.return_value = member
 
-    result = await handle_incoming_message(mock_db, PARENT_PHONE, "מה המצב עם הדברים?", "msg1")
-    expected = TEMPLATES["cant_understand"].format(name="Segev")
-    assert result == expected
-    # Verify intent is mvp.cant_understand (not chat.respond)
+    with patch("src.skills.chat_skill.BedrockClient") as mock_bedrock_cls:
+        mock_bedrock = AsyncMock()
+        mock_bedrock.generate.return_value = "תשובה מהמודל"
+        mock_bedrock_cls.return_value = mock_bedrock
+
+        result = await handle_incoming_message(mock_db, PARENT_PHONE, "מה המצב עם הדברים?", "msg1")
+
+    assert result == "תשובה מהמודל"
     conv_args = mock_conv.call_args[0]
-    assert conv_args[4] == "mvp.cant_understand"
+    assert conv_args[4] == "chat.llm"
 
 
 @pytest.mark.asyncio
@@ -358,11 +362,17 @@ async def test_mvp_unmatched_returns_cant_understand(mock_auth, mock_parse, mock
 @patch("src.services.message_handler.parse_command", return_value=None)
 @patch("src.services.message_handler.get_family_member_by_phone")
 async def test_mvp_unmatched_includes_member_name(mock_auth, mock_parse, mock_conv, mock_db):
-    """Unmatched message includes the member's name in the response."""
+    """Unmatched message — LLM response is returned (member name may appear in prompt)."""
     member = _make_family_member(name="דנה", phone=PARENT_PHONE, role="parent")
     mock_auth.return_value = member
 
-    result = await handle_incoming_message(mock_db, PARENT_PHONE, "random gibberish", "msg1")
+    with patch("src.skills.chat_skill.BedrockClient") as mock_bedrock_cls:
+        mock_bedrock = AsyncMock()
+        mock_bedrock.generate.return_value = "היי דנה, מה שלומך?"
+        mock_bedrock_cls.return_value = mock_bedrock
+
+        result = await handle_incoming_message(mock_db, PARENT_PHONE, "random gibberish", "msg1")
+
     assert "דנה" in result
 
 

@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Fortress 2.0 health router — liveness / readiness probe."""
 
 from fastapi import APIRouter

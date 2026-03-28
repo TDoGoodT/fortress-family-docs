@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Fortress 2.0 scheduler router — manual trigger and status endpoints."""
 
 from fastapi import APIRouter, Depends
