@@ -36,11 +36,6 @@ BEDROCK_LITE_MODEL: str = os.getenv("BEDROCK_LITE_MODEL", "amazon.nova-lite-v1:0
 BEDROCK_HAIKU_MODEL: str = os.getenv("BEDROCK_HAIKU_MODEL", "us.anthropic.claude-haiku-4-5-20251001-v1:0")   # complex Hebrew
 BEDROCK_SONNET_MODEL: str = os.getenv("BEDROCK_SONNET_MODEL", "us.anthropic.claude-sonnet-4-5-20251001-v1:0") # reasoning/code
 
-# OpenRouter
-OPENROUTER_API_KEY: str = os.getenv("OPENROUTER_API_KEY", "")
-OPENROUTER_MODEL: str = os.getenv("OPENROUTER_MODEL", "meta-llama/llama-3.1-70b-instruct:free")
-OPENROUTER_FALLBACK_MODEL: str = os.getenv("OPENROUTER_FALLBACK_MODEL", "google/gemma-2-9b-it:free")
-
 # Scheduler
 SCHEDULER_HOUR: int = int(os.getenv("SCHEDULER_HOUR", "7"))
 

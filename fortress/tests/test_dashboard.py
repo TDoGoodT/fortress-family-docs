@@ -8,11 +8,11 @@ from fastapi.testclient import TestClient
 
 
 # ---------------------------------------------------------------------------
-# Helpers — mock health checks (same pattern as test_health.py)
+# Helpers — mock health checks
 # ---------------------------------------------------------------------------
 
 def _mock_all_health_checks():
-    """Return context managers that mock all 5 health checks as connected."""
+    """Return context managers that mock all 4 health checks as connected."""
     return (
         patch("src.routers.dashboard.test_connection", return_value=True),
         patch(
@@ -21,8 +21,6 @@ def _mock_all_health_checks():
             return_value=(True, "llama3.1:8b"),
         ),
         _mock_bedrock_available(),
-        patch("src.routers.dashboard.OPENROUTER_API_KEY", "test-key"),
-        _mock_openrouter_available(),
         patch(
             "src.routers.dashboard.check_waha_health",
             new_callable=AsyncMock,
@@ -38,24 +36,7 @@ def _mock_bedrock_available():
         def __enter__(self_):
             self_.mock = mock_cls.__enter__()
             self_.mock.return_value.is_available = AsyncMock(
-                return_value=(True, "haiku")
-            )
-            return self_.mock
-
-        def __exit__(self_, *args):
-            return mock_cls.__exit__(*args)
-
-    return _Ctx()
-
-
-def _mock_openrouter_available():
-    mock_cls = patch("src.routers.dashboard.OpenRouterClient")
-
-    class _Ctx:
-        def __enter__(self_):
-            self_.mock = mock_cls.__enter__()
-            self_.mock.return_value.is_available = AsyncMock(
-                return_value=(True, "test-model")
+                return_value=(True, "lite")
             )
             return self_.mock
 
@@ -98,8 +79,8 @@ def _patch_start_time():
 def test_dashboard_data_returns_200(client: TestClient, mock_db: MagicMock) -> None:
     """GET /dashboard/data should return HTTP 200."""
     _setup_db_mock(mock_db)
-    db_p, ollama_p, bedrock_p, or_key_p, or_p, waha_p = _mock_all_health_checks()
-    with db_p, ollama_p, bedrock_p, or_key_p, or_p, waha_p, _patch_start_time():
+    db_p, ollama_p, bedrock_p, waha_p = _mock_all_health_checks()
+    with db_p, ollama_p, bedrock_p, waha_p, _patch_start_time():
         resp = client.get("/dashboard/data")
     assert resp.status_code == 200
 
@@ -107,8 +88,8 @@ def test_dashboard_data_returns_200(client: TestClient, mock_db: MagicMock) -> N
 def test_dashboard_data_json_structure(client: TestClient, mock_db: MagicMock) -> None:
     """Response should contain all required top-level keys."""
     _setup_db_mock(mock_db)
-    db_p, ollama_p, bedrock_p, or_key_p, or_p, waha_p = _mock_all_health_checks()
-    with db_p, ollama_p, bedrock_p, or_key_p, or_p, waha_p, _patch_start_time():
+    db_p, ollama_p, bedrock_p, waha_p = _mock_all_health_checks()
+    with db_p, ollama_p, bedrock_p, waha_p, _patch_start_time():
         data = client.get("/dashboard/data").json()
     for key in ("health", "today", "open_items", "recent_conversations",
                 "open_bugs", "family_members", "system"):
@@ -116,23 +97,22 @@ def test_dashboard_data_json_structure(client: TestClient, mock_db: MagicMock) -
 
 
 def test_dashboard_health_all_services(client: TestClient, mock_db: MagicMock) -> None:
-    """Health object should contain status for all 5 services."""
+    """Health object should contain status for all 4 services."""
     _setup_db_mock(mock_db)
-    db_p, ollama_p, bedrock_p, or_key_p, or_p, waha_p = _mock_all_health_checks()
-    with db_p, ollama_p, bedrock_p, or_key_p, or_p, waha_p, _patch_start_time():
+    db_p, ollama_p, bedrock_p, waha_p = _mock_all_health_checks()
+    with db_p, ollama_p, bedrock_p, waha_p, _patch_start_time():
         health = client.get("/dashboard/data").json()["health"]
     assert health["database"] == "connected"
     assert health["ollama"] == "connected"
     assert health["bedrock"] == "connected"
-    assert health["openrouter"] == "connected"
     assert health["waha"] == "connected"
 
 
 def test_dashboard_today_counts_are_integers(client: TestClient, mock_db: MagicMock) -> None:
     """Today counts should all be integers."""
     _setup_db_mock(mock_db)
-    db_p, ollama_p, bedrock_p, or_key_p, or_p, waha_p = _mock_all_health_checks()
-    with db_p, ollama_p, bedrock_p, or_key_p, or_p, waha_p, _patch_start_time():
+    db_p, ollama_p, bedrock_p, waha_p = _mock_all_health_checks()
+    with db_p, ollama_p, bedrock_p, waha_p, _patch_start_time():
         today = client.get("/dashboard/data").json()["today"]
     for key in ("conversations", "tasks_created", "bugs_reported", "errors"):
         assert isinstance(today[key], int), f"{key} should be int"
@@ -141,8 +121,8 @@ def test_dashboard_today_counts_are_integers(client: TestClient, mock_db: MagicM
 def test_dashboard_open_items(client: TestClient, mock_db: MagicMock) -> None:
     """Open items should contain open_tasks and open_bugs as integers."""
     _setup_db_mock(mock_db)
-    db_p, ollama_p, bedrock_p, or_key_p, or_p, waha_p = _mock_all_health_checks()
-    with db_p, ollama_p, bedrock_p, or_key_p, or_p, waha_p, _patch_start_time():
+    db_p, ollama_p, bedrock_p, waha_p = _mock_all_health_checks()
+    with db_p, ollama_p, bedrock_p, waha_p, _patch_start_time():
         items = client.get("/dashboard/data").json()["open_items"]
     assert isinstance(items["open_tasks"], int)
     assert isinstance(items["open_bugs"], int)
@@ -151,8 +131,8 @@ def test_dashboard_open_items(client: TestClient, mock_db: MagicMock) -> None:
 def test_dashboard_recent_conversations_is_list(client: TestClient, mock_db: MagicMock) -> None:
     """recent_conversations should be a list."""
     _setup_db_mock(mock_db)
-    db_p, ollama_p, bedrock_p, or_key_p, or_p, waha_p = _mock_all_health_checks()
-    with db_p, ollama_p, bedrock_p, or_key_p, or_p, waha_p, _patch_start_time():
+    db_p, ollama_p, bedrock_p, waha_p = _mock_all_health_checks()
+    with db_p, ollama_p, bedrock_p, waha_p, _patch_start_time():
         data = client.get("/dashboard/data").json()
     assert isinstance(data["recent_conversations"], list)
 
@@ -160,8 +140,8 @@ def test_dashboard_recent_conversations_is_list(client: TestClient, mock_db: Mag
 def test_dashboard_open_bugs_is_list(client: TestClient, mock_db: MagicMock) -> None:
     """open_bugs should be a list."""
     _setup_db_mock(mock_db)
-    db_p, ollama_p, bedrock_p, or_key_p, or_p, waha_p = _mock_all_health_checks()
-    with db_p, ollama_p, bedrock_p, or_key_p, or_p, waha_p, _patch_start_time():
+    db_p, ollama_p, bedrock_p, waha_p = _mock_all_health_checks()
+    with db_p, ollama_p, bedrock_p, waha_p, _patch_start_time():
         data = client.get("/dashboard/data").json()
     assert isinstance(data["open_bugs"], list)
 
@@ -169,8 +149,8 @@ def test_dashboard_open_bugs_is_list(client: TestClient, mock_db: MagicMock) -> 
 def test_dashboard_family_members_is_list(client: TestClient, mock_db: MagicMock) -> None:
     """family_members should be a list."""
     _setup_db_mock(mock_db)
-    db_p, ollama_p, bedrock_p, or_key_p, or_p, waha_p = _mock_all_health_checks()
-    with db_p, ollama_p, bedrock_p, or_key_p, or_p, waha_p, _patch_start_time():
+    db_p, ollama_p, bedrock_p, waha_p = _mock_all_health_checks()
+    with db_p, ollama_p, bedrock_p, waha_p, _patch_start_time():
         data = client.get("/dashboard/data").json()
     assert isinstance(data["family_members"], list)
 
@@ -178,8 +158,8 @@ def test_dashboard_family_members_is_list(client: TestClient, mock_db: MagicMock
 def test_dashboard_system_info(client: TestClient, mock_db: MagicMock) -> None:
     """System object should have version, uptime_seconds >= 0, and app_start_time."""
     _setup_db_mock(mock_db)
-    db_p, ollama_p, bedrock_p, or_key_p, or_p, waha_p = _mock_all_health_checks()
-    with db_p, ollama_p, bedrock_p, or_key_p, or_p, waha_p, _patch_start_time():
+    db_p, ollama_p, bedrock_p, waha_p = _mock_all_health_checks()
+    with db_p, ollama_p, bedrock_p, waha_p, _patch_start_time():
         system = client.get("/dashboard/data").json()["system"]
     assert system["version"] == "2.0.0"
     assert isinstance(system["uptime_seconds"], int)
@@ -190,9 +170,9 @@ def test_dashboard_system_info(client: TestClient, mock_db: MagicMock) -> None:
 def test_dashboard_uptime_non_negative(client: TestClient, mock_db: MagicMock) -> None:
     """uptime_seconds should be non-negative when APP_START_TIME is in the past."""
     _setup_db_mock(mock_db)
-    db_p, ollama_p, bedrock_p, or_key_p, or_p, waha_p = _mock_all_health_checks()
+    db_p, ollama_p, bedrock_p, waha_p = _mock_all_health_checks()
     past_time = time.time() - 7200  # 2 hours ago
-    with db_p, ollama_p, bedrock_p, or_key_p, or_p, waha_p, \
+    with db_p, ollama_p, bedrock_p, waha_p, \
          patch("src.main.APP_START_TIME", past_time):
         system = client.get("/dashboard/data").json()["system"]
     assert system["uptime_seconds"] >= 7200
@@ -213,7 +193,6 @@ def test_waha_health_connected(client: TestClient, mock_db: MagicMock) -> None:
          patch("src.routers.dashboard.OllamaClient.is_available",
                new_callable=AsyncMock, return_value=(True, "llama3.1:8b")), \
          _mock_bedrock_available(), \
-         patch("src.routers.dashboard.OPENROUTER_API_KEY", ""), \
          patch("src.routers.dashboard.httpx.AsyncClient") as mock_httpx, \
          _patch_start_time():
         mock_client_instance = AsyncMock()
@@ -235,7 +214,6 @@ def test_waha_health_disconnected_non_200(client: TestClient, mock_db: MagicMock
          patch("src.routers.dashboard.OllamaClient.is_available",
                new_callable=AsyncMock, return_value=(True, "llama3.1:8b")), \
          _mock_bedrock_available(), \
-         patch("src.routers.dashboard.OPENROUTER_API_KEY", ""), \
          patch("src.routers.dashboard.httpx.AsyncClient") as mock_httpx, \
          _patch_start_time():
         mock_client_instance = AsyncMock()
@@ -255,7 +233,6 @@ def test_waha_health_disconnected_error(client: TestClient, mock_db: MagicMock) 
          patch("src.routers.dashboard.OllamaClient.is_available",
                new_callable=AsyncMock, return_value=(True, "llama3.1:8b")), \
          _mock_bedrock_available(), \
-         patch("src.routers.dashboard.OPENROUTER_API_KEY", ""), \
          patch("src.routers.dashboard.httpx.AsyncClient") as mock_httpx, \
          _patch_start_time():
         mock_client_instance = AsyncMock()
@@ -272,19 +249,3 @@ def test_dashboard_page_endpoint(client: TestClient) -> None:
     resp = client.get("/dashboard")
     assert resp.status_code == 200
     assert "Fortress Admin Dashboard" in resp.text
-
-
-def test_dashboard_openrouter_no_key(client: TestClient, mock_db: MagicMock) -> None:
-    """When no OpenRouter API key, health should report 'no_key'."""
-    _setup_db_mock(mock_db)
-    with patch("src.routers.dashboard.test_connection", return_value=True), \
-         patch("src.routers.dashboard.OllamaClient.is_available",
-               new_callable=AsyncMock, return_value=(True, "llama3.1:8b")), \
-         _mock_bedrock_available(), \
-         patch("src.routers.dashboard.OPENROUTER_API_KEY", ""), \
-         patch("src.routers.dashboard.check_waha_health",
-               new_callable=AsyncMock, return_value="connected"), \
-         _patch_start_time():
-        health = client.get("/dashboard/data").json()["health"]
-    assert health["openrouter"] == "no_key"
-    assert health["openrouter_model"] == "not configured"

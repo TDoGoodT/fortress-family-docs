@@ -29,7 +29,7 @@ def _mock_bedrock_available():
 
     def _setup(mock):
         instance = mock.return_value
-        instance.is_available = AsyncMock(return_value=(True, "haiku"))
+        instance.is_available = AsyncMock(return_value=(True, "lite"))
         return mock
 
     class _Ctx:
@@ -65,65 +65,10 @@ def _mock_bedrock_unavailable():
     return _Ctx()
 
 
-def _mock_openrouter_no_key():
-    """Patch OPENROUTER_API_KEY to empty string."""
-    return patch("src.routers.health.OPENROUTER_API_KEY", "")
-
-
-def _mock_openrouter_available():
-    """Patch OpenRouterClient so is_available returns connected."""
-    mock_cls = patch("src.routers.health.OpenRouterClient")
-
-    class _Ctx:
-        def __enter__(self_):
-            self_.mock = mock_cls.__enter__()
-            instance = self_.mock.return_value
-            instance.is_available = AsyncMock(return_value=(True, "test-model"))
-            return self_.mock
-
-        def __exit__(self_, *args):
-            return mock_cls.__exit__(*args)
-
-    return _Ctx()
-
-
-def _mock_openrouter_unavailable():
-    """Patch OpenRouterClient so is_available returns disconnected."""
-    mock_cls = patch("src.routers.health.OpenRouterClient")
-
-    class _Ctx:
-        def __enter__(self_):
-            self_.mock = mock_cls.__enter__()
-            instance = self_.mock.return_value
-            instance.is_available = AsyncMock(return_value=(False, None))
-            return self_.mock
-
-        def __exit__(self_, *args):
-            return mock_cls.__exit__(*args)
-
-    return _Ctx()
-
-
-# Helper to get all standard mocks for existing tests (openrouter defaults to no_key)
-def _all_mocks_ok():
-    """Return context managers for all services available (openrouter = no_key)."""
-    return (
-        patch("src.routers.health.test_connection", return_value=True),
-        _mock_ollama_available(),
-        _mock_bedrock_available(),
-        _mock_openrouter_no_key(),
-    )
-
-
-# ---------------------------------------------------------------------------
-# Existing tests (updated to also mock OpenRouter)
-# ---------------------------------------------------------------------------
-
-
 def test_health_returns_200(client: TestClient) -> None:
     """GET /health should return HTTP 200."""
     with patch("src.routers.health.test_connection", return_value=True), \
-         _mock_ollama_available(), _mock_bedrock_available(), _mock_openrouter_no_key():
+         _mock_ollama_available(), _mock_bedrock_available():
         response = client.get("/health")
     assert response.status_code == 200
 
@@ -131,7 +76,7 @@ def test_health_returns_200(client: TestClient) -> None:
 def test_health_response_body(client: TestClient) -> None:
     """GET /health should contain status, service, and version fields."""
     with patch("src.routers.health.test_connection", return_value=True), \
-         _mock_ollama_available(), _mock_bedrock_available(), _mock_openrouter_no_key():
+         _mock_ollama_available(), _mock_bedrock_available():
         data = client.get("/health").json()
     assert data["status"] == "ok"
     assert data["service"] == "fortress"
@@ -141,7 +86,7 @@ def test_health_response_body(client: TestClient) -> None:
 def test_health_database_connected(client: TestClient) -> None:
     """When the DB is reachable, /health should report 'connected'."""
     with patch("src.routers.health.test_connection", return_value=True), \
-         _mock_ollama_available(), _mock_bedrock_available(), _mock_openrouter_no_key():
+         _mock_ollama_available(), _mock_bedrock_available():
         data = client.get("/health").json()
     assert data["database"] == "connected"
 
@@ -149,7 +94,7 @@ def test_health_database_connected(client: TestClient) -> None:
 def test_health_database_disconnected(client: TestClient) -> None:
     """When the DB is unreachable, /health should report 'disconnected'."""
     with patch("src.routers.health.test_connection", return_value=False), \
-         _mock_ollama_available(), _mock_bedrock_available(), _mock_openrouter_no_key():
+         _mock_ollama_available(), _mock_bedrock_available():
         data = client.get("/health").json()
     assert data["database"] == "disconnected"
 
@@ -157,7 +102,7 @@ def test_health_database_disconnected(client: TestClient) -> None:
 def test_health_ollama_connected(client: TestClient) -> None:
     """When Ollama is reachable with model, /health should report 'connected'."""
     with patch("src.routers.health.test_connection", return_value=True), \
-         _mock_ollama_available(), _mock_bedrock_available(), _mock_openrouter_no_key():
+         _mock_ollama_available(), _mock_bedrock_available():
         data = client.get("/health").json()
     assert data["ollama"] == "connected"
     assert data["ollama_model"] == "llama3.1:8b"
@@ -166,7 +111,7 @@ def test_health_ollama_connected(client: TestClient) -> None:
 def test_health_ollama_disconnected(client: TestClient) -> None:
     """When Ollama is unreachable, /health should report 'disconnected'."""
     with patch("src.routers.health.test_connection", return_value=True), \
-         _mock_ollama_unavailable(), _mock_bedrock_available(), _mock_openrouter_no_key():
+         _mock_ollama_unavailable(), _mock_bedrock_available():
         data = client.get("/health").json()
     assert data["ollama"] == "disconnected"
     assert data["ollama_model"] == "not loaded"
@@ -175,51 +120,16 @@ def test_health_ollama_disconnected(client: TestClient) -> None:
 def test_health_bedrock_connected(client: TestClient) -> None:
     """When Bedrock is reachable, /health should report 'connected'."""
     with patch("src.routers.health.test_connection", return_value=True), \
-         _mock_ollama_available(), _mock_bedrock_available(), _mock_openrouter_no_key():
+         _mock_ollama_available(), _mock_bedrock_available():
         data = client.get("/health").json()
     assert data["bedrock"] == "connected"
-    assert data["bedrock_model"] == "haiku"
+    assert data["bedrock_model"] == "lite"
 
 
 def test_health_bedrock_disconnected(client: TestClient) -> None:
     """When Bedrock is unreachable, /health should report 'disconnected'."""
     with patch("src.routers.health.test_connection", return_value=True), \
-         _mock_ollama_available(), _mock_bedrock_unavailable(), _mock_openrouter_no_key():
+         _mock_ollama_unavailable(), _mock_bedrock_unavailable():
         data = client.get("/health").json()
     assert data["bedrock"] == "disconnected"
     assert data["bedrock_model"] == "not available"
-
-
-# ---------------------------------------------------------------------------
-# New OpenRouter tests
-# ---------------------------------------------------------------------------
-
-
-def test_health_openrouter_no_key(client: TestClient) -> None:
-    """When no OpenRouter API key, /health should report 'no_key'."""
-    with patch("src.routers.health.test_connection", return_value=True), \
-         _mock_ollama_available(), _mock_bedrock_available(), _mock_openrouter_no_key():
-        data = client.get("/health").json()
-    assert data["openrouter"] == "no_key"
-    assert data["openrouter_model"] == "not configured"
-
-
-def test_health_openrouter_connected(client: TestClient) -> None:
-    """When OpenRouter is reachable, /health should report 'connected'."""
-    with patch("src.routers.health.test_connection", return_value=True), \
-         _mock_ollama_available(), _mock_bedrock_available(), \
-         patch("src.routers.health.OPENROUTER_API_KEY", "test-key"), \
-         _mock_openrouter_available():
-        data = client.get("/health").json()
-    assert data["openrouter"] == "connected"
-    assert data["openrouter_model"] == "test-model"
-
-
-def test_health_openrouter_disconnected(client: TestClient) -> None:
-    """When OpenRouter is unreachable, /health should report 'disconnected'."""
-    with patch("src.routers.health.test_connection", return_value=True), \
-         _mock_ollama_available(), _mock_bedrock_available(), \
-         patch("src.routers.health.OPENROUTER_API_KEY", "test-key"), \
-         _mock_openrouter_unavailable():
-        data = client.get("/health").json()
-    assert data["openrouter"] == "disconnected"

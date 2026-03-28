@@ -11,12 +11,11 @@ from fastapi.responses import FileResponse
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from src.config import OPENROUTER_API_KEY, WAHA_API_KEY, WAHA_API_URL
+from src.config import WAHA_API_KEY, WAHA_API_URL
 from src.database import get_db, test_connection
 from src.models.schema import BugReport, Conversation, FamilyMember, Task
 from src.services.bedrock_client import BedrockClient
 from src.services.llm_client import OllamaClient
-from src.services.openrouter_client import OpenRouterClient
 
 logger = logging.getLogger(__name__)
 
@@ -63,15 +62,6 @@ async def dashboard_data(db: Session = Depends(get_db)) -> dict:
 
     bedrock = BedrockClient()
     bedrock_ok, bedrock_model = await bedrock.is_available()
-
-    if not OPENROUTER_API_KEY:
-        openrouter_status = "no_key"
-        openrouter_model = "not configured"
-    else:
-        openrouter = OpenRouterClient()
-        or_ok, or_model = await openrouter.is_available()
-        openrouter_status = "connected" if or_ok else "disconnected"
-        openrouter_model = or_model or "not available"
 
     waha_status = await check_waha_health()
 
@@ -182,8 +172,6 @@ async def dashboard_data(db: Session = Depends(get_db)) -> dict:
             "ollama_model": ollama_model_name if ollama_model_name else "not loaded",
             "bedrock": "connected" if bedrock_ok else "disconnected",
             "bedrock_model": bedrock_model if bedrock_model else "not available",
-            "openrouter": openrouter_status,
-            "openrouter_model": openrouter_model,
             "waha": waha_status,
         },
         "today": {

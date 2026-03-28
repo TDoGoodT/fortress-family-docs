@@ -34,6 +34,7 @@ class MorningSkill(BaseSkill):
     def commands(self) -> list[tuple[re.Pattern, str]]:
         return [
             (re.compile(r"^(בוקר|morning|סיכום בוקר)$", re.IGNORECASE), "briefing"),
+            (re.compile(r"^(סטטוס|status)$", re.IGNORECASE), "status"),
             (re.compile(r"^(דוח|report|סיכום)$", re.IGNORECASE), "summary"),
         ]
 

@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   db:
     image: postgres:16-alpine
@@ -34,15 +32,18 @@ services:
       WAHA_API_KEY: ${WAHA_API_KEY:-}
       ADMIN_PHONE: ${ADMIN_PHONE:-972542364393}
       OLLAMA_API_URL: http://ollama:11434
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.1:8b}
       AWS_REGION: ${AWS_REGION:-us-east-1}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
-      BEDROCK_HAIKU_MODEL: ${BEDROCK_HAIKU_MODEL:-anthropic.claude-3-5-haiku-20241022-v1:0}
+      BEDROCK_API_KEY: ${BEDROCK_API_KEY:-}
+      BEDROCK_API_BASE_URL: ${BEDROCK_API_BASE_URL:-https://bedrock.us-east-1.amazonaws.com/v1}
+      BEDROCK_MICRO_MODEL: ${BEDROCK_MICRO_MODEL:-amazon.nova-micro-v1:0}
+      BEDROCK_LITE_MODEL: ${BEDROCK_LITE_MODEL:-amazon.nova-lite-v1:0}
+      BEDROCK_HAIKU_MODEL: ${BEDROCK_HAIKU_MODEL:-us.anthropic.claude-haiku-4-5-20251001-v1:0}
+      BEDROCK_SONNET_MODEL: ${BEDROCK_SONNET_MODEL:-us.anthropic.claude-sonnet-4-5-20251001-v1:0}
       BEDROCK_HAIKU_PROFILE_ARN: ${BEDROCK_HAIKU_PROFILE_ARN:-}
       SYSTEM_PHONE: ${SYSTEM_PHONE:-}
-      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
-      OPENROUTER_MODEL: ${OPENROUTER_MODEL:-meta-llama/llama-3.1-70b-instruct:free}
-      OPENROUTER_FALLBACK_MODEL: ${OPENROUTER_FALLBACK_MODEL:-google/gemma-2-9b-it:free}
       DEPLOY_LISTENER_URL: ${DEPLOY_LISTENER_URL:-http://host.docker.internal:9111}
       DEPLOY_SECRET: ${DEPLOY_SECRET:-fortress-deploy-key}
     ports:

@@ -1,6 +1,6 @@
 # Fortress — Backlog & Known Issues
 
-> כשתרצה לעשות סשן תיקונים, תגיד לקירו: "בוא נעבור על ה-backlog ונתקן משימה משימה"
+> כשתרצה לעשה סשן תיקונים, תגיד לקירו: "בוא נעבור על ה-backlog ונתקן משימה משימה"
 
 ---
 
@@ -68,4 +68,13 @@
 
 ---
 
-*עודכן לאחרונה: 27 מרץ 2026*
+## ✅ הושלם לאחרונה (28 מרץ 2026)
+
+- **OpenRouter הוסר** — עברנו לבדרוק בלבד, הסרנו את OpenRouter מהקוד
+- **Bedrock API Key** — מעבר ל-Bedrock API key authentication (במקום boto3)
+- **Morning status** — נוסף פקודת "סטטוס" ל-morning skill
+- **Docker compose cleanup** — הסרת version warning
+
+---
+
+*עודכן לאחרונה: 28 מרץ 2026*
