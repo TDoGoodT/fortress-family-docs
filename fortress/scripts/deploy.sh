@@ -1,4 +1,5 @@
 #!/bin/bash
+export PATH="/usr/local/bin:/opt/homebrew/bin:$PATH"
 # Fortress remote deploy script — triggered via WhatsApp
 # Runs on the Mac Mini host (NOT inside Docker)
 set -euo pipefail
