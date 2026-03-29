@@ -98,15 +98,29 @@ class DeployHandler(http.server.BaseHTTPRequestHandler):
         logger.info("Deploy request: action=%s sender=%s ip=%s", action, sender, client_ip)
 
         if action == "status":
-            result = subprocess.run(
-                ["bash", str(DEPLOY_SCRIPT), "status"],
-                capture_output=True, text=True, encoding="utf-8",
-                timeout=30,
-            )
-            self._send_json(200, json.dumps({
-                "status": "ok",
-                "output": result.stdout.strip(),
-            }, ensure_ascii=False).encode("utf-8"))
+            try:
+                result = subprocess.run(
+                    ["bash", str(DEPLOY_SCRIPT), "status"],
+                    capture_output=True, text=True, encoding="utf-8",
+                    errors="replace", timeout=30,
+                )
+                output = result.stdout.strip() or result.stderr.strip() or "לא הצלחתי לקבל סטטוס"
+                self._send_json(200, json.dumps({
+                    "status": "ok",
+                    "output": output,
+                }, ensure_ascii=False).encode("utf-8"))
+            except subprocess.TimeoutExpired:
+                logger.warning("Status command timed out")
+                self._send_json(200, json.dumps({
+                    "status": "ok",
+                    "output": "⏰ הסטטוס לקח יותר מדי זמן. נסה שוב.",
+                }, ensure_ascii=False).encode("utf-8"))
+            except Exception:
+                logger.exception("Status command failed")
+                self._send_json(200, json.dumps({
+                    "status": "ok",
+                    "output": "❌ שגיאה בקבלת סטטוס",
+                }, ensure_ascii=False).encode("utf-8"))
         else:
             threading.Thread(
                 target=self._run_deploy, args=(action, sender), daemon=True

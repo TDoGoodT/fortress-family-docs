@@ -108,6 +108,9 @@ case "$ACTION" in
         ;;
 
     status)
+        # Disable strict mode for status — subcommands may fail gracefully
+        set +eo pipefail
+
         DC="docker compose --env-file $ENV_FILE -f $COMPOSE_FILE"
         COMMIT=$(git -C "$REPO_DIR" rev-parse --short HEAD 2>/dev/null || echo 'unknown')
 
