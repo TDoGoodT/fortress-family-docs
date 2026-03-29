@@ -24,6 +24,7 @@ case "$ACTION" in
     deploy_app)
         log "Pulling latest code..."
         git -C "$REPO_DIR" pull origin main >> "$LOG_FILE" 2>&1
+        COMMIT=$(git -C "$REPO_DIR" rev-parse --short HEAD)
 
         log "Building fortress container..."
         docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" build --no-cache fortress >> "$LOG_FILE" 2>&1
@@ -35,9 +36,9 @@ case "$ACTION" in
 
         HEALTH=$(curl -s http://localhost:8000/health 2>/dev/null || echo '{}')
         if echo "$HEALTH" | grep -q '"status":"ok"'; then
-            echo "🟢 העדכון הושלם בהצלחה ✅"
+            echo "🟢 הקוד עודכן ✅ | גרסה: $COMMIT"
         else
-            echo "🟡 העדכון הושלם אבל המערכת לא מגיבה עדיין. נסה שוב בעוד דקה."
+            echo "🟡 העדכון הושלם אבל המערכת לא מגיבה. גרסה: $COMMIT"
         fi
 
         log "=== APP UPDATE complete ==="
@@ -55,6 +56,7 @@ case "$ACTION" in
     deploy_all)
         log "Pulling latest code..."
         git -C "$REPO_DIR" pull origin main >> "$LOG_FILE" 2>&1
+        COMMIT=$(git -C "$REPO_DIR" rev-parse --short HEAD)
 
         log "Building and restarting all services..."
         docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d --build >> "$LOG_FILE" 2>&1
@@ -80,9 +82,9 @@ case "$ACTION" in
 
         HEALTH=$(curl -s http://localhost:8000/health 2>/dev/null || echo '{}')
         if echo "$HEALTH" | grep -q '"status":"ok"'; then
-            echo "🟢 עדכון מלא הושלם בהצלחה ✅"
+            echo "🟢 עדכון מלא הושלם ✅ | גרסה: $COMMIT"
         else
-            echo "🟡 העדכון הושלם אבל המערכת לא מגיבה עדיין. נסה שוב בעוד דקה."
+            echo "🟡 העדכון הושלם אבל המערכת לא מגיבה. גרסה: $COMMIT"
         fi
 
         log "=== FULL UPDATE complete ==="
@@ -107,6 +109,7 @@ case "$ACTION" in
 
     status)
         DC="docker compose --env-file $ENV_FILE -f $COMPOSE_FILE"
+        COMMIT=$(git -C "$REPO_DIR" rev-parse --short HEAD 2>/dev/null || echo 'unknown')
 
         APP=$($DC ps --format json fortress 2>/dev/null | python3 -c "
 import sys, json
@@ -174,6 +177,7 @@ except: print('לא זמין')
 " 2>/dev/null || echo 'לא זמין')
 
         echo "🏰 סטטוס פורטרס
+📌 גרסה: $COMMIT
 
 📦 שירותים:
   אפליקציה: $APP
