@@ -27,6 +27,11 @@ OLLAMA_API_URL: str = os.getenv("OLLAMA_API_URL", "http://localhost:11434")
 OLLAMA_MODEL: str = os.getenv("OLLAMA_MODEL", "llama3.1:8b")
 
 # AWS Bedrock — OpenAI-compatible API
+AWS_REGION: str = os.getenv("AWS_REGION", "us-east-1")
+AWS_ACCESS_KEY_ID: str = os.getenv("AWS_ACCESS_KEY_ID", "")
+AWS_SECRET_ACCESS_KEY: str = os.getenv("AWS_SECRET_ACCESS_KEY", "")
+AWS_SESSION_TOKEN: str = os.getenv("AWS_SESSION_TOKEN", "")
+
 BEDROCK_API_KEY: str = os.getenv("BEDROCK_API_KEY", "")
 BEDROCK_API_BASE_URL: str = os.getenv("BEDROCK_API_BASE_URL", "https://bedrock.us-east-1.amazonaws.com/v1")
 
