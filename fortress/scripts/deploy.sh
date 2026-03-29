@@ -31,6 +31,15 @@ case "$ACTION" in
         log "Restarting fortress service (WAHA excluded)..."
         docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d --no-deps fortress >> "$LOG_FILE" 2>&1
 
+        sleep 10
+
+        HEALTH=$(curl -s http://localhost:8000/health 2>/dev/null || echo '{}')
+        if echo "$HEALTH" | grep -q '"status":"ok"'; then
+            echo "🟢 העדכון הושלם בהצלחה ✅"
+        else
+            echo "🟡 העדכון הושלם אבל המערכת לא מגיבה עדיין. נסה שוב בעוד דקה."
+        fi
+
         log "=== APP UPDATE complete ==="
         ;;
 
@@ -67,6 +76,15 @@ case "$ACTION" in
             log "WARNING: WAHA session is $WAHA_STATUS — run: deploy.sh waha-restart"
         fi
 
+        sleep 10
+
+        HEALTH=$(curl -s http://localhost:8000/health 2>/dev/null || echo '{}')
+        if echo "$HEALTH" | grep -q '"status":"ok"'; then
+            echo "🟢 עדכון מלא הושלם בהצלחה ✅"
+        else
+            echo "🟡 העדכון הושלם אבל המערכת לא מגיבה עדיין. נסה שוב בעוד דקה."
+        fi
+
         log "=== FULL UPDATE complete ==="
         ;;
 
@@ -88,7 +106,85 @@ case "$ACTION" in
         ;;
 
     status)
-        docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" ps 2>&1
+        DC="docker compose --env-file $ENV_FILE -f $COMPOSE_FILE"
+
+        APP=$($DC ps --format json fortress 2>/dev/null | python3 -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    state = data.get('State', 'unknown')
+    uptime = data.get('Status', '')
+    if state == 'running':
+        print(f'🟢 פעיל ({uptime})')
+    else:
+        print(f'🔴 לא פעיל ({state})')
+except: print('⚪ לא ידוע')
+" 2>/dev/null || echo '⚪ לא ידוע')
+
+        DB=$($DC ps --format json db 2>/dev/null | python3 -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    state = data.get('State', 'unknown')
+    uptime = data.get('Status', '')
+    if 'healthy' in uptime.lower():
+        print(f'🟢 תקין ({uptime})')
+    elif state == 'running':
+        print(f'🟡 פעיל ({uptime})')
+    else:
+        print(f'🔴 לא פעיל ({state})')
+except: print('⚪ לא ידוע')
+" 2>/dev/null || echo '⚪ לא ידוע')
+
+        OLLAMA=$($DC ps --format json ollama 2>/dev/null | python3 -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    state = data.get('State', 'unknown')
+    uptime = data.get('Status', '')
+    if state == 'running':
+        print(f'🟢 פעיל ({uptime})')
+    else:
+        print(f'🔴 לא פעיל ({state})')
+except: print('⚪ לא ידוע')
+" 2>/dev/null || echo '⚪ לא ידוע')
+
+        WAHA=$($DC ps --format json waha 2>/dev/null | python3 -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    state = data.get('State', 'unknown')
+    uptime = data.get('Status', '')
+    if state == 'running':
+        print(f'🟢 פעיל ({uptime})')
+    else:
+        print(f'🔴 לא פעיל ({state})')
+except: print('⚪ לא ידוע')
+" 2>/dev/null || echo '⚪ לא ידוע')
+
+        HEALTH=$(curl -s http://localhost:8000/health 2>/dev/null | python3 -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    db = '🟢' if data.get('database') == 'connected' else '🔴'
+    bedrock = '🟢' if data.get('bedrock') == 'connected' else '🔴'
+    ollama_s = '🟢' if data.get('ollama') == 'connected' else '🔴'
+    print(f'DB: {db} | Bedrock: {bedrock} | Ollama: {ollama_s}')
+except: print('לא זמין')
+" 2>/dev/null || echo 'לא זמין')
+
+        echo "🏰 סטטוס פורטרס
+
+📦 שירותים:
+  אפליקציה: $APP
+  בסיס נתונים: $DB
+  Ollama: $OLLAMA
+  WhatsApp: $WAHA
+
+🔗 חיבורים:
+  $HEALTH
+
+📊 דשבורד: http://localhost:8000/dashboard"
         ;;
 
     *)
