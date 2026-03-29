@@ -93,7 +93,7 @@ class DeploySkill(BaseSkill):
                 config.DEPLOY_LISTENER_URL,
                 json={"token": config.DEPLOY_SECRET, "action": action, "sender": sender},
                 headers={"Content-Type": "application/json"},
-                timeout=20.0,
+                timeout=30.0,
             )
 
             if resp.status_code == 429:

@@ -100,12 +100,13 @@ class DeployHandler(http.server.BaseHTTPRequestHandler):
         if action == "status":
             result = subprocess.run(
                 ["bash", str(DEPLOY_SCRIPT), "status"],
-                capture_output=True, text=True, timeout=15,
+                capture_output=True, text=True, encoding="utf-8",
+                timeout=30,
             )
             self._send_json(200, json.dumps({
                 "status": "ok",
                 "output": result.stdout.strip(),
-            }).encode())
+            }, ensure_ascii=False).encode("utf-8"))
         else:
             threading.Thread(
                 target=self._run_deploy, args=(action, sender), daemon=True
@@ -113,7 +114,7 @@ class DeployHandler(http.server.BaseHTTPRequestHandler):
             self._send_json(202, json.dumps({
                 "status": "accepted",
                 "message": f"{action} started",
-            }).encode())
+            }, ensure_ascii=False).encode("utf-8"))
 
     def _reject(self, reason: str, *, client_ip=None):
         ip = client_ip or self.client_address[0]
@@ -122,7 +123,7 @@ class DeployHandler(http.server.BaseHTTPRequestHandler):
 
     def _send_json(self, code: int, data: bytes):
         self.send_response(code)
-        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Type", "application/json; charset=utf-8")
         self.end_headers()
         self.wfile.write(data)
 
@@ -131,7 +132,8 @@ class DeployHandler(http.server.BaseHTTPRequestHandler):
         try:
             result = subprocess.run(
                 ["bash", str(DEPLOY_SCRIPT), action],
-                capture_output=True, text=True, timeout=300,
+                capture_output=True, text=True, encoding="utf-8",
+                timeout=300,
             )
             if result.returncode == 0:
                 commit_after = _get_commit_hash()
