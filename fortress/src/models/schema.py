@@ -104,6 +104,10 @@ class Document(Base):
     doc_metadata: Mapped[Optional[dict]] = mapped_column(
         "metadata", JSONB, server_default=text("'{}'")
     )
+    # Sprint 1: new columns (doc_type, vendor, doc_date, ai_summary, raw_text already exist)
+    tags: Mapped[Optional[list]] = mapped_column(JSONB, server_default=text("'[]'"))
+    confidence: Mapped[Optional[Decimal]] = mapped_column(Numeric, server_default=text("0.0"))
+    review_state: Mapped[Optional[str]] = mapped_column(Text, server_default=text("'pending'"))
     created_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=text("now()")
     )
@@ -112,6 +116,47 @@ class Document(Base):
     uploader: Mapped[Optional["FamilyMember"]] = relationship(back_populates="documents")
     transactions: Mapped[list["Transaction"]] = relationship(back_populates="document")
     tasks: Mapped[list["Task"]] = relationship(back_populates="source_document")
+    facts: Mapped[list["DocumentFact"]] = relationship(back_populates="document", cascade="all, delete-orphan")
+
+    # Logical-to-physical property aliases (service/API layer names → physical columns)
+    @property
+    def document_type(self) -> Optional[str]:
+        return self.doc_type
+
+    @property
+    def counterparty(self) -> Optional[str]:
+        return self.vendor
+
+    @property
+    def source_date(self):
+        return self.doc_date
+
+    @property
+    def summary(self) -> Optional[str]:
+        return self.ai_summary
+
+
+class DocumentFact(Base):
+    """Flexible structured fact extracted from a document during ingestion."""
+    __tablename__ = "document_facts"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    document_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("documents.id"), nullable=False
+    )
+    fact_type: Mapped[str] = mapped_column(Text, nullable=False)
+    fact_key: Mapped[str] = mapped_column(Text, nullable=False)
+    fact_value: Mapped[str] = mapped_column(Text, nullable=False)
+    confidence: Mapped[Optional[Decimal]] = mapped_column(Numeric, server_default=text("0.0"))
+    source_excerpt: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=text("now()")
+    )
+
+    # Relationships
+    document: Mapped["Document"] = relationship(back_populates="facts")
 
 
 class Transaction(Base):

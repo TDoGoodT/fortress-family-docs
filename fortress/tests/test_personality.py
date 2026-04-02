@@ -96,6 +96,13 @@ REQUIRED_TEMPLATE_KEYS = {
     "deploy_restarted",
     "deploy_not_configured",
     "deploy_rate_limited",
+    # Sprint 1: document Q&A and search
+    "document_search_header",
+    "document_search_empty",
+    "document_qa_not_found",
+    "document_recent_header",
+    "document_clarify",
+    "document_clarify_option",
 }
 
 

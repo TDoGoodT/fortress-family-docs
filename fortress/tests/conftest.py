@@ -91,6 +91,7 @@ from src.models.schema import (  # noqa: E402
     BugReport,
     ConversationState,
     Document,
+    DocumentFact,
     RecurringPattern,
     Task,
 )
@@ -138,8 +139,30 @@ def _make_document(**overrides) -> MagicMock:
     d.id = overrides.get("id", uuid.uuid4())
     d.original_filename = overrides.get("original_filename", "test.pdf")
     d.doc_type = overrides.get("doc_type", "document")
+    d.vendor = overrides.get("vendor", None)
+    d.doc_date = overrides.get("doc_date", None)
+    d.amount = overrides.get("amount", None)
+    d.raw_text = overrides.get("raw_text", None)
+    d.ai_summary = overrides.get("ai_summary", None)
+    d.tags = overrides.get("tags", [])
+    d.confidence = overrides.get("confidence", 0.0)
+    d.review_state = overrides.get("review_state", "pending")
     d.created_at = overrides.get("created_at", None)
     return d
+
+
+def _make_document_fact(**overrides) -> MagicMock:
+    """Build a mock DocumentFact with sensible defaults."""
+    f = MagicMock(spec=DocumentFact)
+    f.id = overrides.get("id", uuid.uuid4())
+    f.document_id = overrides.get("document_id", uuid.uuid4())
+    f.fact_type = overrides.get("fact_type", "invoice")
+    f.fact_key = overrides.get("fact_key", "amount")
+    f.fact_value = overrides.get("fact_value", "100.00")
+    f.confidence = overrides.get("confidence", 0.9)
+    f.source_excerpt = overrides.get("source_excerpt", "Total: 100.00")
+    f.created_at = overrides.get("created_at", None)
+    return f
 
 
 def _make_conversation_state(**overrides) -> MagicMock:

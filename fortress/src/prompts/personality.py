@@ -83,6 +83,7 @@ TEMPLATES: dict[str, str] = {
     "task_list_header": "📋 המשימות שלך:\n",
     "document_saved": "שמרתי את הקובץ ✅ {filename}",
     "permission_denied": "אין לך הרשאה לזה 🔒",
+    "permission_denied": "אין לך הרשאה לזה 🔒",
     "unknown_member": "לא מכיר את המספר הזה. בקש מההורים להוסיף אותך.",
     "inactive_member": "החשבון שלך לא פעיל. פנה להורים.",
     "error_fallback": "משהו השתבש 😅 אפשר לנסות שוב?",
@@ -93,6 +94,13 @@ TEMPLATES: dict[str, str] = {
     "task_duplicate": "המשימה הזו כבר קיימת ✅",
     "document_list_header": "📁 המסמכים שלך:\n",
     "document_list_empty": "אין מסמכים שמורים 📂",
+    # Sprint 1: document Q&A and search templates
+    "document_search_header": "🔍 תוצאות חיפוש:\n",
+    "document_search_empty": "לא נמצאו מסמכים תואמים 📂",
+    "document_qa_not_found": "המידע הזה לא זמין במסמך 🤷",
+    "document_recent_header": "📄 המסמך האחרון שלך:\n",
+    "document_clarify": "מצאתי כמה מסמכים — על איזה אתה שואל?\n{options}",
+    "document_clarify_option": "{index}. {emoji} {filename} ({doc_type}) — {date}",
     "reminder_new_task": "📋 תזכורת: {title}\n📅 עד {due_date}\nנוצר אוטומטית מתבנית חוזרת.",
     "scheduler_summary": "🔄 סיכום יומי: נוצרו {count} משימות מתבניות חוזרות.",
     "recurring_list_header": "🔄 התזכורות החוזרות שלך:\n",
@@ -206,6 +214,15 @@ _DOC_TYPE_EMOJI: dict[str, str] = {
     "image": "🖼️",
     "spreadsheet": "📊",
     "other": "📎",
+    # Sprint 1: household categories
+    "contract": "📝",
+    "invoice": "🧾",
+    "receipt": "🧾",
+    "bank_statement": "🏦",
+    "credit_card_statement": "💳",
+    "insurance": "🛡️",
+    "warranty": "✅",
+    "official_letter": "📬",
 }
 
 
@@ -270,5 +287,22 @@ def format_bug_list(bugs: list) -> str:
                 index=i, description=description, created_at=date_text,
             )
         )
+
+    return "\n".join(lines)
+
+
+def format_search_results(documents: list) -> str:
+    """Return a formatted Hebrew document search results list."""
+    if not documents:
+        return TEMPLATES["document_search_empty"]
+
+    lines: list[str] = [TEMPLATES["document_search_header"]]
+    for i, doc in enumerate(documents, 1):
+        doc_type = getattr(doc, "doc_type", None) or "other"
+        emoji = _DOC_TYPE_EMOJI.get(doc_type, "📎")
+        filename = getattr(doc, "original_filename", None) or "ללא שם"
+        created_at = getattr(doc, "created_at", None)
+        date_text = str(created_at)[:10] if created_at else ""
+        lines.append(f"{emoji} {i}. {filename}\n   📅 {date_text} | {doc_type}")
 
     return "\n".join(lines)

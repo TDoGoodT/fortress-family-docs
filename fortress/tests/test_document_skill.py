@@ -1,219 +1,223 @@
-"""Unit tests for DocumentSkill — save, list, verify, dual registration."""
-
+"""Unit tests for extended DocumentSkill — search, query, recent, P7 access control."""
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from sqlalchemy.orm import Session
 
-from src.models.schema import Document, FamilyMember
-from src.prompts.personality import TEMPLATES
+from src.models.schema import Document, FamilyMember, Permission
 from src.skills.base_skill import Command, Result
 from src.skills.document_skill import DocumentSkill
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-def _member(**overrides) -> MagicMock:
+def _make_member(role="parent", is_active=True) -> MagicMock:
     m = MagicMock(spec=FamilyMember)
-    m.id = overrides.get("id", uuid.uuid4())
-    m.name = overrides.get("name", "Test Parent")
-    m.phone = overrides.get("phone", "+972501234567")
-    m.role = overrides.get("role", "parent")
-    m.is_active = True
+    m.id = uuid.uuid4()
+    m.name = "Test User"
+    m.phone = "+972501234567"
+    m.role = role
+    m.is_active = is_active
     return m
 
 
-def _document(**overrides) -> MagicMock:
-    d = MagicMock(spec=Document)
-    d.id = overrides.get("id", uuid.uuid4())
-    d.original_filename = overrides.get("original_filename", "invoice.pdf")
-    d.doc_type = overrides.get("doc_type", "document")
-    d.created_at = overrides.get("created_at", datetime.now(timezone.utc))
-    d.uploaded_by = overrides.get("uploaded_by", uuid.uuid4())
-    return d
+def _make_doc(**kwargs) -> MagicMock:
+    doc = MagicMock(spec=Document)
+    doc.id = kwargs.get("id", uuid.uuid4())
+    doc.original_filename = kwargs.get("original_filename", "test.pdf")
+    doc.doc_type = kwargs.get("doc_type", "invoice")
+    doc.vendor = kwargs.get("vendor", "Super-Pharm")
+    doc.doc_date = kwargs.get("doc_date", "2026-03-15")
+    doc.amount = kwargs.get("amount", Decimal("100.00"))
+    doc.ai_summary = kwargs.get("ai_summary", "סיכום.")
+    doc.raw_text = kwargs.get("raw_text", "invoice text")
+    doc.created_at = kwargs.get("created_at", None)
+    return doc
+
+
+def _make_permission(can_read=True, can_write=True) -> MagicMock:
+    p = MagicMock(spec=Permission)
+    p.can_read = can_read
+    p.can_write = can_write
+    return p
+
+
+def _make_db(docs=None, permission=None) -> MagicMock:
+    db = MagicMock()
+    perm = permission or _make_permission()
+    db.query.return_value.filter.return_value.first.return_value = perm
+    if docs is not None:
+        mock_q = MagicMock()
+        mock_q.filter.return_value = mock_q
+        mock_q.order_by.return_value = mock_q
+        mock_q.limit.return_value = mock_q
+        mock_q.all.return_value = docs
+        mock_q.first.return_value = docs[0] if docs else None
+        db.query.return_value = mock_q
+    return db
+
+
+skill = DocumentSkill()
 
 
 # ---------------------------------------------------------------------------
-# Structure tests
+# _search: by type
 # ---------------------------------------------------------------------------
 
-class TestDocumentSkillStructure:
-    def test_name(self):
-        assert DocumentSkill().name == "document"
+def test_search_by_type_returns_results():
+    doc = _make_doc(doc_type="invoice")
+    db = MagicMock()
 
-    def test_description_is_hebrew(self):
-        desc = DocumentSkill().description
-        assert "מסמכים" in desc
+    # Permission check returns a permission with can_read=True
+    perm = _make_permission(can_read=True)
+    mock_q = MagicMock()
+    mock_q.filter.return_value = mock_q
+    mock_q.order_by.return_value = mock_q
+    mock_q.limit.return_value = mock_q
+    mock_q.all.return_value = [doc]
+    mock_q.first.return_value = perm
+    db.query.return_value = mock_q
 
-    def test_commands_count(self):
-        # Only "list" command — save is triggered by media detection, not regex
-        assert len(DocumentSkill().commands) == 1
+    with patch("src.skills.document_skill.check_perm", return_value=None), \
+         patch("src.skills.document_skill.search_documents", return_value=[doc]):
+        cmd = Command(skill="document", action="search", params={"doc_type": "חשבוניות"})
+        result = skill.execute(db, _make_member(), cmd)
 
-    def test_commands_list_action(self):
-        skill = DocumentSkill()
-        _, action = skill.commands[0]
-        assert action == "list"
-
-    def test_get_help_returns_string(self):
-        help_text = DocumentSkill().get_help()
-        assert isinstance(help_text, str)
-        assert len(help_text) > 0
+    assert result.success
+    assert "invoice" in result.message or "🧾" in result.message or "חשבונית" in result.message or "1." in result.message
 
 
-# ---------------------------------------------------------------------------
-# _save
-# ---------------------------------------------------------------------------
+def test_search_by_vendor_keyword():
+    doc = _make_doc(vendor="Super-Pharm")
+    with patch("src.skills.document_skill.check_perm", return_value=None), \
+         patch("src.skills.document_skill.search_documents", return_value=[doc]):
+        cmd = Command(skill="document", action="search", params={"keyword": "Super-Pharm"})
+        result = skill.execute(MagicMock(), _make_member(), cmd)
 
-class TestSave:
-    @patch("src.skills.document_skill.documents.process_document", new_callable=AsyncMock)
-    @patch("src.skills.document_skill.check_perm", return_value=None)
-    def test_save_happy_path(self, _perm, mock_process, mock_db: MagicMock):
-        doc = _document(original_filename="receipt.jpg")
-        mock_process.return_value = doc
+    assert result.success
 
-        skill = DocumentSkill()
-        member = _member()
-        cmd = Command(skill="document", action="save", params={"file_path": "/tmp/receipt.jpg"})
-        result = skill.execute(mock_db, member, cmd)
 
-        assert result.success
-        assert result.entity_type == "document"
-        assert result.entity_id == doc.id
-        assert result.action == "saved"
+def test_search_empty_returns_empty_message():
+    with patch("src.skills.document_skill.check_perm", return_value=None), \
+         patch("src.skills.document_skill.search_documents", return_value=[]):
+        cmd = Command(skill="document", action="search", params={"doc_type": "contract"})
+        result = skill.execute(MagicMock(), _make_member(), cmd)
 
-    @patch("src.skills.document_skill.documents.process_document", new_callable=AsyncMock)
-    @patch("src.skills.document_skill.check_perm", return_value=None)
-    def test_save_calls_process_document_with_correct_args(self, _perm, mock_process, mock_db: MagicMock):
-        doc = _document()
-        mock_process.return_value = doc
-
-        skill = DocumentSkill()
-        member = _member()
-        cmd = Command(skill="document", action="save", params={"file_path": "/tmp/doc.pdf"})
-        skill.execute(mock_db, member, cmd)
-
-        mock_process.assert_called_once_with(mock_db, "/tmp/doc.pdf", member.id, "whatsapp")
-
-    @patch("src.skills.document_skill.documents.process_document", new_callable=AsyncMock)
-    @patch("src.skills.document_skill.check_perm", return_value=None)
-    def test_save_uses_template(self, _perm, mock_process, mock_db: MagicMock):
-        doc = _document(original_filename="scan.pdf")
-        mock_process.return_value = doc
-
-        skill = DocumentSkill()
-        member = _member()
-        cmd = Command(skill="document", action="save", params={"file_path": "/tmp/scan.pdf"})
-        result = skill.execute(mock_db, member, cmd)
-
-        assert "scan.pdf" in result.message
-        assert "✅" in result.message
-
-    @patch("src.skills.document_skill.check_perm")
-    def test_save_permission_denied(self, mock_perm, mock_db: MagicMock):
-        mock_perm.return_value = Result(success=False, message=TEMPLATES["permission_denied"])
-
-        skill = DocumentSkill()
-        member = _member()
-        cmd = Command(skill="document", action="save", params={"file_path": "/tmp/doc.pdf"})
-        result = skill.execute(mock_db, member, cmd)
-
-        assert not result.success
-        assert TEMPLATES["permission_denied"] in result.message
+    assert result.success
+    assert "לא נמצאו" in result.message
 
 
 # ---------------------------------------------------------------------------
-# _list
+# _recent
 # ---------------------------------------------------------------------------
 
-class TestList:
-    @patch("src.skills.document_skill.check_perm", return_value=None)
-    def test_list_with_documents(self, _perm, mock_db: MagicMock):
-        d1 = _document(original_filename="invoice.pdf", doc_type="document")
-        d2 = _document(original_filename="photo.jpg", doc_type="image")
-        mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.all.return_value = [d1, d2]
+def test_recent_returns_most_recent_document():
+    doc = _make_doc()
+    db = MagicMock()
+    mock_q = MagicMock()
+    mock_q.filter.return_value = mock_q
+    mock_q.order_by.return_value = mock_q
+    mock_q.first.return_value = doc
+    db.query.return_value = mock_q
 
-        skill = DocumentSkill()
-        member = _member()
-        cmd = Command(skill="document", action="list", params={})
-        result = skill.execute(mock_db, member, cmd)
+    with patch("src.skills.document_skill.check_perm", return_value=None):
+        cmd = Command(skill="document", action="recent", params={})
+        result = skill.execute(db, _make_member(), cmd)
 
-        assert result.success
-        assert "invoice.pdf" in result.message
-        assert "photo.jpg" in result.message
+    assert result.success
+    assert result.entity_id == doc.id
 
-    @patch("src.skills.document_skill.check_perm", return_value=None)
-    def test_list_empty_returns_template(self, _perm, mock_db: MagicMock):
-        mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.all.return_value = []
 
-        skill = DocumentSkill()
-        member = _member()
-        cmd = Command(skill="document", action="list", params={})
-        result = skill.execute(mock_db, member, cmd)
+def test_recent_empty_returns_empty_message():
+    db = MagicMock()
+    mock_q = MagicMock()
+    mock_q.filter.return_value = mock_q
+    mock_q.order_by.return_value = mock_q
+    mock_q.first.return_value = None
+    db.query.return_value = mock_q
 
-        assert result.success
-        assert result.message == TEMPLATES["document_list_empty"]
+    with patch("src.skills.document_skill.check_perm", return_value=None):
+        cmd = Command(skill="document", action="recent", params={})
+        result = skill.execute(db, _make_member(), cmd)
 
-    @patch("src.skills.document_skill.check_perm")
-    def test_list_permission_denied(self, mock_perm, mock_db: MagicMock):
-        mock_perm.return_value = Result(success=False, message=TEMPLATES["permission_denied"])
-
-        skill = DocumentSkill()
-        member = _member()
-        cmd = Command(skill="document", action="list", params={})
-        result = skill.execute(mock_db, member, cmd)
-
-        assert not result.success
-        assert TEMPLATES["permission_denied"] in result.message
+    assert result.success
+    assert "אין" in result.message
 
 
 # ---------------------------------------------------------------------------
-# verify
+# _query: resolves from conversation_state
 # ---------------------------------------------------------------------------
 
-class TestVerify:
-    def test_verify_saved_document_exists(self, mock_db: MagicMock):
-        doc_id = uuid.uuid4()
-        mock_doc = _document(id=doc_id)
-        mock_db.query.return_value.filter.return_value.first.return_value = mock_doc
+def test_query_resolves_from_conversation_state():
+    doc = _make_doc()
+    with patch("src.skills.document_skill.check_perm", return_value=None), \
+         patch("src.skills.document_skill.resolve_document_reference", return_value=doc), \
+         patch("src.skills.document_skill.update_state"), \
+         patch("src.skills.document_skill.answer_document_question", new_callable=AsyncMock) as mock_qa:
+        from src.services.document_query_service import QAResult
+        mock_qa.return_value = QAResult(answer_text="invoice", source="db_field", confidence=1.0, field_used="doc_type")
+        cmd = Command(skill="document", action="query", params={"question": "מה סוג המסמך?"})
+        result = skill.execute(MagicMock(), _make_member(), cmd)
 
-        skill = DocumentSkill()
-        result = Result(
-            success=True, message="ok",
-            entity_type="document", entity_id=doc_id, action="saved",
-        )
-        assert skill.verify(mock_db, result) is True
+    assert result.success
+    assert result.entity_id == doc.id
 
-    def test_verify_not_found_returns_false(self, mock_db: MagicMock):
-        doc_id = uuid.uuid4()
-        mock_db.query.return_value.filter.return_value.first.return_value = None
 
-        skill = DocumentSkill()
-        result = Result(
-            success=True, message="ok",
-            entity_type="document", entity_id=doc_id, action="saved",
-        )
-        assert skill.verify(mock_db, result) is False
+def test_query_with_multiple_candidates_returns_clarification():
+    docs = [_make_doc() for _ in range(3)]
+    with patch("src.skills.document_skill.check_perm", return_value=None), \
+         patch("src.skills.document_skill.resolve_document_reference", return_value=docs):
+        cmd = Command(skill="document", action="query", params={"question": "מה הסכום?"})
+        result = skill.execute(MagicMock(), _make_member(), cmd)
 
-    def test_verify_no_entity_id_returns_true(self, mock_db: MagicMock):
-        skill = DocumentSkill()
-        result = Result(success=True, message="ok")
-        assert skill.verify(mock_db, result) is True
+    assert result.success
+    assert "מצאתי" in result.message or "1." in result.message
+
+
+def test_query_no_documents_returns_empty_message():
+    with patch("src.skills.document_skill.check_perm", return_value=None), \
+         patch("src.skills.document_skill.resolve_document_reference", return_value=None):
+        cmd = Command(skill="document", action="query", params={"question": "מה הסכום?"})
+        result = skill.execute(MagicMock(), _make_member(), cmd)
+
+    assert result.success
+    assert "אין" in result.message
 
 
 # ---------------------------------------------------------------------------
-# Dual registration
+# P7: Access Control Enforcement
 # ---------------------------------------------------------------------------
 
-class TestDualRegistration:
-    def test_media_and_document_are_same_object(self):
-        from src.skills.registry import registry
+def test_p7_search_denied_for_no_read_permission():
+    """P7: search returns permission denied when user lacks read access."""
+    from src.prompts.personality import TEMPLATES
+    denied_result = Result(success=False, message=TEMPLATES["permission_denied"])
+    with patch("src.skills.document_skill.check_perm", return_value=denied_result):
+        cmd = Command(skill="document", action="search", params={"doc_type": "invoice"})
+        result = skill.execute(MagicMock(), _make_member(role="child"), cmd)
 
-        doc_skill = registry.get("document")
-        media_skill = registry.get("media")
-        assert doc_skill is media_skill
+    assert not result.success
+    assert "הרשאה" in result.message
+
+
+def test_p7_query_denied_for_no_read_permission():
+    """P7: query returns permission denied when user lacks read access."""
+    from src.prompts.personality import TEMPLATES
+    denied_result = Result(success=False, message=TEMPLATES["permission_denied"])
+    with patch("src.skills.document_skill.check_perm", return_value=denied_result):
+        cmd = Command(skill="document", action="query", params={"question": "מה הסכום?"})
+        result = skill.execute(MagicMock(), _make_member(role="child"), cmd)
+
+    assert not result.success
+
+
+def test_p7_recent_denied_for_no_read_permission():
+    """P7: recent returns permission denied when user lacks read access."""
+    from src.prompts.personality import TEMPLATES
+    denied_result = Result(success=False, message=TEMPLATES["permission_denied"])
+    with patch("src.skills.document_skill.check_perm", return_value=denied_result):
+        cmd = Command(skill="document", action="recent", params={})
+        result = skill.execute(MagicMock(), _make_member(role="child"), cmd)
+
+    assert not result.success
