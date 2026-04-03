@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import re
 from typing import Union
 
@@ -20,6 +21,8 @@ from src.services.document_query_service import (
 )
 from src.skills.base_skill import BaseSkill, Command, Result
 from src.skills.permissions import check_perm
+
+logger = logging.getLogger(__name__)
 
 
 class DocumentSkill(BaseSkill):
@@ -79,33 +82,58 @@ class DocumentSkill(BaseSkill):
         if denied:
             return denied
 
-        file_path = params.get("file_path") or params.get("media_file_path", "")
+        file_path = params.get("file_path") or params.get("media_file_path") or ""
 
-        loop = None
+        if not file_path:
+            logger.warning("DocumentSkill._save: no file_path in params=%s", list(params.keys()))
+            return Result(success=False, message=TEMPLATES["error_fallback"])
+
         try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            loop = None
+            # process_document is async. We need to run it from a sync context.
+            # Strategy: always run in a fresh thread with its own event loop.
+            # This avoids conflicts with any running event loop (FastAPI, pytest-asyncio).
+            import threading
 
-        if loop and loop.is_running():
-            import concurrent.futures
-            with concurrent.futures.ThreadPoolExecutor() as pool:
-                doc = pool.submit(
-                    asyncio.run,
-                    documents.process_document(db, file_path, member.id, "whatsapp"),
-                ).result()
-        else:
-            doc = asyncio.run(
-                documents.process_document(db, file_path, member.id, "whatsapp")
+            result_holder: list = []
+            exc_holder: list = []
+
+            def run_in_thread():
+                import asyncio as _asyncio
+                new_loop = _asyncio.new_event_loop()
+                _asyncio.set_event_loop(new_loop)
+                try:
+                    doc = new_loop.run_until_complete(
+                        documents.process_document(db, file_path, member.id, "whatsapp")
+                    )
+                    result_holder.append(doc)
+                except Exception as e:
+                    exc_holder.append(e)
+                finally:
+                    new_loop.close()
+
+            t = threading.Thread(target=run_in_thread, daemon=True)
+            t.start()
+            t.join(timeout=120)
+
+            if exc_holder:
+                raise exc_holder[0]
+            if not result_holder:
+                raise RuntimeError("process_document timed out after 120s")
+            doc = result_holder[0]
+
+            return Result(
+                success=True,
+                message=TEMPLATES["document_saved"].format(filename=doc.original_filename),
+                entity_type="document",
+                entity_id=doc.id,
+                action="saved",
             )
-
-        return Result(
-            success=True,
-            message=TEMPLATES["document_saved"].format(filename=doc.original_filename),
-            entity_type="document",
-            entity_id=doc.id,
-            action="saved",
-        )
+        except Exception as exc:
+            logger.error(
+                "DocumentSkill._save: failed file_path=%s error=%s: %s",
+                file_path, type(exc).__name__, exc,
+            )
+            return Result(success=False, message=TEMPLATES["error_fallback"])
 
     def _list(self, db: Session, member: FamilyMember, params: dict) -> Result:
         denied = check_perm(db, member, "documents", "read")

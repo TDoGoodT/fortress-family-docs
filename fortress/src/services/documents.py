@@ -54,6 +54,11 @@ async def process_document(
     Each step after Step 0 is wrapped in try/except — failures are logged
     and the pipeline continues with partial results.
     """
+    if not file_path:
+        raise ValueError("process_document: file_path is empty or None")
+
+    logger.info("[PIPELINE] media_received file_path=%s source=%s", file_path, source)
+
     original_filename = os.path.basename(file_path)
     _, ext = os.path.splitext(original_filename)
     ext_lower = ext.lower()
@@ -64,9 +69,20 @@ async def process_document(
     storage_dir = os.path.join(STORAGE_PATH, str(now.year), f"{now.month:02d}")
     os.makedirs(storage_dir, exist_ok=True)
 
-    storage_filename = f"{unique_id}_{original_filename}"
-    storage_path = os.path.join(storage_dir, storage_filename)
-    shutil.copy2(file_path, storage_path)
+    # If the file is already inside STORAGE_PATH (saved by save_media), use it directly.
+    # Otherwise copy it to storage.
+    abs_storage = os.path.abspath(STORAGE_PATH)
+    abs_file = os.path.abspath(file_path)
+    if abs_file.startswith(abs_storage):
+        storage_path = file_path
+        logger.info("[PIPELINE] step=file_store doc_id=pending filename=%s status=reused path=%s",
+                    original_filename, storage_path)
+    else:
+        storage_filename = f"{unique_id}_{original_filename}"
+        storage_path = os.path.join(storage_dir, storage_filename)
+        shutil.copy2(file_path, storage_path)
+        logger.info("[PIPELINE] step=file_store doc_id=pending filename=%s status=copied path=%s",
+                    original_filename, storage_path)
 
     doc = Document(
         file_path=storage_path,
@@ -82,6 +98,7 @@ async def process_document(
     db.commit()
     db.refresh(doc)
     doc_id = str(doc.id)
+    logger.info("[PIPELINE] step=db_record doc_id=%s filename=%s status=success", doc_id, original_filename)
 
     # Track pipeline outcomes for final summary log
     steps_ok: list[str] = []
