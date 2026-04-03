@@ -45,10 +45,22 @@ def execute(db: Session, member: FamilyMember, command: Command) -> Result:
         # 1. Look up skill
         skill = registry.get(command.skill)
         if skill is None:
+            logger.error(
+                "Executor skill lookup failed: requested_skill=%s action=%s member_id=%s",
+                command.skill,
+                command.action,
+                member.id,
+            )
             return Result(
                 success=False,
                 message=PERSONALITY_TEMPLATES["error_fallback"],
             )
+        logger.info(
+            "Executor dispatch: skill=%s action=%s member_id=%s",
+            command.skill,
+            command.action,
+            member.id,
+        )
 
         # 2. Handle confirmation re-dispatch
         if command.action == "confirm":

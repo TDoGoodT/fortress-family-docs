@@ -66,6 +66,13 @@ async def handle_incoming_message(
             pii_stripped = False
 
         if command is not None:
+            logger.info(
+                "message_handler: parsed_command skill=%s action=%s has_media=%s media_file_path_present=%s",
+                command.skill,
+                command.action,
+                has_media,
+                bool(media_file_path),
+            )
             # Skills Engine path — inject PII metadata for executor audit logging
             command.params["_original_message"] = message_text
             command.params["_pii_stripped"] = pii_stripped
@@ -89,6 +96,12 @@ async def handle_incoming_message(
             response = PERSONALITY_TEMPLATES["error_fallback"]
 
         response = _sanitize_response(response)
+        logger.info(
+            "message_handler: response_ready member_id=%s intent=%s response_len=%d",
+            member.id,
+            intent,
+            len(response),
+        )
         _save_conversation(db, member.id, message_text, response, intent)
         return response
 

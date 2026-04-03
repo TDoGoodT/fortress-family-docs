@@ -74,3 +74,49 @@ def test_webhook_ignores_empty_non_text_noweb_event(client) -> None:
     assert response.json() == {"status": "ignored", "reason": "non-text message"}
     mock_handle.assert_not_awaited()
     mock_send.assert_not_awaited()
+
+
+def test_webhook_media_download_tries_multiple_message_ids(client, mock_db) -> None:
+    body = {
+        "event": "message",
+        "payload": {
+            "id": "bad-id",
+            "from": "972542364393@c.us",
+            "fromMe": False,
+            "body": None,
+            "hasMedia": True,
+            "filename": "contract.pdf",
+            "_data": {
+                "id": {"id": "good-id"},
+                "message": {"documentMessage": {"caption": "הנה מסמך"}},
+            },
+        },
+    }
+
+    with patch(
+        "src.routers.whatsapp.download_media",
+        new=AsyncMock(side_effect=[None, (b"pdf", "application/pdf")]),
+    ) as mock_download, patch(
+        "src.routers.whatsapp.save_media",
+        return_value="/tmp/saved-contract.pdf",
+    ) as mock_save, patch(
+        "src.routers.whatsapp.handle_incoming_message",
+        new=AsyncMock(return_value="ok"),
+    ) as mock_handle, patch(
+        "src.routers.whatsapp.send_text_message",
+        new=AsyncMock(return_value=True),
+    ):
+        response = client.post("/webhook/whatsapp", json=body)
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "processed"}
+    assert [c.args[0] for c in mock_download.await_args_list] == ["bad-id", "good-id"]
+    mock_save.assert_called_once()
+    mock_handle.assert_awaited_once_with(
+        mock_db,
+        "972542364393",
+        "הנה מסמך",
+        "good-id",
+        has_media=True,
+        media_file_path="/tmp/saved-contract.pdf",
+    )

@@ -17,6 +17,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from src.engine.command_parser import parse_command
+from src.engine.executor import execute
 from src.models.schema import Document
 from src.skills.base_skill import Command, Result
 from src.skills.document_skill import DocumentSkill
@@ -27,12 +28,12 @@ from src.skills.document_skill import DocumentSkill
 # ---------------------------------------------------------------------------
 
 def test_media_message_routes_to_media_skill():
-    """has_media=True must produce Command(skill='media', action='save')."""
+    """has_media=True must produce Command(skill='document', action='save')."""
     from src.skills.registry import SkillRegistry
     registry = SkillRegistry()
     cmd = parse_command(None, registry, has_media=True, media_file_path="/tmp/photo.jpg")
     assert cmd is not None
-    assert cmd.skill == "media"
+    assert cmd.skill == "document"
     assert cmd.action == "save"
     assert cmd.params.get("media_file_path") == "/tmp/photo.jpg"
 
@@ -43,7 +44,7 @@ def test_media_message_with_text_still_routes_to_media():
     registry = SkillRegistry()
     cmd = parse_command("some text", registry, has_media=True, media_file_path="/tmp/doc.pdf")
     assert cmd is not None
-    assert cmd.skill == "media"
+    assert cmd.skill == "document"
     assert cmd.action == "save"
 
 
@@ -53,7 +54,7 @@ def test_media_without_file_path_still_routes_to_media():
     registry = SkillRegistry()
     cmd = parse_command(None, registry, has_media=True, media_file_path=None)
     assert cmd is not None
-    assert cmd.skill == "media"
+    assert cmd.skill == "document"
     assert cmd.action == "save"
 
 
@@ -64,15 +65,29 @@ def test_media_without_file_path_still_routes_to_media():
 def test_media_skill_registered_as_document_skill():
     """The 'media' key in the registry must point to a DocumentSkill instance."""
     from src.skills import registry  # triggers __init__.py registration
-    skill = registry.get("media")
+    skill = registry.get("document")
     assert skill is not None
     assert isinstance(skill, DocumentSkill)
 
 
-def test_media_and_document_are_same_instance():
-    """'media' and 'document' must be the same skill instance."""
+def test_executor_resolves_document_skill_for_save():
+    """Executor must resolve command.skill='document' to DocumentSkill."""
     from src.skills import registry
-    assert registry.get("media") is registry.get("document")
+    db = MagicMock()
+    member = MagicMock()
+    member.id = uuid.uuid4()
+    member.name = "tester"
+
+    cmd = Command(skill="document", action="save", params={"media_file_path": "/tmp/test.pdf"})
+    expected = Result(success=True, message="ok")
+
+    with patch.object(registry.get("document"), "execute", return_value=expected) as mock_execute, \
+         patch("src.engine.executor.update_state"), \
+         patch("src.engine.executor.log_action"):
+        result = execute(db, member, cmd)
+
+    assert result.success is True
+    mock_execute.assert_called_once()
 
 
 # ---------------------------------------------------------------------------
@@ -88,7 +103,7 @@ def test_save_with_empty_file_path_returns_error():
     member.role = "parent"
 
     with patch("src.skills.document_skill.check_perm", return_value=None):
-        cmd = Command(skill="media", action="save", params={"media_file_path": ""})
+        cmd = Command(skill="document", action="save", params={"media_file_path": ""})
         result = skill.execute(db, member, cmd)
 
     assert not result.success
@@ -103,7 +118,7 @@ def test_save_with_none_file_path_returns_error():
     member.id = uuid.uuid4()
 
     with patch("src.skills.document_skill.check_perm", return_value=None):
-        cmd = Command(skill="media", action="save", params={"media_file_path": None})
+        cmd = Command(skill="document", action="save", params={"media_file_path": None})
         result = skill.execute(db, member, cmd)
 
     assert not result.success
@@ -129,7 +144,7 @@ def test_save_calls_process_document_with_correct_file_path(tmp_path):
 
     with patch("src.skills.document_skill.check_perm", return_value=None), \
          patch("src.skills.document_skill.documents.process_document", new_callable=AsyncMock, return_value=mock_doc) as mock_process:
-        cmd = Command(skill="media", action="save", params={"media_file_path": str(test_file)})
+        cmd = Command(skill="document", action="save", params={"media_file_path": str(test_file)})
         result = skill.execute(db, member, cmd)
 
     assert result.success
@@ -156,7 +171,7 @@ def test_save_returns_document_saved_template_on_success(tmp_path):
 
     with patch("src.skills.document_skill.check_perm", return_value=None), \
          patch("src.skills.document_skill.documents.process_document", new_callable=AsyncMock, return_value=mock_doc):
-        cmd = Command(skill="media", action="save", params={"media_file_path": str(test_file)})
+        cmd = Command(skill="document", action="save", params={"media_file_path": str(test_file)})
         result = skill.execute(db, member, cmd)
 
     assert result.success

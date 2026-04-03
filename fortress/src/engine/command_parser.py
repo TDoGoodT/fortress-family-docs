@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import re
+import logging
 
 from src.skills.base_skill import Command
 from src.skills.registry import SkillRegistry
+
+logger = logging.getLogger(__name__)
 
 # Hebrew cancel patterns — whole-message match
 CANCEL_PATTERNS: list[re.Pattern] = [
@@ -36,8 +39,13 @@ def parse_command(
     """
     # 1. Media — highest priority
     if has_media:
+        logger.info(
+            "parse_command: media route selected has_media=%s media_file_path_present=%s",
+            has_media,
+            bool(media_file_path),
+        )
         return Command(
-            skill="media",
+            skill="document",
             action="save",
             params={"media_file_path": media_file_path},
         )
@@ -62,6 +70,12 @@ def parse_command(
         m = pattern.search(stripped)
         if m:
             params = {k: v for k, v in m.groupdict().items() if v is not None}
+            logger.info(
+                "parse_command: matched skill=%s action=%s text=%s",
+                skill.name,
+                action_name,
+                stripped[:120],
+            )
             return Command(skill=skill.name, action=action_name, params=params, raw_text=stripped)
 
     # 5. LLM fallback
