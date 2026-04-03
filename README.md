@@ -8,6 +8,20 @@ Fortress is a FastAPI service that acts as a WhatsApp family assistant through W
 
 `WhatsApp -> WAHA -> Fortress API -> Postgres` (with Bedrock/Ollama connectivity checks in health).
 
+## Quick start (first run)
+
+From repo root:
+
+```bash
+cd fortress
+cp .env.example .env
+docker compose up -d
+bash scripts/apply_migrations.sh
+curl -s http://localhost:8000/health
+```
+
+> WAHA is **not** started by default by `docker compose up -d` because it is behind a profile. Start it explicitly with `docker compose --profile waha up -d` when you need WhatsApp connectivity.
+
 ## Canonical repo layout
 
 The repository root is mainly a wrapper; the app lives under `fortress/`.
@@ -94,7 +108,7 @@ docker compose build fortress
 # restart only app
 docker compose restart fortress
 
-# start WAHA when needed
+# start WAHA when needed (explicit; not part of default profile)
 docker compose --profile waha up -d waha
 
 # logs
@@ -138,6 +152,7 @@ bash scripts/deploy.sh status       # runtime status summary
 - API key auth is passed via `X-Api-Key` header.
 - WAHA dashboard defaults to `http://localhost:3000`.
 - Deploy skill supports parent/admin-only remote commands (status/deploy/restart) via deploy listener.
+- WAHA is behind the compose `waha` profile and stays down unless you explicitly run with `--profile waha`.
 
 Typical WAHA bring-up:
 
@@ -145,6 +160,17 @@ Typical WAHA bring-up:
 docker compose --profile waha up -d
 # then open http://localhost:3000 and scan QR for session: default
 ```
+
+## Document ingestion flow (high-level)
+
+Current operational path for incoming WhatsApp documents/media:
+
+1. WhatsApp message/file arrives in WAHA.
+2. WAHA forwards webhook event to `/webhook/whatsapp`.
+3. Router hands message to the skills/message handler flow.
+4. `DocumentSkill` handles media/document commands and stores raw file to configured storage path.
+5. Document pipeline (`process_document()` path) performs text extraction, classification, fact extraction, and summary generation.
+6. Metadata/results are persisted in Postgres and document list/query endpoints can return the stored item.
 
 ## Database and migration flow
 
@@ -168,12 +194,26 @@ curl -s http://localhost:8000/health
 bash scripts/deploy.sh status
 ```
 
-Also useful:
+## Common debugging flows
+
+When something breaks, run these first:
 
 ```bash
+# app logs
+docker compose logs -f fortress
+
+# WAHA logs
+docker compose logs -f waha
+
+# container status
 docker compose ps
-docker compose logs --tail=200 fortress
-docker compose logs --tail=200 waha
+
+# health endpoint
+curl -s http://localhost:8000/health
+
+# DB shell/checks
+docker compose exec -T db psql -U fortress -d fortress
+# inside psql: \dt
 ```
 
 ## Current major capabilities
@@ -228,4 +268,4 @@ curl -s http://localhost:8000/health
 bash scripts/deploy.sh status
 ```
 
-If commit/hash and container status disagree, restart app container and re-check health/status.
+If WhatsApp-triggered deploy/status behavior looks inconsistent, verify host commit, run `git pull origin main`, run `bash scripts/deploy.sh status` (or `deploy_all`) directly on the Mac Mini, then re-check `/health` and WAHA status.
