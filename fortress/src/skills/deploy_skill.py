@@ -93,7 +93,7 @@ class DeploySkill(BaseSkill):
                 config.DEPLOY_LISTENER_URL,
                 json={"token": config.DEPLOY_SECRET, "action": action, "sender": sender},
                 headers={"Content-Type": "application/json"},
-                timeout=30.0,
+                timeout=45.0,
             )
 
             if resp.status_code == 429:
@@ -105,10 +105,17 @@ class DeploySkill(BaseSkill):
                     message=TEMPLATES["deploy_failed"].format(details="אימות נכשל"),
                 )
 
-            body = resp.json()
+            body = self._safe_json(resp)
 
             if action == "status":
                 output = body.get("output", "אין מידע")
+                status_label = body.get("status")
+                errors = body.get("errors") or []
+                if isinstance(errors, list) and errors:
+                    error_text = "\n".join(f"• {err}" for err in errors)
+                    output = f"{output}\n\n⚠️ בדיקות חלקיות נכשלו:\n{error_text}"
+                if status_label == "partial":
+                    output = f"{output}\n\nℹ️ הסטטוס חלקי — בדוק לוגים אם צריך."
                 return Result(
                     success=True,
                     message=TEMPLATES["deploy_status"].format(status=output),
@@ -137,9 +144,33 @@ class DeploySkill(BaseSkill):
                 success=False,
                 message=TEMPLATES["deploy_failed"].format(details="לא ניתן להתחבר לשרת העדכון"),
             )
+        except httpx.TimeoutException:
+            logger.exception("Deploy listener timed out")
+            return Result(
+                success=False,
+                message=TEMPLATES["deploy_failed"].format(
+                    details="בדיקת הסטטוס לקחה יותר מדי זמן. נסה שוב בעוד כמה שניות"
+                ),
+            )
+        except httpx.HTTPError:
+            logger.exception("Deploy listener HTTP error")
+            return Result(
+                success=False,
+                message=TEMPLATES["deploy_failed"].format(details="שגיאת תקשורת מול שרת העדכון"),
+            )
         except Exception as e:
             logger.exception("Deploy request failed")
             return Result(
                 success=False,
                 message=TEMPLATES["deploy_failed"].format(details=str(e)),
             )
+
+    @staticmethod
+    def _safe_json(resp: httpx.Response) -> dict:
+        """Parse listener JSON safely without crashing status flow."""
+        try:
+            body = resp.json()
+            return body if isinstance(body, dict) else {"output": str(body)}
+        except ValueError:
+            text = (resp.text or "").strip()
+            return {"output": text or "אין מידע"}
