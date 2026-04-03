@@ -10,7 +10,13 @@ COMPOSE_FILE="${REPO_DIR}/fortress/docker-compose.yml"
 ENV_FILE="${REPO_DIR}/fortress/.env"
 
 # Ensure a valid working directory (launchd may start with a non-existent cwd)
-cd /private/tmp
+if [ -d /private/tmp ]; then
+    cd /private/tmp
+elif [ -d /tmp ]; then
+    cd /tmp
+else
+    cd "$REPO_DIR"
+fi
 
 ACTION="${1:-deploy_all}"
 
@@ -131,24 +137,65 @@ case "$ACTION" in
             fi
         }
 
+        docker_ready() {
+            run_quick docker info >/dev/null
+            if [ $? -ne 0 ]; then
+                ERRORS+=("docker: daemon לא זמין או שאין הרשאות")
+                return 1
+            fi
+            return 0
+        }
+
         container_status() {
             local cname="$1"
             local label="$2"
-            local status
-            status=$(run_quick docker inspect --format '{{.State.Status}}|{{.State.Health.Status}}|{{.State.RunningFor}}' "$cname")
-            if [ $? -ne 0 ] || [ -z "$status" ]; then
-                ERRORS+=("$label: לא ניתן לקבל סטטוס קונטיינר")
-                echo "⚪ לא ידוע"
+            local status_json
+            status_json=$(run_quick docker inspect --format '{{json .State}}' "$cname")
+            if [ $? -ne 0 ] || [ -z "$status_json" ]; then
+                local ps_status
+                ps_status=$(run_quick docker ps -a --filter "name=^/${cname}$" --format '{{.Status}}')
+                if [ $? -ne 0 ]; then
+                    ERRORS+=("$label: inspect/docker ps נכשלו")
+                    echo "⚪ לא ניתן לקבוע"
+                    return
+                fi
+                if [ -z "$ps_status" ]; then
+                    echo "🔴 לא קיים / לא נוצר"
+                    return
+                fi
+                if echo "$ps_status" | grep -qi '^up'; then
+                    echo "🟡 פעיל (ללא נתוני health)"
+                else
+                    echo "🔴 לא פעיל ($ps_status)"
+                fi
                 return
             fi
 
-            local state health uptime
-            IFS='|' read -r state health uptime <<< "$status"
-            uptime="${uptime:-ללא מידע}"
+            local parsed
+            parsed=$(echo "$status_json" | python3 -c "
+import json, sys
+state = json.loads(sys.stdin.read() or '{}')
+status = state.get('Status') or 'unknown'
+health = (state.get('Health') or {}).get('Status') or 'none'
+started = state.get('StartedAt') or ''
+print(f'{status}|{health}|{started}')
+" 2>/dev/null)
+            if [ $? -ne 0 ] || [ -z "$parsed" ]; then
+                ERRORS+=("$label: כשל בפענוח סטטוס inspect")
+                echo "⚪ לא ניתן לקבוע"
+                return
+            fi
+
+            local state health started_at
+            IFS='|' read -r state health started_at <<< "$parsed"
             if [ "$state" = "running" ] && [ "$health" = "healthy" ]; then
-                echo "🟢 פעיל ותקין ($uptime)"
+                echo "🟢 healthy / connected"
+            elif [ "$state" = "running" ] && [ "$health" = "none" ]; then
+                echo "🟢 connected (ללא healthcheck)"
+            elif [ "$state" = "running" ] && { [ "$health" = "starting" ] || [ "$health" = "unhealthy" ]; }; then
+                echo "🟡 degraded ($health)"
             elif [ "$state" = "running" ]; then
-                echo "🟡 פעיל ($uptime)"
+                echo "🟡 degraded (state=running health=$health)"
             else
                 echo "🔴 לא פעיל ($state)"
             fi
@@ -181,10 +228,17 @@ except Exception:
         }
 
         git_info
-        APP=$(container_status "fortress-app" "app")
-        DB=$(container_status "fortress-db" "db")
-        OLLAMA=$(container_status "fortress-ollama" "ollama")
-        WAHA=$(container_status "fortress-waha" "waha")
+        if docker_ready; then
+            APP=$(container_status "fortress-app" "app")
+            DB=$(container_status "fortress-db" "db")
+            OLLAMA=$(container_status "fortress-ollama" "ollama")
+            WAHA=$(container_status "fortress-waha" "waha")
+        else
+            APP="⚪ לא ניתן לקבוע (docker לא זמין)"
+            DB="⚪ לא ניתן לקבוע (docker לא זמין)"
+            OLLAMA="⚪ לא ניתן לקבוע (docker לא זמין)"
+            WAHA="⚪ לא ניתן לקבוע (docker לא זמין)"
+        fi
         HEALTH=$(health_status)
 
         echo "🏰 סטטוס פורטרס
