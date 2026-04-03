@@ -8,7 +8,17 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from src.models.schema import Document, DocumentFact, FamilyMember, ConversationState
-from src.services.document_query_service import QAResult, answer_document_question, search_documents, resolve_document_reference
+from src.services.document_query_service import (
+    QAResult,
+    answer_document_question,
+    get_recent_documents,
+    get_view_filters,
+    merge_tags,
+    normalize_tag,
+    normalize_tags,
+    resolve_document_reference,
+    search_documents,
+)
 
 
 def _make_doc(**kwargs) -> MagicMock:
@@ -183,6 +193,54 @@ def test_search_empty_results():
 
     results = search_documents(db, member_id, {"doc_type": "contract"})
     assert results == []
+
+
+def test_search_by_tag_and_review_state():
+    db = MagicMock()
+    member_id = uuid.uuid4()
+    docs = [_make_doc(doc_type="insurance")]
+
+    mock_query = MagicMock()
+    mock_query.filter.return_value = mock_query
+    mock_query.order_by.return_value = mock_query
+    mock_query.limit.return_value = mock_query
+    mock_query.all.return_value = docs
+    db.query.return_value = mock_query
+
+    results = search_documents(
+        db,
+        member_id,
+        {"tag": "#important", "review_state": "needs_review", "limit": 5},
+    )
+    assert results == docs
+
+
+def test_get_recent_documents_uses_limit():
+    db = MagicMock()
+    member_id = uuid.uuid4()
+    docs = [_make_doc() for _ in range(3)]
+    mock_query = MagicMock()
+    mock_query.filter.return_value = mock_query
+    mock_query.order_by.return_value = mock_query
+    mock_query.limit.return_value = mock_query
+    mock_query.all.return_value = docs
+    db.query.return_value = mock_query
+
+    results = get_recent_documents(db, member_id, limit=10)
+    assert results == docs
+    mock_query.limit.assert_called_once_with(10)
+
+
+def test_view_filters_mapping():
+    assert get_view_filters("active_contracts")["doc_type"] == "contract"
+    assert get_view_filters("needs_review")["review_state"] == "needs_review"
+    assert get_view_filters("unknown") == {}
+
+
+def test_tag_normalization_and_merge():
+    assert normalize_tag("#Tax-2025") == "tax-2025"
+    assert normalize_tags(["#Tax", "tax", "INSURANCE"]) == ["tax", "insurance"]
+    assert merge_tags(["tax", "home"], ["#Tax", "insurance"]) == ["tax", "home", "insurance"]
 
 
 # ---------------------------------------------------------------------------
