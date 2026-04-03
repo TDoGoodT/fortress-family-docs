@@ -56,7 +56,7 @@ def test_media_with_text_prioritizes_media():
         has_media=True, media_file_path="/data/file.pdf",
     )
     assert cmd is not None
-    assert cmd.skill == "media"
+    assert cmd.skill == "document"
     assert cmd.action == "save"
 
 

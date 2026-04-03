@@ -83,6 +83,12 @@ class DocumentSkill(BaseSkill):
             return denied
 
         file_path = params.get("file_path") or params.get("media_file_path") or ""
+        logger.info(
+            "DocumentSkill._save reached: member_id=%s file_path_present=%s param_keys=%s",
+            member.id,
+            bool(file_path),
+            sorted(list(params.keys())),
+        )
 
         if not file_path:
             logger.warning("DocumentSkill._save: no file_path in params=%s", list(params.keys()))
@@ -120,6 +126,12 @@ class DocumentSkill(BaseSkill):
             if not result_holder:
                 raise RuntimeError("process_document timed out after 120s")
             doc = result_holder[0]
+            logger.info(
+                "DocumentSkill._save success: member_id=%s doc_id=%s filename=%s",
+                member.id,
+                doc.id,
+                doc.original_filename,
+            )
 
             return Result(
                 success=True,

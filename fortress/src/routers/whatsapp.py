@@ -95,6 +95,26 @@ def _extract_sender_phone(payload: dict) -> str:
     return fallback
 
 
+def _extract_message_id_candidates(payload: dict) -> list[str]:
+    candidates = [
+        payload.get("id"),
+        _get_nested_value(payload, "_data", "id", "_serialized"),
+        _get_nested_value(payload, "_data", "id", "id"),
+        _get_nested_value(payload, "_data", "key", "id"),
+    ]
+    result: list[str] = []
+    seen: set[str] = set()
+    for raw in candidates:
+        if not isinstance(raw, str):
+            continue
+        item = raw.strip()
+        if not item or item in seen:
+            continue
+        seen.add(item)
+        result.append(item)
+    return result
+
+
 @router.post("/webhook/whatsapp")
 async def whatsapp_webhook(
     body: dict,
@@ -129,7 +149,8 @@ async def whatsapp_webhook(
             logger.warning("Rate limit exceeded for %s", phone)
             return {"status": "ignored", "reason": "rate_limited"}
 
-        message_id = payload.get("id", "")
+        message_id_candidates = _extract_message_id_candidates(payload)
+        message_id = message_id_candidates[0] if message_id_candidates else ""
         message_text = _extract_message_text(payload)
         has_media = payload.get("hasMedia", False)
 
@@ -140,18 +161,28 @@ async def whatsapp_webhook(
         logger.info("Incoming message from %s: %s", phone, message_text)
 
         media_file_path: Optional[str] = None
-        if has_media and message_id:
+        if has_media and message_id_candidates:
             logger.info(
-                "Media received: type=%s mimetype=%s filename=%s",
+                "Media received: ids=%s type=%s mimetype=%s filename=%s",
+                message_id_candidates,
                 payload.get("type", "unknown"),
                 payload.get("mimetype", "unknown"),
                 payload.get("filename", "unknown"),
             )
-            media_result = await download_media(message_id)
-            if media_result:
+            for candidate in message_id_candidates:
+                media_result = await download_media(candidate)
+                if not media_result:
+                    logger.warning("Media download attempt failed: message_id=%s", candidate)
+                    continue
                 file_bytes, mimetype = media_result
                 filename = payload.get("filename", "attachment")
                 media_file_path = save_media(file_bytes, filename, mimetype)
+                message_id = candidate
+                logger.info("Media download succeeded: message_id=%s path=%s", candidate, media_file_path)
+                break
+
+        if has_media and not media_file_path:
+            logger.error("Media message received but no file downloaded: message_ids=%s", message_id_candidates)
 
         response_text = await handle_incoming_message(
             db,

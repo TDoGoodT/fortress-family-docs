@@ -17,7 +17,7 @@ class TestMediaPriority:
     def test_media_returns_media_save(self, empty_registry):
         cmd = parse_command("כן", empty_registry, has_media=True)
         assert cmd is not None
-        assert cmd.skill == "media"
+        assert cmd.skill == "document"
         assert cmd.action == "save"
 
     def test_media_with_file_path(self, empty_registry):
@@ -26,7 +26,7 @@ class TestMediaPriority:
 
     def test_media_overrides_cancel_text(self, empty_registry):
         cmd = parse_command("בטל", empty_registry, has_media=True)
-        assert cmd.skill == "media"
+        assert cmd.skill == "document"
 
 
 class TestCancelPatterns:
