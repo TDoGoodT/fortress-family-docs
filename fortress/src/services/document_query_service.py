@@ -39,6 +39,66 @@ class QAResult:
     field_used: str | None
 
 
+def normalize_tag(tag: str) -> str:
+    """Normalize a user/system tag to storage format."""
+    if not tag:
+        return ""
+    cleaned = tag.strip().lower()
+    if cleaned.startswith("#"):
+        cleaned = cleaned[1:]
+    return cleaned
+
+
+def normalize_tags(tags: list[str] | None) -> list[str]:
+    """Normalize a list of tags to lowercase + deduplicated values."""
+    if not tags:
+        return []
+    normalized: list[str] = []
+    for tag in tags:
+        value = normalize_tag(str(tag))
+        if value and value not in normalized:
+            normalized.append(value)
+    return normalized
+
+
+def merge_tags(existing: list[str] | None, additions: list[str] | None) -> list[str]:
+    """Merge tags deterministically while keeping insertion order."""
+    merged: list[str] = []
+    for tag in normalize_tags(existing) + normalize_tags(additions):
+        if tag not in merged:
+            merged.append(tag)
+    return merged
+
+
+def get_recent_documents(
+    db: Session,
+    member_id: UUID,
+    limit: int = 5,
+) -> list[Document]:
+    """Return the most recent documents for a member."""
+    safe_limit = min(max(limit, 1), 20)
+    return (
+        db.query(Document)
+        .filter(Document.uploaded_by == member_id)
+        .order_by(Document.created_at.desc())
+        .limit(safe_limit)
+        .all()
+    )
+
+
+_PREDEFINED_VIEWS: dict[str, dict] = {
+    "active_contracts": {"doc_type": "contract"},
+    "insurance_documents": {"doc_type": "insurance"},
+    "recent_invoices": {"doc_type": "invoice", "recent": True, "limit": 10},
+    "needs_review": {"review_state": "needs_review"},
+}
+
+
+def get_view_filters(view_name: str) -> dict:
+    """Map lightweight saved-search style views to deterministic filters."""
+    return _PREDEFINED_VIEWS.get(view_name, {}).copy()
+
+
 def _format_field_value(field: str, value) -> str:
     """Format a DB field value for WhatsApp display."""
     if value is None:
@@ -140,6 +200,8 @@ def search_documents(
     - doc_type (str): exact match against physical doc_type column
     - vendor (str): case-insensitive partial match against physical vendor column
     - keyword (str): case-insensitive partial match against original_filename and raw_text
+    - review_state (str): exact match against review_state
+    - tag (str): filter by a single normalized tag in JSONB tags array
     - recent (bool): order by created_at descending
     - limit (int): max results (default 20)
     """
@@ -161,6 +223,14 @@ def search_documents(
                 Document.raw_text.ilike(f"%{keyword}%"),
             )
         )
+
+    review_state = filters.get("review_state")
+    if review_state:
+        query = query.filter(Document.review_state == review_state)
+
+    tag = normalize_tag(filters.get("tag", ""))
+    if tag:
+        query = query.filter(Document.tags.contains([tag]))
 
     query = query.order_by(Document.created_at.desc())
     limit = filters.get("limit", 20)

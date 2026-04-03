@@ -19,6 +19,7 @@ from src.services.document_classifier import (
 )
 from src.services.document_fact_extractor import extract_facts
 from src.services.document_summarizer import summarize_document
+from src.services.document_query_service import merge_tags, normalize_tag
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +34,39 @@ def _log_step(step: str, doc_id, filename: str, status: str, **extra) -> None:
     for k, v in extra.items():
         parts.append(f"{k}={v}")
     logger.info(" ".join(parts))
+
+
+def _extract_year_tag(doc_date, filename: str) -> str:
+    """Return a year tag from source date or filename, if present."""
+    if doc_date:
+        return str(doc_date.year)
+    for token in filename.replace(".", " ").replace("-", " ").split():
+        if token.isdigit() and len(token) == 4 and token.startswith(("19", "20")):
+            return token
+    return ""
+
+
+def _generate_auto_tags(doc: Document, facts: list[dict], filename: str) -> list[str]:
+    """Generate deterministic, explainable tags from structured pipeline signals."""
+    tags: list[str] = []
+
+    if doc.doc_type:
+        tags.append(doc.doc_type)
+    if doc.vendor:
+        tags.append(doc.vendor)
+    if doc.review_state:
+        tags.append(doc.review_state)
+
+    year_tag = _extract_year_tag(doc.doc_date, filename)
+    if year_tag:
+        tags.append(year_tag)
+
+    for fact in facts:
+        fact_type = normalize_tag(fact.get("fact_type", ""))
+        if fact_type in {"policy", "contract", "invoice", "payment"}:
+            tags.append(fact_type)
+
+    return merge_tags([], tags)
 
 
 async def process_document(
@@ -144,9 +178,10 @@ async def process_document(
 
     # ── Step 3: Fact extraction ───────────────────────────────────────────
     fact_count = 0
+    extracted_facts: list[dict] = []
     try:
-        facts = await extract_facts(raw_text, doc.doc_type, original_filename)
-        for fact_data in facts:
+        extracted_facts = await extract_facts(raw_text, doc.doc_type, original_filename)
+        for fact_data in extracted_facts:
             fact = DocumentFact(
                 document_id=doc.id,
                 fact_type=fact_data["fact_type"],
@@ -156,7 +191,7 @@ async def process_document(
                 source_excerpt=fact_data.get("source_excerpt", ""),
             )
             db.add(fact)
-        fact_count = len(facts)
+        fact_count = len(extracted_facts)
         _log_step("fact_extraction", doc_id, original_filename, "success",
                   facts_count=fact_count)
         steps_ok.append("fact_extraction")
@@ -210,6 +245,17 @@ async def process_document(
                   error=f"{type(exc).__name__}: {exc}")
         doc.review_state = "needs_review"
         steps_failed.append("review_state")
+
+    # ── Step 5.5: deterministic auto-tagging ────────────────────────────
+    try:
+        auto_tags = _generate_auto_tags(doc, extracted_facts, original_filename)
+        doc.tags = merge_tags(doc.tags or [], auto_tags)
+        _log_step("tagging", doc_id, original_filename, "success", tags_count=len(doc.tags or []))
+        steps_ok.append("tagging")
+    except Exception as exc:
+        _log_step("tagging", doc_id, original_filename, "failed",
+                  error=f"{type(exc).__name__}: {exc}")
+        steps_failed.append("tagging")
 
     # ── Step 6: Final persist + summary log ──────────────────────────────
     db.commit()

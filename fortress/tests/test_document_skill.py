@@ -145,6 +145,77 @@ def test_recent_empty_returns_empty_message():
     assert "אין" in result.message
 
 
+def test_recent_feed_returns_latest_five():
+    docs = [_make_doc(original_filename=f"doc-{i}.pdf") for i in range(5)]
+    with patch("src.skills.document_skill.check_perm", return_value=None), \
+         patch("src.skills.document_skill.get_recent_documents", return_value=docs):
+        cmd = Command(skill="document", action="recent_feed", params={})
+        result = skill.execute(MagicMock(), _make_member(), cmd)
+
+    assert result.success
+    assert "מסמכים אחרונים" in result.message
+    assert "doc-0.pdf" in result.message
+
+
+def test_tag_add_on_resolved_document():
+    doc = _make_doc()
+    doc.tags = ["insurance"]
+    db = MagicMock()
+    with patch("src.skills.document_skill.check_perm", return_value=None), \
+         patch("src.skills.document_skill.resolve_document_reference", return_value=doc), \
+         patch("src.skills.document_skill.update_state"):
+        cmd = Command(skill="document", action="tag_add", params={"tag": "Tax-2025"})
+        result = skill.execute(db, _make_member(), cmd)
+
+    assert result.success
+    assert "tax-2025" in doc.tags
+    db.commit.assert_called_once()
+
+
+def test_tag_remove_on_resolved_document():
+    doc = _make_doc()
+    doc.tags = ["insurance", "important"]
+    db = MagicMock()
+    with patch("src.skills.document_skill.check_perm", return_value=None), \
+         patch("src.skills.document_skill.resolve_document_reference", return_value=doc):
+        cmd = Command(skill="document", action="tag_remove", params={"tag": "important"})
+        result = skill.execute(db, _make_member(), cmd)
+
+    assert result.success
+    assert "important" not in doc.tags
+
+
+def test_tag_show():
+    doc = _make_doc()
+    doc.tags = ["insurance", "tax-2025"]
+    with patch("src.skills.document_skill.check_perm", return_value=None), \
+         patch("src.skills.document_skill.resolve_document_reference", return_value=doc):
+        cmd = Command(skill="document", action="tag_show", params={})
+        result = skill.execute(MagicMock(), _make_member(), cmd)
+    assert result.success
+    assert "#insurance" in result.message
+
+
+def test_tag_search_uses_search_documents():
+    doc = _make_doc()
+    with patch("src.skills.document_skill.check_perm", return_value=None), \
+         patch("src.skills.document_skill.search_documents", return_value=[doc]) as mock_search:
+        cmd = Command(skill="document", action="tag_search", params={"tag": "rent"})
+        result = skill.execute(MagicMock(), _make_member(), cmd)
+    assert result.success
+    mock_search.assert_called_once()
+
+
+def test_predefined_view_needs_review():
+    doc = _make_doc()
+    with patch("src.skills.document_skill.check_perm", return_value=None), \
+         patch("src.skills.document_skill.search_documents", return_value=[doc]) as mock_search:
+        cmd = Command(skill="document", action="view_needs_review", params={})
+        result = skill.execute(MagicMock(), _make_member(), cmd)
+    assert result.success
+    assert mock_search.call_args[0][2]["review_state"] == "needs_review"
+
+
 # ---------------------------------------------------------------------------
 # _query: resolves from conversation_state
 # ---------------------------------------------------------------------------
