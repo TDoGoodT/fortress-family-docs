@@ -147,6 +147,41 @@ class TestListenerForwarding:
             assert result.success is True
             assert "all running" in result.message
 
+    def test_status_handles_non_json_response(self, skill, mock_db):
+        with patch("src.skills.deploy_skill.config") as cfg, \
+             patch("src.skills.deploy_skill.httpx") as mock_httpx:
+            cfg.DEPLOY_SECRET = "secret"
+            cfg.DEPLOY_LISTENER_URL = "http://localhost:9111"
+            mock_resp = MagicMock()
+            mock_resp.status_code = 200
+            mock_resp.json.side_effect = ValueError("not json")
+            mock_resp.text = "plain status line"
+            mock_httpx.post.return_value = mock_resp
+
+            result = skill.execute(mock_db, _member("parent"), Command(skill="deploy", action="status"))
+            assert result.success is True
+            assert "plain status line" in result.message
+
+    def test_status_partial_has_warning_lines(self, skill, mock_db):
+        with patch("src.skills.deploy_skill.config") as cfg, \
+             patch("src.skills.deploy_skill.httpx") as mock_httpx:
+            cfg.DEPLOY_SECRET = "secret"
+            cfg.DEPLOY_LISTENER_URL = "http://localhost:9111"
+            mock_resp = MagicMock()
+            mock_resp.status_code = 200
+            mock_resp.json.return_value = {
+                "status": "partial",
+                "output": "base status",
+                "errors": ["db timeout", "waha missing"],
+            }
+            mock_httpx.post.return_value = mock_resp
+
+            result = skill.execute(mock_db, _member("parent"), Command(skill="deploy", action="status"))
+            assert result.success is True
+            assert "base status" in result.message
+            assert "בדיקות חלקיות נכשלו" in result.message
+            assert "db timeout" in result.message
+
 
 class TestErrorHandling:
     def test_429_rate_limited(self, skill, mock_db):
@@ -173,6 +208,20 @@ class TestErrorHandling:
             result = skill.execute(mock_db, _member("parent"), Command(skill="deploy", action="deploy_all"))
             assert result.success is False
             assert "נכשל" in result.message
+
+    def test_timeout_error(self, skill, mock_db):
+        with patch("src.skills.deploy_skill.config") as cfg, \
+             patch("src.skills.deploy_skill.httpx") as mock_httpx:
+            cfg.DEPLOY_SECRET = "secret"
+            cfg.DEPLOY_LISTENER_URL = "http://localhost:9111"
+            mock_httpx.post.side_effect = httpx.ReadTimeout("timed out")
+            mock_httpx.ConnectError = httpx.ConnectError
+            mock_httpx.TimeoutException = httpx.TimeoutException
+            mock_httpx.HTTPError = httpx.HTTPError
+
+            result = skill.execute(mock_db, _member("parent"), Command(skill="deploy", action="status"))
+            assert result.success is False
+            assert "לקחה יותר מדי זמן" in result.message
 
 
 class TestTemplatesExist:

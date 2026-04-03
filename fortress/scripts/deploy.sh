@@ -109,78 +109,89 @@ case "$ACTION" in
 
     status)
         # Disable strict mode for status — subcommands may fail gracefully
-        set +eo pipefail
+        set +e
+        set +o pipefail
 
-        DC="docker compose --env-file $ENV_FILE -f $COMPOSE_FILE"
-        COMMIT=$(git -C "$REPO_DIR" rev-parse --short HEAD 2>/dev/null || echo 'unknown')
+        ERRORS=()
 
-        APP=$($DC ps --format json fortress 2>/dev/null | python3 -c "
-import sys, json
-try:
-    data = json.load(sys.stdin)
-    state = data.get('State', 'unknown')
-    uptime = data.get('Status', '')
-    if state == 'running':
-        print(f'🟢 פעיל ({uptime})')
-    else:
-        print(f'🔴 לא פעיל ({state})')
-except: print('⚪ לא ידוע')
-" 2>/dev/null || echo '⚪ לא ידוע')
+        run_quick() {
+            "$@" 2>/dev/null
+            return $?
+        }
 
-        DB=$($DC ps --format json db 2>/dev/null | python3 -c "
-import sys, json
-try:
-    data = json.load(sys.stdin)
-    state = data.get('State', 'unknown')
-    uptime = data.get('Status', '')
-    if 'healthy' in uptime.lower():
-        print(f'🟢 תקין ({uptime})')
-    elif state == 'running':
-        print(f'🟡 פעיל ({uptime})')
-    else:
-        print(f'🔴 לא פעיל ({state})')
-except: print('⚪ לא ידוע')
-" 2>/dev/null || echo '⚪ לא ידוע')
+        git_info() {
+            COMMIT=$(git -C "$REPO_DIR" rev-parse --short HEAD 2>/dev/null || echo 'unknown')
+            BRANCH=$(git -C "$REPO_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo 'unknown')
+            SUBJECT=$(git -C "$REPO_DIR" log -1 --pretty=%s 2>/dev/null || echo 'unknown')
+            if ! git -C "$REPO_DIR" diff --quiet --ignore-submodules -- 2>/dev/null || \
+               ! git -C "$REPO_DIR" diff --cached --quiet --ignore-submodules -- 2>/dev/null; then
+                TREE_STATE="dirty"
+            else
+                TREE_STATE="clean"
+            fi
+        }
 
-        OLLAMA=$($DC ps --format json ollama 2>/dev/null | python3 -c "
-import sys, json
-try:
-    data = json.load(sys.stdin)
-    state = data.get('State', 'unknown')
-    uptime = data.get('Status', '')
-    if state == 'running':
-        print(f'🟢 פעיל ({uptime})')
-    else:
-        print(f'🔴 לא פעיל ({state})')
-except: print('⚪ לא ידוע')
-" 2>/dev/null || echo '⚪ לא ידוע')
+        container_status() {
+            local cname="$1"
+            local label="$2"
+            local status
+            status=$(run_quick docker inspect --format '{{.State.Status}}|{{.State.Health.Status}}|{{.State.RunningFor}}' "$cname")
+            if [ $? -ne 0 ] || [ -z "$status" ]; then
+                ERRORS+=("$label: לא ניתן לקבל סטטוס קונטיינר")
+                echo "⚪ לא ידוע"
+                return
+            fi
 
-        WAHA=$($DC ps --format json waha 2>/dev/null | python3 -c "
-import sys, json
-try:
-    data = json.load(sys.stdin)
-    state = data.get('State', 'unknown')
-    uptime = data.get('Status', '')
-    if state == 'running':
-        print(f'🟢 פעיל ({uptime})')
-    else:
-        print(f'🔴 לא פעיל ({state})')
-except: print('⚪ לא ידוע')
-" 2>/dev/null || echo '⚪ לא ידוע')
+            local state health uptime
+            IFS='|' read -r state health uptime <<< "$status"
+            uptime="${uptime:-ללא מידע}"
+            if [ "$state" = "running" ] && [ "$health" = "healthy" ]; then
+                echo "🟢 פעיל ותקין ($uptime)"
+            elif [ "$state" = "running" ]; then
+                echo "🟡 פעיל ($uptime)"
+            else
+                echo "🔴 לא פעיל ($state)"
+            fi
+        }
 
-        HEALTH=$(curl -s http://localhost:8000/health 2>/dev/null | python3 -c "
+        health_status() {
+            local health_json
+            health_json=$(run_quick curl -s --max-time 8 http://localhost:8000/health)
+            if [ $? -ne 0 ] || [ -z "$health_json" ]; then
+                ERRORS+=("health: לא ניתן להגיע ל-/health")
+                echo "לא זמין"
+                return
+            fi
+
+            echo "$health_json" | python3 -c "
 import sys, json
 try:
     data = json.load(sys.stdin)
     db = '🟢' if data.get('database') == 'connected' else '🔴'
     bedrock = '🟢' if data.get('bedrock') == 'connected' else '🔴'
     ollama_s = '🟢' if data.get('ollama') == 'connected' else '🔴'
-    print(f'DB: {db} | Bedrock: {bedrock} | Ollama: {ollama_s}')
-except: print('לא זמין')
-" 2>/dev/null || echo 'לא זמין')
+    version = data.get('version', 'unknown')
+    print(f'DB: {db} | Bedrock: {bedrock} | Ollama: {ollama_s} | App Version: {version}')
+except Exception:
+    print('לא זמין')
+" 2>/dev/null
+            if [ ${PIPESTATUS[1]} -ne 0 ]; then
+                ERRORS+=("health: תגובת health לא בפורמט צפוי")
+            fi
+        }
+
+        git_info
+        APP=$(container_status "fortress-app" "app")
+        DB=$(container_status "fortress-db" "db")
+        OLLAMA=$(container_status "fortress-ollama" "ollama")
+        WAHA=$(container_status "fortress-waha" "waha")
+        HEALTH=$(health_status)
 
         echo "🏰 סטטוס פורטרס
-📌 גרסה: $COMMIT
+📌 גרסה רצה: $COMMIT
+🌿 branch: $BRANCH
+📝 commit: $SUBJECT
+🧹 working tree: $TREE_STATE
 
 📦 שירותים:
   אפליקציה: $APP
@@ -192,6 +203,12 @@ except: print('לא זמין')
   $HEALTH
 
 📊 דשבורד: http://localhost:8000/dashboard"
+        if [ "${#ERRORS[@]}" -gt 0 ]; then
+            printf "\n⚠️ בדיקות חלקיות נכשלו:\n"
+            for err in "${ERRORS[@]}"; do
+                printf "• %s\n" "$err"
+            done
+        fi
         ;;
 
     *)
