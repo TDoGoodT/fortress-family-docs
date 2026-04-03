@@ -1,7 +1,7 @@
 # 🏰 Fortress 2.0
 
 **Family assistant bot over WhatsApp** — task management, document storage, recurring reminders, memory, bug tracking, and morning briefings. Built for a Hebrew-speaking family, powered by AWS Bedrock LLMs.
-
+Test for 123
 ## Architecture
 
 ```
