@@ -8,7 +8,7 @@ from datetime import datetime
 
 import httpx
 
-from src.config import STORAGE_PATH, WAHA_API_URL
+from src.config import STORAGE_PATH, WAHA_API_URL, WAHA_API_KEY
 
 logger = logging.getLogger(__name__)
 
@@ -22,9 +22,12 @@ async def download_media(
     Returns (file_bytes, mimetype) or None on failure.
     """
     try:
+        headers: dict[str, str] = {}
+        if WAHA_API_KEY:
+            headers["X-Api-Key"] = WAHA_API_KEY
         async with httpx.AsyncClient(timeout=30.0) as client:
             url = f"{WAHA_API_URL}/api/{session}/messages/{message_id}/download"
-            response = await client.get(url)
+            response = await client.get(url, headers=headers)
             if response.status_code != 200:
                 logger.error("Media download failed: %s %s", response.status_code, response.text)
                 return None
