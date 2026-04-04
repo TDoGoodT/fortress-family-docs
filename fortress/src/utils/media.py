@@ -25,12 +25,16 @@ async def download_media_url(
     Returns (file_bytes, mimetype) or None on failure.
     """
     try:
-        from urllib.parse import urlparse
-        parsed = urlparse(url)
-        # Extract just the path (and query if any)
-        path = parsed.path
-        if parsed.query:
-            path = f"{path}?{parsed.query}"
+        # WAHA builds media URLs using WHATSAPP_API_HOSTNAME which can
+        # produce malformed URLs like http://http://host:8000:3000/api/files/...
+        # We extract the /api/... path and prepend WAHA_API_URL.
+        api_idx = url.find("/api/")
+        if api_idx != -1:
+            path = url[api_idx:]
+        else:
+            # Last resort: take everything after the third slash
+            from urllib.parse import urlparse
+            path = urlparse(url).path or "/"
         resolved_url = f"{WAHA_API_URL.rstrip('/')}{path}"
         logger.info("Media URL resolved: %s -> %s", url, resolved_url)
 
