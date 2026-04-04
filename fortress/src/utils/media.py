@@ -13,6 +13,39 @@ from src.config import STORAGE_PATH, WAHA_API_URL, WAHA_API_KEY
 logger = logging.getLogger(__name__)
 
 
+async def download_media_url(
+    url: str,
+) -> tuple[bytes, str] | None:
+    """Download media directly from a WAHA media URL.
+
+    WAHA may provide URLs with localhost that need rewriting to the
+    Docker service hostname.  We replace the host portion with
+    WAHA_API_URL so the request resolves inside the container network.
+
+    Returns (file_bytes, mimetype) or None on failure.
+    """
+    try:
+        # Rewrite localhost URLs to use the configured WAHA_API_URL
+        # e.g. http://localhost:3000/api/files/xxx -> http://waha:3000/api/files/xxx
+        import re
+        resolved_url = re.sub(r"^https?://[^/]+", WAHA_API_URL.rstrip("/"), url)
+        logger.info("Media URL resolved: %s -> %s", url, resolved_url)
+
+        headers: dict[str, str] = {}
+        if WAHA_API_KEY:
+            headers["X-Api-Key"] = WAHA_API_KEY
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(resolved_url, headers=headers)
+            if response.status_code != 200:
+                logger.error("Media URL download failed: %s %s", response.status_code, response.text)
+                return None
+            mimetype = response.headers.get("content-type", "application/octet-stream")
+            return response.content, mimetype
+    except Exception:
+        logger.exception("Error downloading media from URL %s", url)
+        return None
+
+
 async def download_media(
     message_id: str,
     session: str = "default",

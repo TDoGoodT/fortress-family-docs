@@ -10,7 +10,7 @@ from src.config import WAHA_API_KEY
 from src.database import get_db
 from src.services.message_handler import handle_incoming_message
 from src.services.whatsapp_client import send_text_message
-from src.utils.media import download_media, save_media
+from src.utils.media import download_media, download_media_url, save_media
 from src.utils.phone import is_valid_israeli_phone, normalize_phone
 from src.utils.rate_limit import is_rate_limited
 
@@ -162,24 +162,41 @@ async def whatsapp_webhook(
 
         media_file_path: Optional[str] = None
         if has_media and message_id_candidates:
+            media_obj = payload.get("media") or {}
+            media_url = media_obj.get("url") if isinstance(media_obj, dict) else None
             logger.info(
-                "Media received: ids=%s type=%s mimetype=%s filename=%s",
+                "Media received: ids=%s type=%s mimetype=%s filename=%s media_url=%s",
                 message_id_candidates,
                 payload.get("type", "unknown"),
                 payload.get("mimetype", "unknown"),
                 payload.get("filename", "unknown"),
+                media_url,
             )
-            for candidate in message_id_candidates:
-                media_result = await download_media(candidate)
-                if not media_result:
-                    logger.warning("Media download attempt failed: message_id=%s", candidate)
-                    continue
-                file_bytes, mimetype = media_result
-                filename = payload.get("filename", "attachment")
-                media_file_path = save_media(file_bytes, filename, mimetype)
-                message_id = candidate
-                logger.info("Media download succeeded: message_id=%s path=%s", candidate, media_file_path)
-                break
+            # Prefer the direct media URL provided by WAHA in the webhook payload
+            if media_url:
+                media_result = await download_media_url(media_url)
+                if media_result:
+                    file_bytes, mimetype = media_result
+                    filename = (
+                        media_obj.get("filename")
+                        or payload.get("filename")
+                        or "attachment"
+                    )
+                    media_file_path = save_media(file_bytes, filename, mimetype)
+                    logger.info("Media download via URL succeeded: path=%s", media_file_path)
+            # Fallback: try downloading by message ID
+            if not media_file_path:
+                for candidate in message_id_candidates:
+                    media_result = await download_media(candidate)
+                    if not media_result:
+                        logger.warning("Media download attempt failed: message_id=%s", candidate)
+                        continue
+                    file_bytes, mimetype = media_result
+                    filename = payload.get("filename", "attachment")
+                    media_file_path = save_media(file_bytes, filename, mimetype)
+                    message_id = candidate
+                    logger.info("Media download succeeded: message_id=%s path=%s", candidate, media_file_path)
+                    break
 
         if has_media and not media_file_path:
             logger.error("Media message received but no file downloaded: message_ids=%s", message_id_candidates)
