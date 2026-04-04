@@ -264,7 +264,9 @@ class DocumentSkill(BaseSkill):
             for i, doc in enumerate(result[:5], 1):
                 emoji = _DOC_TYPE_EMOJI.get(doc.doc_type or "other", "📎")
                 date_text = str(doc.created_at)[:10] if doc.created_at else ""
-                options.append(f"{i}. {emoji} {doc.original_filename} ({doc.doc_type}) — {date_text}")
+                dn = getattr(doc, "display_name", None)
+                title = dn if isinstance(dn, str) and dn else doc.original_filename
+                options.append(f"{i}. {emoji} {title} ({doc.doc_type}) — {date_text}")
             clarify_msg = TEMPLATES["document_clarify"].format(options="\n".join(options))
             return Result(success=True, message=clarify_msg)
 
@@ -280,7 +282,9 @@ class DocumentSkill(BaseSkill):
     def _format_recent_feed(self, docs: list[Document]) -> str:
         lines = ["🗂️ מסמכים אחרונים:"]
         for i, doc in enumerate(docs, 1):
-            filename = doc.original_filename or "ללא שם"
+            dn = getattr(doc, "display_name", None)
+            display_name = dn if isinstance(dn, str) and dn else None
+            filename = display_name if display_name else (doc.original_filename or "ללא שם")
             doc_type = doc.doc_type or "other"
             doc_date = str(doc.doc_date) if doc.doc_date else ""
             tags = ", ".join(f"#{t}" for t in (doc.tags or [])[:3])
@@ -421,7 +425,9 @@ class DocumentSkill(BaseSkill):
                 from src.prompts.personality import _DOC_TYPE_EMOJI
                 emoji = _DOC_TYPE_EMOJI.get(doc.doc_type or "other", "📎")
                 date_text = str(doc.created_at)[:10] if doc.created_at else ""
-                options.append(f"{i}. {emoji} {doc.original_filename} ({doc.doc_type}) — {date_text}")
+                dn = getattr(doc, "display_name", None)
+                title = dn if isinstance(dn, str) and dn else doc.original_filename
+                options.append(f"{i}. {emoji} {title} ({doc.doc_type}) — {date_text}")
             clarify_msg = TEMPLATES["document_clarify"].format(options="\n".join(options))
             return Result(success=True, message=clarify_msg)
 

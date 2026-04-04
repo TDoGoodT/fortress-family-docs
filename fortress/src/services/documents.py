@@ -19,6 +19,7 @@ from src.services.document_classifier import (
 )
 from src.services.document_fact_extractor import extract_facts
 from src.services.document_summarizer import summarize_document
+from src.services.document_namer import generate_display_name
 from src.services.document_query_service import merge_tags, normalize_tag
 
 logger = logging.getLogger(__name__)
@@ -211,6 +212,43 @@ async def process_document(
         _log_step("summary", doc_id, original_filename, "failed",
                   error=f"{type(exc).__name__}: {exc}")
         steps_failed.append("summary")
+
+    # ── Step 5.25: Display name generation ──────────────────────────────
+    try:
+        # Read vendor/doc_date from Document columns first
+        dn_vendor = doc.vendor
+        dn_doc_date = doc.doc_date
+
+        # Fall back to document_facts for counterparty and source_date
+        if not dn_vendor or not dn_doc_date:
+            for fact_data in extracted_facts:
+                fk = fact_data.get("fact_key", "")
+                fv = fact_data.get("fact_value", "")
+                if not dn_vendor and fk == "counterparty" and fv:
+                    dn_vendor = fv
+                if not dn_doc_date and fk == "source_date" and fv:
+                    from datetime import date as _date_type
+                    try:
+                        dn_doc_date = _date_type.fromisoformat(fv)
+                    except (ValueError, TypeError):
+                        pass
+
+        display_name = generate_display_name(
+            doc_type=doc.doc_type,
+            vendor=dn_vendor,
+            doc_date=dn_doc_date,
+            ai_summary=doc.ai_summary,
+        )
+        if display_name:
+            doc.display_name = display_name
+        _log_step("display_name", doc_id, original_filename,
+                  "success" if display_name else "skipped",
+                  display_name=display_name or "")
+        steps_ok.append("display_name")
+    except Exception as exc:
+        _log_step("display_name", doc_id, original_filename, "failed",
+                  error=f"{type(exc).__name__}: {exc}")
+        steps_failed.append("display_name")
 
     # ── Step 5: Review state assignment ──────────────────────────────────
     try:

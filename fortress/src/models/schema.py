@@ -100,6 +100,7 @@ class Document(Base):
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     ai_summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     raw_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    display_name: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     source: Mapped[str] = mapped_column(Text, nullable=False)
     doc_metadata: Mapped[Optional[dict]] = mapped_column(
         "metadata", JSONB, server_default=text("'{}'")

@@ -221,6 +221,7 @@ def search_documents(
         query = query.filter(
             or_(
                 Document.original_filename.ilike(f"%{keyword}%"),
+                Document.display_name.ilike(f"%{keyword}%"),
                 Document.raw_text.ilike(f"%{keyword}%"),
             )
         )
@@ -258,7 +259,10 @@ def search_by_name(
         db.query(Document)
         .filter(
             Document.uploaded_by == member_id,
-            Document.original_filename.ilike(pattern),
+            or_(
+                Document.original_filename.ilike(pattern),
+                Document.display_name.ilike(pattern),
+            ),
         )
         .order_by(Document.created_at.desc())
         .limit(10)

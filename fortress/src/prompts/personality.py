@@ -235,10 +235,13 @@ def format_document_list(documents: list) -> str:
     for i, doc in enumerate(documents, 1):
         doc_type = getattr(doc, "doc_type", None) or (doc.get("doc_type") if isinstance(doc, dict) else None) or "other"
         emoji = _DOC_TYPE_EMOJI.get(doc_type, "📎")
+        display_name = getattr(doc, "display_name", None) or (doc.get("display_name") if isinstance(doc, dict) else None)
+        display_name = display_name if isinstance(display_name, str) and display_name else None
         filename = getattr(doc, "original_filename", None) or (doc.get("original_filename") if isinstance(doc, dict) else None) or "ללא שם"
+        title = display_name if display_name else filename
         created_at = getattr(doc, "created_at", None) or (doc.get("created_at") if isinstance(doc, dict) else None)
         date_text = str(created_at)[:10] if created_at else ""
-        lines.append(f"{emoji} {i}. {filename}\n   📅 {date_text}")
+        lines.append(f"{emoji} {i}. {title}\n   📅 {date_text}")
 
     return "\n".join(lines)
 
@@ -300,9 +303,12 @@ def format_search_results(documents: list) -> str:
     for i, doc in enumerate(documents, 1):
         doc_type = getattr(doc, "doc_type", None) or "other"
         emoji = _DOC_TYPE_EMOJI.get(doc_type, "📎")
+        display_name = getattr(doc, "display_name", None)
+        display_name = display_name if isinstance(display_name, str) and display_name else None
         filename = getattr(doc, "original_filename", None) or "ללא שם"
+        title = display_name if display_name else filename
         created_at = getattr(doc, "created_at", None)
         date_text = str(created_at)[:10] if created_at else ""
-        lines.append(f"{emoji} {i}. {filename}\n   📅 {date_text} | {doc_type}")
+        lines.append(f"{emoji} {i}. {title}\n   📅 {date_text} | {doc_type}")
 
     return "\n".join(lines)
