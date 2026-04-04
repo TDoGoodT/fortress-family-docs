@@ -46,6 +46,7 @@ class DocumentSkill(BaseSkill):
         return [
             # Existing: list all documents
             (re.compile(r'^(מסמכים|documents)$', re.IGNORECASE), 'list'),
+            (re.compile(r'^(נקה מסמכים|מחק מסמכים|מחק את כל המסמכים)$', re.IGNORECASE), 'delete_documents'),
             # Natural Hebrew document-listing variants → list
             (re.compile(r'איזה מסמכים', re.IGNORECASE), 'list'),
             (re.compile(r'אילו מסמכים', re.IGNORECASE), 'list'),
@@ -100,6 +101,7 @@ class DocumentSkill(BaseSkill):
             "view_needs_review": self._view_needs_review,
             "query": self._query,
             "doc_search_fallback": self._doc_search_fallback,
+            "delete_documents": self._delete_documents,
         }
         handler = dispatch.get(command.action)
         if handler is None:
@@ -259,21 +261,13 @@ class DocumentSkill(BaseSkill):
             return Result(success=True, message="לא נמצא מסמך בשם זה 📂")
 
         if isinstance(result, list):
-            from src.prompts.personality import _DOC_TYPE_EMOJI
-            options = []
-            for i, doc in enumerate(result[:5], 1):
-                emoji = _DOC_TYPE_EMOJI.get(doc.doc_type or "other", "📎")
-                date_text = str(doc.created_at)[:10] if doc.created_at else ""
-                dn = getattr(doc, "display_name", None)
-                title = dn if isinstance(dn, str) and dn else doc.original_filename
-                options.append(f"{i}. {emoji} {title} ({doc.doc_type}) — {date_text}")
-            clarify_msg = TEMPLATES["document_clarify"].format(options="\n".join(options))
-            return Result(success=True, message=clarify_msg)
+            logger.info("disambiguation_triggered context=fetch count=%d", len(result))
+            return Result(success=True, message=self._build_disambiguation_message(result))
 
         doc = result
         return Result(
             success=True,
-            message=format_document_list([doc]),
+            message="מצאתי את המסמך, אבל עדיין לא ניתן לפתוח אותו ישירות. רוצה סיכום או פרטים ממנו?",
             entity_type="document",
             entity_id=doc.id,
             action="viewed",
@@ -414,22 +408,15 @@ class DocumentSkill(BaseSkill):
 
         # Resolve which document the user is asking about
         resolved = resolve_document_reference(db, member, question)
+        logger.info("document_match_count count=%d", len(resolved) if isinstance(resolved, list) else (1 if resolved else 0))
 
         if resolved is None:
             return Result(success=True, message=TEMPLATES["document_list_empty"])
 
         # Multiple candidates — ask for clarification
         if isinstance(resolved, list):
-            options = []
-            for i, doc in enumerate(resolved[:5], 1):
-                from src.prompts.personality import _DOC_TYPE_EMOJI
-                emoji = _DOC_TYPE_EMOJI.get(doc.doc_type or "other", "📎")
-                date_text = str(doc.created_at)[:10] if doc.created_at else ""
-                dn = getattr(doc, "display_name", None)
-                title = dn if isinstance(dn, str) and dn else doc.original_filename
-                options.append(f"{i}. {emoji} {title} ({doc.doc_type}) — {date_text}")
-            clarify_msg = TEMPLATES["document_clarify"].format(options="\n".join(options))
-            return Result(success=True, message=clarify_msg)
+            logger.info("disambiguation_triggered context=query count=%d", len(resolved))
+            return Result(success=True, message=self._build_disambiguation_message(resolved))
 
         doc = resolved
 
@@ -546,8 +533,30 @@ class DocumentSkill(BaseSkill):
                 action="queried",
             )
 
+        # Multiple results + question → disambiguation
+        if len(results) > 1 and is_question:
+            logger.info("disambiguation_triggered context=doc_search_fallback count=%d", len(results))
+            return Result(success=True, message=self._build_disambiguation_message(results))
+
         # Multiple results or non-question → return search results
         return Result(success=True, message=format_search_results(results))
+
+    def _build_disambiguation_message(self, docs: list[Document]) -> str:
+        from src.prompts.personality import _DOC_TYPE_EMOJI
+
+        options = []
+        for i, doc in enumerate(docs[:5], 1):
+            emoji = _DOC_TYPE_EMOJI.get(doc.doc_type or "other", "📎")
+            dn = getattr(doc, "display_name", None)
+            title = dn if isinstance(dn, str) and dn else (doc.original_filename or "מסמך לא מזוהה")
+            options.append(f"{i}. {emoji} {title}")
+        return "מצאתי כמה מסמכים דומים:\n" + "\n".join(options) + "\n\nעל איזה מהם מדובר?"
+
+    def _delete_documents(self, db: Session, member: FamilyMember, params: dict) -> Result:
+        denied = check_perm(db, member, "documents", "write")
+        if denied:
+            return denied
+        return Result(success=True, message="זיהיתי בקשה למחיקת מסמכים. הפעולה הזו עדיין לא זמינה במערכת.")
 
     # ------------------------------------------------------------------
     # Verification

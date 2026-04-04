@@ -134,8 +134,22 @@ async def test_router_receives_correct_text(mock_auth, mock_parse, mock_exec, mo
 @patch("src.services.message_handler._save_conversation")
 @patch("src.services.message_handler.parse_command", return_value=None)
 @patch("src.services.message_handler.get_family_member_by_phone")
-async def test_llm_fallback_when_no_match(mock_auth, mock_parse, mock_conv, mock_db) -> None:
-    """Unmatched messages should route to ChatSkill LLM (Bedrock)."""
+async def test_strict_unknown_when_no_match(mock_auth, mock_parse, mock_conv, mock_db) -> None:
+    """Unmatched system-like messages should return strict unknown response."""
+    member = _make_member()
+    mock_auth.return_value = member
+
+    result = await handle_incoming_message(mock_db, "972501234567", "מה המצב?", "msg1")
+
+    assert result == PERSONALITY_TEMPLATES["cant_understand"]
+    mock_conv.assert_called_once()
+
+
+@pytest.mark.asyncio
+@patch("src.services.message_handler._save_conversation")
+@patch("src.services.message_handler.parse_command", return_value=None)
+@patch("src.services.message_handler.get_family_member_by_phone")
+async def test_chat_fallback_for_clear_non_system_query(mock_auth, mock_parse, mock_conv, mock_db) -> None:
     member = _make_member()
     mock_auth.return_value = member
 
@@ -143,11 +157,9 @@ async def test_llm_fallback_when_no_match(mock_auth, mock_parse, mock_conv, mock
         mock_bedrock = AsyncMock()
         mock_bedrock.generate.return_value = "תשובה מהמודל"
         mock_bedrock_cls.return_value = mock_bedrock
-
-        result = await handle_incoming_message(mock_db, "972501234567", "מה המצב?", "msg1")
+        result = await handle_incoming_message(mock_db, "972501234567", "תן לי בדיחה", "msg1")
 
     assert result == "תשובה מהמודל"
-    mock_conv.assert_called_once()
 
 
 # ── Conversation saving tests ────────────────────────────────────
