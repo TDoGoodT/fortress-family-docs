@@ -87,7 +87,7 @@ TEMPLATES: dict[str, str] = {
     "unknown_member": "לא מכיר את המספר הזה. בקש מההורים להוסיף אותך.",
     "inactive_member": "החשבון שלך לא פעיל. פנה להורים.",
     "error_fallback": "משהו השתבש 😅 אפשר לנסות שוב?",
-    "cant_understand": "לא הבנתי, {name}. אפשר לנסח אחרת? 🤔",
+    "cant_understand": "לא הבנתי את הבקשה. אפשר לנסות לנסח אחרת או לבקש עזרה על מסמכים, משימות או מידע.",
     "task_deleted": "משימה נמחקה: {title} ✅",
     "task_delete_which": "איזו משימה למחוק? 🤔\n{task_list}",
     "task_not_found": "לא מצאתי את המשימה הזו 🤷",
@@ -237,8 +237,15 @@ def format_document_list(documents: list) -> str:
         emoji = _DOC_TYPE_EMOJI.get(doc_type, "📎")
         display_name = getattr(doc, "display_name", None) or (doc.get("display_name") if isinstance(doc, dict) else None)
         display_name = display_name if isinstance(display_name, str) and display_name else None
-        filename = getattr(doc, "original_filename", None) or (doc.get("original_filename") if isinstance(doc, dict) else None) or "ללא שם"
-        title = display_name if display_name else filename
+        filename = getattr(doc, "original_filename", None) or (doc.get("original_filename") if isinstance(doc, dict) else None)
+        if display_name:
+            title = display_name
+        elif doc_type == "invoice":
+            title = "חשבונית (ללא פרטים)"
+        elif filename:
+            title = filename
+        else:
+            title = "מסמך לא מזוהה"
         created_at = getattr(doc, "created_at", None) or (doc.get("created_at") if isinstance(doc, dict) else None)
         date_text = str(created_at)[:10] if created_at else ""
         lines.append(f"{emoji} {i}. {title}\n   📅 {date_text}")
@@ -305,8 +312,15 @@ def format_search_results(documents: list) -> str:
         emoji = _DOC_TYPE_EMOJI.get(doc_type, "📎")
         display_name = getattr(doc, "display_name", None)
         display_name = display_name if isinstance(display_name, str) and display_name else None
-        filename = getattr(doc, "original_filename", None) or "ללא שם"
-        title = display_name if display_name else filename
+        filename = getattr(doc, "original_filename", None)
+        if display_name:
+            title = display_name
+        elif doc_type == "invoice":
+            title = "חשבונית (ללא פרטים)"
+        elif filename:
+            title = filename
+        else:
+            title = "מסמך לא מזוהה"
         created_at = getattr(doc, "created_at", None)
         date_text = str(created_at)[:10] if created_at else ""
         lines.append(f"{emoji} {i}. {title}\n   📅 {date_text} | {doc_type}")

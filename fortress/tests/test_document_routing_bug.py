@@ -53,6 +53,14 @@ DOCUMENT_MESSAGES_THAT_SHOULD_ROUTE = [
 ]
 
 
+def test_delete_documents_intent_maps_to_delete_action():
+    registry = _make_doc_registry()
+    command = parse_command("נקה מסמכים", registry)
+    assert command is not None
+    assert command.skill == "document"
+    assert command.action == "delete_documents"
+
+
 @given(msg=st.sampled_from(DOCUMENT_MESSAGES_THAT_SHOULD_ROUTE))
 @settings(max_examples=len(DOCUMENT_MESSAGES_THAT_SHOULD_ROUTE))
 def test_document_messages_route_to_document_skill(msg: str):

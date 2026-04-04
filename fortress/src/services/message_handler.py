@@ -11,6 +11,7 @@ from src.services.auth import get_family_member_by_phone
 from src.engine.command_parser import parse_command
 from src.engine.executor import execute
 from src.engine.response_formatter import format_response
+from src.services.intent_detector import detect_intent, should_fallback_to_chat
 from src.services.pii_guard import strip_pii
 from src.skills.registry import registry
 
@@ -56,6 +57,8 @@ async def handle_incoming_message(
         command = parse_command(
             message_text, registry, has_media=has_media, media_file_path=media_file_path
         )
+        detected_intent = detect_intent(message_text)
+        logger.info("intent_detected intent=%s", detected_intent)
 
         # Determine PII status for audit logging
         try:
@@ -80,15 +83,19 @@ async def handle_incoming_message(
             response = format_response(result)
             intent = f"{command.skill}.{command.action}"
         else:
-            # Free-form chat — route to ChatSkill LLM
-            from src.skills.registry import registry as _registry
-            chat_skill = _registry.get("chat")
-            if chat_skill is not None:
-                response = await chat_skill.respond(db, member, message_text)
-                intent = "chat.llm"
+            logger.info("fallback_triggered reason=no_command intent=%s", detected_intent)
+            if should_fallback_to_chat(message_text):
+                from src.skills.registry import registry as _registry
+                chat_skill = _registry.get("chat")
+                if chat_skill is not None:
+                    response = await chat_skill.respond(db, member, message_text)
+                    intent = "chat.llm"
+                else:
+                    response = PERSONALITY_TEMPLATES["cant_understand"]
+                    intent = "strict.unknown"
             else:
-                response = PERSONALITY_TEMPLATES["cant_understand"].format(name=member.name)
-                intent = "mvp.cant_understand"
+                response = PERSONALITY_TEMPLATES["cant_understand"]
+                intent = "strict.unknown"
 
         # Guard against empty/None responses
         if not response or not response.strip():
