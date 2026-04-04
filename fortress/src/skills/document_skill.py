@@ -21,6 +21,7 @@ from src.services.document_query_service import (
     merge_tags,
     normalize_tag,
     resolve_document_reference,
+    search_by_name,
     search_documents,
 )
 from src.skills.base_skill import BaseSkill, Command, Result
@@ -45,6 +46,14 @@ class DocumentSkill(BaseSkill):
         return [
             # Existing: list all documents
             (re.compile(r'^(מסמכים|documents)$', re.IGNORECASE), 'list'),
+            # Natural Hebrew document-listing variants → list
+            (re.compile(r'איזה מסמכים', re.IGNORECASE), 'list'),
+            (re.compile(r'אילו מסמכים', re.IGNORECASE), 'list'),
+            (re.compile(r'מה המסמכים', re.IGNORECASE), 'list'),
+            (re.compile(r'רשימת מסמכים', re.IGNORECASE), 'list'),
+            (re.compile(r'הצג מסמכים', re.IGNORECASE), 'list'),
+            (re.compile(r'כל המסמכים', re.IGNORECASE), 'list'),
+            (re.compile(r'הראה מסמכים', re.IGNORECASE), 'list'),
             # New: latest N / recent feed
             (re.compile(r'^(מסמכים אחרונים|recent documents)$', re.IGNORECASE), 'recent_feed'),
             (re.compile(r'^show latest (?P<limit>\d{1,2}) documents$', re.IGNORECASE), 'recent_feed'),
@@ -65,8 +74,12 @@ class DocumentSkill(BaseSkill):
             (re.compile(r'^(?:הראה|show|חפש|find)\s+(?P<doc_type>חוזים|contracts|חשבוניות|invoices|קבלות|receipts|ביטוח|insurance|אחריות|warranty|דפי חשבון|bank statements|כרטיס אשראי|credit card)', re.IGNORECASE), 'search'),
             # New: search by vendor/keyword
             (re.compile(r'^(?:חפש|find)\s+(?:מסמך|document|קבלה|receipt)?\s*(?:מ|from|של|by)?\s+(?P<keyword>.+)', re.IGNORECASE), 'search'),
+            # Fetch by name: "תביא לי X" / "תראה לי X" / "מצא לי X" / "תמצא לי X"
+            (re.compile(r'^(?:תביא|תראה|מצא|תמצא)\s+לי\s+(?P<doc_name>.+)', re.IGNORECASE), 'fetch'),
             # New: document questions (deterministic, owned by DocumentSkill)
             (re.compile(r'^(?P<question>(?:מה סוג|what type|כמה עולה|what.+amount|מי ה|who.+counterparty|תן לי סיכום|give me a summary|מה הסכום|what is the amount|מה התאריך|what is the date).+)', re.IGNORECASE), 'query'),
+            # Catch-all: document-oriented Hebrew keywords — MUST be LAST to avoid shadowing
+            (re.compile(r'(?:מסמך|חשבונית|ביטוח|חוזה|קבלה|פוליסה|תשלום|הסכם|חשבון|אחריות|ערבות|שטר|תעודה)', re.IGNORECASE), 'doc_search_fallback'),
         ]
 
     def execute(self, db: Session, member: FamilyMember, command: Command) -> Result:
@@ -76,6 +89,7 @@ class DocumentSkill(BaseSkill):
             "search": self._search,
             "recent": self._recent,
             "recent_feed": self._recent_feed,
+            "fetch": self._fetch,
             "tag_add": self._tag_add,
             "tag_remove": self._tag_remove,
             "tag_show": self._tag_show,
@@ -85,6 +99,7 @@ class DocumentSkill(BaseSkill):
             "view_recent_invoices": self._view_recent_invoices,
             "view_needs_review": self._view_needs_review,
             "query": self._query,
+            "doc_search_fallback": self._doc_search_fallback,
         }
         handler = dispatch.get(command.action)
         if handler is None:
@@ -228,6 +243,39 @@ class DocumentSkill(BaseSkill):
             return Result(success=True, message=TEMPLATES["document_search_empty"])
 
         return Result(success=True, message=format_search_results(results))
+
+    def _fetch(self, db: Session, member: FamilyMember, params: dict) -> Result:
+        denied = check_perm(db, member, "documents", "read")
+        if denied:
+            return denied
+
+        doc_name = (params.get("doc_name") or "").strip()
+        if not doc_name:
+            return Result(success=False, message=TEMPLATES["error_fallback"])
+
+        result = search_by_name(db, member.id, doc_name)
+
+        if result is None:
+            return Result(success=True, message="לא נמצא מסמך בשם זה 📂")
+
+        if isinstance(result, list):
+            from src.prompts.personality import _DOC_TYPE_EMOJI
+            options = []
+            for i, doc in enumerate(result[:5], 1):
+                emoji = _DOC_TYPE_EMOJI.get(doc.doc_type or "other", "📎")
+                date_text = str(doc.created_at)[:10] if doc.created_at else ""
+                options.append(f"{i}. {emoji} {doc.original_filename} ({doc.doc_type}) — {date_text}")
+            clarify_msg = TEMPLATES["document_clarify"].format(options="\n".join(options))
+            return Result(success=True, message=clarify_msg)
+
+        doc = result
+        return Result(
+            success=True,
+            message=format_document_list([doc]),
+            entity_type="document",
+            entity_id=doc.id,
+            action="viewed",
+        )
 
     def _format_recent_feed(self, docs: list[Document]) -> str:
         lines = ["🗂️ מסמכים אחרונים:"]
@@ -406,6 +454,94 @@ class DocumentSkill(BaseSkill):
             entity_id=doc.id,
             action="queried",
         )
+
+    # ------------------------------------------------------------------
+    # Catch-all fallback for document-oriented messages
+    # ------------------------------------------------------------------
+
+    # Hebrew question indicators (question mark or question words)
+    _QUESTION_INDICATORS = re.compile(
+        r'\?|מה |מי |כמה |איזה |למה |מתי |האם |איפה |איך '
+    )
+
+    # Document-related keywords for extraction from the message
+    _DOC_KEYWORDS = [
+        "מסמך", "חשבונית", "ביטוח", "חוזה", "קבלה", "פוליסה",
+        "תשלום", "הסכם", "חשבון", "אחריות", "ערבות", "שטר", "תעודה",
+    ]
+
+    def _doc_search_fallback(self, db: Session, member: FamilyMember, params: dict) -> Result:
+        """Catch-all handler for document-oriented messages that didn't match specific patterns.
+
+        Extracts keywords from the message, searches documents, and either
+        delegates to answer_document_question (single match + question) or
+        returns search results.
+        """
+        denied = check_perm(db, member, "documents", "read")
+        if denied:
+            return denied
+
+        raw_text = params.get("raw_text", "")
+
+        # Extract document-related keywords from the message
+        keywords = [kw for kw in self._DOC_KEYWORDS if kw in raw_text]
+
+        # Search documents using extracted keywords
+        results: list[Document] = []
+        for kw in keywords:
+            found = search_documents(db, member.id, {"keyword": kw})
+            for doc in found:
+                if doc not in results:
+                    results.append(doc)
+            if results:
+                break  # Use first keyword that yields results
+
+        # If no keyword search results, try a broad search with the full message
+        if not results:
+            # Strip common question words to get a cleaner search term
+            search_text = raw_text.strip()
+            for prefix in ["מה ", "כמה ", "איזה ", "מי ", "האם ", "איפה ", "מתי ", "איך ", "למה "]:
+                if search_text.startswith(prefix):
+                    search_text = search_text[len(prefix):]
+                    break
+            if search_text:
+                results = search_documents(db, member.id, {"keyword": search_text.strip()})
+
+        if not results:
+            return Result(success=True, message="לא נמצאו מסמכים רלוונטיים 📂")
+
+        # Single match + question → delegate to answer_document_question
+        is_question = bool(self._QUESTION_INDICATORS.search(raw_text))
+        if len(results) == 1 and is_question:
+            doc = results[0]
+            update_state(db, member.id, entity_type="document", entity_id=doc.id, intent="document.query")
+
+            loop = None
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                loop = None
+
+            if loop and loop.is_running():
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as pool:
+                    qa_result: QAResult = pool.submit(
+                        asyncio.run,
+                        answer_document_question(db, member, raw_text, doc),
+                    ).result()
+            else:
+                qa_result = asyncio.run(answer_document_question(db, member, raw_text, doc))
+
+            return Result(
+                success=True,
+                message=qa_result.answer_text,
+                entity_type="document",
+                entity_id=doc.id,
+                action="queried",
+            )
+
+        # Multiple results or non-question → return search results
+        return Result(success=True, message=format_search_results(results))
 
     # ------------------------------------------------------------------
     # Verification

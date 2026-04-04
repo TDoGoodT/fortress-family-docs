@@ -21,6 +21,7 @@ _FIELD_QUESTION_MAP: dict[str, str] = {
     "סוג": "doc_type", "type": "doc_type", "what type": "doc_type", "מה סוג": "doc_type",
     # amount questions
     "סכום": "amount", "amount": "amount", "כמה": "amount", "עולה": "amount",
+    "לתשלום": "amount", "כמה לתשלום": "amount",
     # counterparty questions
     "ספק": "vendor", "vendor": "vendor", "counterparty": "vendor", "מי": "vendor",
     # date questions
@@ -235,6 +236,40 @@ def search_documents(
     query = query.order_by(Document.created_at.desc())
     limit = filters.get("limit", 20)
     return query.limit(limit).all()
+
+
+def search_by_name(
+    db: Session,
+    member_id: UUID,
+    name_query: str,
+) -> Union[Document, list[Document], None]:
+    """Search documents by filename using case-insensitive substring match.
+
+    Returns:
+    - Document: exactly one match
+    - list[Document]: multiple matches
+    - None: no matches
+    """
+    if not name_query or not name_query.strip():
+        return None
+
+    pattern = f"%{name_query.strip()}%"
+    results = (
+        db.query(Document)
+        .filter(
+            Document.uploaded_by == member_id,
+            Document.original_filename.ilike(pattern),
+        )
+        .order_by(Document.created_at.desc())
+        .limit(10)
+        .all()
+    )
+
+    if not results:
+        return None
+    if len(results) == 1:
+        return results[0]
+    return results
 
 
 def resolve_document_reference(
