@@ -18,17 +18,20 @@ async def download_media_url(
 ) -> tuple[bytes, str] | None:
     """Download media directly from a WAHA media URL.
 
-    WAHA may provide URLs with localhost that need rewriting to the
-    Docker service hostname.  We replace the host portion with
-    WAHA_API_URL so the request resolves inside the container network.
+    WAHA builds media URLs using WHATSAPP_API_HOSTNAME which may not
+    match the Docker-internal address the app should use.  We extract
+    the path portion (e.g. /api/files/...) and prepend WAHA_API_URL.
 
     Returns (file_bytes, mimetype) or None on failure.
     """
     try:
-        # Rewrite localhost URLs to use the configured WAHA_API_URL
-        # e.g. http://localhost:3000/api/files/xxx -> http://waha:3000/api/files/xxx
-        import re
-        resolved_url = re.sub(r"^https?://[^/]+", WAHA_API_URL.rstrip("/"), url)
+        from urllib.parse import urlparse
+        parsed = urlparse(url)
+        # Extract just the path (and query if any)
+        path = parsed.path
+        if parsed.query:
+            path = f"{path}?{parsed.query}"
+        resolved_url = f"{WAHA_API_URL.rstrip('/')}{path}"
         logger.info("Media URL resolved: %s -> %s", url, resolved_url)
 
         headers: dict[str, str] = {}
