@@ -7,7 +7,7 @@ import hmac
 import json
 import logging
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Optional, Tuple
 from urllib.parse import quote, urlparse
@@ -51,6 +51,29 @@ def _is_ascii(value: str) -> bool:
     except UnicodeEncodeError:
         return False
     return True
+
+
+@dataclass
+class ToolCall:
+    """A single tool invocation returned by the LLM."""
+    tool_use_id: str
+    name: str
+    arguments: dict
+
+
+@dataclass
+class ConverseResponse:
+    """Parsed response from the Bedrock Converse API."""
+    text: str | None
+    tool_calls: list[ToolCall] = field(default_factory=list)
+    stop_reason: str = "end_turn"  # "end_turn" | "tool_use" | "max_tokens"
+
+
+class BedrockError(Exception):
+    """Raised by converse() on HTTP errors, timeouts, or malformed responses."""
+    def __init__(self, message: str, status_code: int | None = None) -> None:
+        super().__init__(message)
+        self.status_code = status_code
 
 
 @dataclass(frozen=True)
@@ -239,6 +262,95 @@ class BedrockClient:
                 _safe_exception_text(exc),
             )
             return HEBREW_FALLBACK
+
+    async def converse(
+        self,
+        messages: list[dict],
+        system_prompt: str = "",
+        tools: list[dict] | None = None,
+        model: str = "haiku",
+        max_tokens: int = 1024,
+    ) -> ConverseResponse:
+        """Call Bedrock Converse API with optional tool definitions.
+
+        Returns ConverseResponse with either text or tool_calls populated.
+        Raises BedrockError on HTTP/network failures or malformed responses.
+        """
+        model_id = MODEL_MAP.get(model, BEDROCK_HAIKU_MODEL)
+        payload: dict = {
+            "messages": messages,
+            "inferenceConfig": {"maxTokens": max_tokens},
+        }
+        if system_prompt:
+            payload["system"] = [{"text": system_prompt}]
+        if tools:
+            payload["toolConfig"] = {"tools": tools}
+
+        start = time.monotonic()
+        try:
+            logger.info(
+                "Bedrock converse: model=%s messages=%d tools=%d auth=%s",
+                model_id, len(messages), len(tools) if tools else 0, self._auth.mode,
+            )
+            resp = await self._post_converse(model_id, payload, timeout=30.0)
+            resp.raise_for_status()
+            data = resp.json()
+            elapsed = time.monotonic() - start
+
+            stop_reason = data.get("stopReason", "end_turn")
+            content_blocks = data.get("output", {}).get("message", {}).get("content", [])
+
+            tool_calls: list[ToolCall] = []
+            text_parts: list[str] = []
+
+            for block in content_blocks:
+                if "toolUse" in block:
+                    tu = block["toolUse"]
+                    tool_calls.append(ToolCall(
+                        tool_use_id=tu.get("toolUseId", ""),
+                        name=tu.get("name", ""),
+                        arguments=tu.get("input", {}),
+                    ))
+                elif "text" in block:
+                    text_parts.append(block["text"])
+
+            text = "\n".join(text_parts) if text_parts else None
+            logger.info(
+                "Bedrock converse response: stop_reason=%s tool_calls=%d text_len=%d time=%.1fs",
+                stop_reason, len(tool_calls), len(text) if text else 0, elapsed,
+            )
+            return ConverseResponse(text=text, tool_calls=tool_calls, stop_reason=stop_reason)
+
+        except httpx.HTTPStatusError as exc:
+            elapsed = time.monotonic() - start
+            logger.error(
+                "Bedrock converse HTTP error: status=%s model=%s time=%.1fs body=%s",
+                exc.response.status_code, model_id, elapsed, exc.response.text[:200],
+            )
+            raise BedrockError(
+                f"HTTP {exc.response.status_code}: {exc.response.text[:100]}",
+                status_code=exc.response.status_code,
+            ) from exc
+        except httpx.TimeoutException as exc:
+            elapsed = time.monotonic() - start
+            logger.error("Bedrock converse timeout: model=%s time=%.1fs", model_id, elapsed)
+            raise BedrockError("Request timed out") from exc
+        except (KeyError, ValueError, json.JSONDecodeError) as exc:
+            elapsed = time.monotonic() - start
+            logger.error(
+                "Bedrock converse malformed response: model=%s time=%.1fs error=%s",
+                model_id, elapsed, _safe_exception_text(exc),
+            )
+            raise BedrockError(f"Malformed response: {_safe_exception_text(exc)}") from exc
+        except BedrockError:
+            raise
+        except Exception as exc:
+            elapsed = time.monotonic() - start
+            logger.error(
+                "Bedrock converse unexpected error: model=%s time=%.1fs error=%s: %s",
+                model_id, elapsed, type(exc).__name__, _safe_exception_text(exc),
+            )
+            raise BedrockError(f"Unexpected error: {_safe_exception_text(exc)}") from exc
 
     async def is_available(self) -> Tuple[bool, Optional[str]]:
         """Check connectivity with a minimal request.
