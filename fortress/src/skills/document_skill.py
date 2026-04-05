@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from src.models.schema import Document, FamilyMember
 from src.prompts.personality import TEMPLATES, format_document_list, format_search_results
 from src.services import documents
-from src.services.conversation_state import update_state
+from src.services.conversation_state import set_pending_confirmation, update_state
 from src.services.document_query_service import (
     QAResult,
     answer_document_question,
@@ -85,12 +85,19 @@ class DocumentSkill(BaseSkill):
             (re.compile(r'^(?P<question>(?:מה סוג|what type|כמה עולה|what.+amount|מי ה|who.+counterparty|תן לי סיכום|give me a summary|מה הסכום|what is the amount|מה התאריך|what is the date).+)', re.IGNORECASE), 'query'),
             # Recipe commands: list
             (re.compile(r'^(מתכונים|מתכונים שלי|הראה מתכונים)$', re.IGNORECASE), 'recipe_list'),
+            # Recipe knowledge queries: "יש לי מתכונים?", "איזה מתכונים יש לי?"
+            (re.compile(r'^(?:יש לי|איזה)\s+(?:מתכונים)', re.IGNORECASE), 'recipe_list'),
+            (re.compile(r'^(?:מה יש לי|מה יש)\s+(?:מתכונים)', re.IGNORECASE), 'recipe_list'),
             # Recipe commands: search
             (re.compile(r'^(?:חפש מתכון|יש מתכון ל)\s*(?P<recipe_query>.+)', re.IGNORECASE), 'recipe_search'),
             # Recipe commands: how-to / preparation
             (re.compile(r'^(?:איך מכינים|מה המתכון ל)\s*(?P<recipe_name>.+)', re.IGNORECASE), 'recipe_howto'),
             # Recipe commands: recipes in a document
             (re.compile(r'^(?:מה יש ב|מתכונים של|מתכונים ב)\s*(?P<doc_query>.+)', re.IGNORECASE), 'recipe_in_doc'),
+            # Generic free-text search: "חפש X" / "search X" (MUST be after specific search patterns)
+            (re.compile(r'^(?:חפש|search)\s+(?P<keyword>.+)', re.IGNORECASE), 'search'),
+            # Recipe catch-all: any message mentioning מתכון/מתכונים that wasn't caught above
+            (re.compile(r'(?:מתכון|מתכונים|recipe)', re.IGNORECASE), 'recipe_fallback'),
             # Catch-all: document-oriented Hebrew keywords — MUST be LAST to avoid shadowing
             (re.compile(r'(?:מסמך|חשבונית|ביטוח|חוזה|קבלה|פוליסה|תשלום|הסכם|חשבון|אחריות|ערבות|שטר|תעודה)', re.IGNORECASE), 'doc_search_fallback'),
         ]
@@ -116,8 +123,11 @@ class DocumentSkill(BaseSkill):
             "recipe_search": self._recipe_search,
             "recipe_howto": self._recipe_howto,
             "recipe_in_doc": self._recipe_in_doc,
+            "recipe_fallback": self._recipe_fallback,
             "doc_search_fallback": self._doc_search_fallback,
             "delete_documents": self._delete_documents,
+            "summary": self._summary,
+            "contextual_query": self._contextual_query,
         }
         handler = dispatch.get(command.action)
         if handler is None:
@@ -278,9 +288,22 @@ class DocumentSkill(BaseSkill):
 
         if isinstance(result, list):
             logger.info("disambiguation_triggered context=fetch count=%d", len(result))
+            # Store pending disambiguation so user can pick by number
+            doc_ids = [str(d.id) for d in result[:5]]
+            set_pending_confirmation(
+                db, member.id, "document.disambiguate",
+                {"doc_ids": doc_ids, "doc_name": doc_name},
+            )
             return Result(success=True, message=self._build_disambiguation_message(result))
 
         doc = result
+        # Store pending confirmation so "כן" resolves to summary
+        set_pending_confirmation(
+            db, member.id, "document.summary",
+            {"doc_id": str(doc.id), "doc_name": doc_name},
+        )
+        # Update conversation state with the resolved document
+        update_state(db, member.id, entity_type="document", entity_id=doc.id, intent="document.fetch")
         return Result(
             success=True,
             message="מצאתי את המסמך, אבל עדיין לא ניתן לפתוח אותו ישירות. רוצה סיכום או פרטים ממנו?",
@@ -465,6 +488,86 @@ class DocumentSkill(BaseSkill):
         )
 
     # ------------------------------------------------------------------
+    # Pending confirmation handlers
+    # ------------------------------------------------------------------
+
+    def _summary(self, db: Session, member: FamilyMember, params: dict) -> Result:
+        """Return the AI summary for a document (used by confirm re-dispatch)."""
+        denied = check_perm(db, member, "documents", "read")
+        if denied:
+            return denied
+
+        doc_id = params.get("doc_id")
+        if not doc_id:
+            return Result(success=False, message=TEMPLATES["error_fallback"])
+
+        from uuid import UUID
+        try:
+            doc = db.query(Document).filter(Document.id == UUID(doc_id)).first()
+        except (ValueError, AttributeError):
+            doc = None
+
+        if not doc:
+            return Result(success=True, message="לא נמצא מסמך 📂")
+
+        summary = getattr(doc, "ai_summary", None)
+        if summary and str(summary).strip():
+            return Result(
+                success=True,
+                message=f"📄 סיכום המסמך:\n{summary}",
+                entity_type="document",
+                entity_id=doc.id,
+                action="summarized",
+            )
+        return Result(success=True, message="אין סיכום זמין למסמך הזה")
+
+    def _contextual_query(self, db: Session, member: FamilyMember, params: dict) -> Result:
+        """Handle a short follow-up question about the last-viewed document."""
+        denied = check_perm(db, member, "documents", "read")
+        if denied:
+            return denied
+
+        question = params.get("question", params.get("raw_text", ""))
+        doc_id = params.get("doc_id")
+        if not doc_id:
+            return Result(success=False, message=TEMPLATES["error_fallback"])
+
+        from uuid import UUID
+        try:
+            doc = db.query(Document).filter(Document.id == UUID(str(doc_id))).first()
+        except (ValueError, AttributeError):
+            doc = None
+
+        if not doc:
+            return Result(success=True, message="לא נמצא מסמך 📂")
+
+        update_state(db, member.id, entity_type="document", entity_id=doc.id, intent="document.query")
+
+        loop = None
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop and loop.is_running():
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                qa_result: QAResult = pool.submit(
+                    asyncio.run,
+                    answer_document_question(db, member, question, doc),
+                ).result()
+        else:
+            qa_result = asyncio.run(answer_document_question(db, member, question, doc))
+
+        return Result(
+            success=True,
+            message=qa_result.answer_text,
+            entity_type="document",
+            entity_id=doc.id,
+            action="queried",
+        )
+
+    # ------------------------------------------------------------------
     # Recipe handlers
     # ------------------------------------------------------------------
 
@@ -556,6 +659,56 @@ class DocumentSkill(BaseSkill):
         lines = [f"🍳 מתכונים ב{doc_title}:"]
         for i, r in enumerate(recipes, 1):
             lines.append(f"{i}. {r['recipe_name']}")
+        return Result(success=True, message="\n".join(lines))
+
+    def _recipe_fallback(self, db: Session, member: FamilyMember, params: dict) -> Result:
+        """Catch-all for any message mentioning מתכון/מתכונים.
+
+        Extracts a search term from the raw text. If found, searches recipes;
+        otherwise lists all recipes for the member.
+        """
+        denied = check_perm(db, member, "documents", "read")
+        if denied:
+            return denied
+
+        raw = params.get("raw_text", "")
+        # Try to extract a meaningful search query by stripping common filler
+        search_term = raw
+        for noise in [
+            "יש לך", "יש לי", "תחפש לי", "תחפש", "חפש לי", "חפש",
+            "אני רוצה", "אני מחפש", "תבדוק אם יש", "תבדוק",
+            "שתחפש ותבדוק אם יש לך", "שתחפש",
+            "איזה", "איזו", "מתכון", "מתכונים", "recipe",
+            "של", "בשבילי", "?", "!",
+        ]:
+            search_term = search_term.replace(noise, "")
+        search_term = search_term.strip()
+
+        # If there's a meaningful search term, search; otherwise list all
+        if search_term and len(search_term) >= 2:
+            results = search_recipes(db, member.id, search_term)
+            if results:
+                lines = ["🔍 תוצאות חיפוש מתכונים:"]
+                for i, r in enumerate(results, 1):
+                    lines.append(f"🍳 {i}. {r['recipe_name']} (מתוך {r['display_name']})")
+                return Result(success=True, message="\n".join(lines))
+            # No results for search — fall through to list all
+            return Result(
+                success=True,
+                message=f"לא נמצאו מתכונים עבור \"{search_term}\" 🍳\nנסה לשלוח מסמך עם מתכונים ואשמור אותם עבורך.",
+            )
+
+        # No search term — list all recipes
+        recipes = list_member_recipes(db, member.id)
+        if not recipes:
+            return Result(
+                success=True,
+                message="אין מתכונים שמורים עדיין 📂\nשלח לי מסמך או תמונה עם מתכונים ואני אשמור אותם עבורך.",
+            )
+
+        lines = [TEMPLATES.get("recipe_list_header", "🍳 המתכונים שלך:\n")]
+        for i, r in enumerate(recipes, 1):
+            lines.append(f"🍳 {i}. {r['recipe_name']}\n   מתוך: {r['display_name']}")
         return Result(success=True, message="\n".join(lines))
 
     # ------------------------------------------------------------------

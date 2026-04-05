@@ -21,11 +21,13 @@ _FIELD_QUESTION_MAP: dict[str, str] = {
     "סוג": "doc_type", "type": "doc_type", "what type": "doc_type", "מה סוג": "doc_type",
     # amount questions
     "סכום": "amount", "amount": "amount", "כמה": "amount", "עולה": "amount",
-    "לתשלום": "amount", "כמה לתשלום": "amount",
+    "לתשלום": "amount", "כמה לתשלום": "amount", "כמה עלה": "amount",
     # counterparty questions
     "ספק": "vendor", "vendor": "vendor", "counterparty": "vendor", "מי": "vendor",
+    "מי הספק": "vendor",
     # date questions
     "תאריך": "doc_date", "date": "doc_date", "מתי": "doc_date",
+    "תאריך התחלה": "period_start", "תאריך סיום": "period_end",
     # summary questions
     "סיכום": "ai_summary", "summary": "ai_summary", "תקציר": "ai_summary",
 }
@@ -135,15 +137,31 @@ async def answer_document_question(
             break
 
     if matched_field:
-        value = getattr(doc, matched_field, None)
-        if value is not None and str(value).strip():
-            formatted = _format_field_value(matched_field, value)
-            return QAResult(
-                answer_text=formatted,
-                source="db_field",
-                confidence=1.0,
-                field_used=matched_field,
-            )
+        # period_start / period_end are stored in document_facts, not as DB columns
+        if matched_field in ("period_start", "period_end"):
+            try:
+                facts = db.query(DocumentFact).filter(DocumentFact.document_id == doc.id).all()
+                for fact in facts:
+                    if fact.fact_key == matched_field:
+                        return QAResult(
+                            answer_text=fact.fact_value,
+                            source="document_fact",
+                            confidence=float(fact.confidence or 0.5),
+                            field_used=matched_field,
+                        )
+            except Exception as exc:
+                logger.warning("query_service: fact lookup for %s failed doc=%s error=%s", matched_field, doc.id, exc)
+            # Fall through to other resolution paths if not found in facts
+        else:
+            value = getattr(doc, matched_field, None)
+            if value is not None and str(value).strip():
+                formatted = _format_field_value(matched_field, value)
+                return QAResult(
+                    answer_text=formatted,
+                    source="db_field",
+                    confidence=1.0,
+                    field_used=matched_field,
+                )
 
     # 2. Check document_facts for matching fact_key
     try:

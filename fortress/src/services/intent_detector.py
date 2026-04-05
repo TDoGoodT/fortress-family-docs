@@ -31,7 +31,7 @@ _TASK_PATTERNS = [
 ]
 
 _NON_SYSTEM_PATTERNS = [
-    re.compile(r"(בדיחה|מתכון|translate|תרגם|מה זה|who is|what is)", re.IGNORECASE),
+    re.compile(r"(בדיחה|translate|תרגם|מה זה|who is|what is)", re.IGNORECASE),
 ]
 
 
