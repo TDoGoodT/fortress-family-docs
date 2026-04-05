@@ -60,6 +60,7 @@ class TaskSkill(BaseSkill):
             (re.compile(r"^done\s*(?P<index>\d+)?$", re.IGNORECASE), "complete"),
             (re.compile(r"^(עדכן|שנה|תעדכן|תשנה)\s*(משימה)?\s*(?P<index>\d+)?\s*(?P<changes>.*)$", re.IGNORECASE), "update"),
             (re.compile(r"^משימות$", re.IGNORECASE), "list"),
+            (re.compile(r"^מה\s+המשימות\s+שלי\??$", re.IGNORECASE), "list"),
             (re.compile(r"^tasks$", re.IGNORECASE), "list"),
         ]
 

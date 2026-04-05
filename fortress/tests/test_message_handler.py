@@ -13,6 +13,7 @@ import pytest
 from src.models.schema import FamilyMember
 from src.prompts.personality import TEMPLATES as PERSONALITY_TEMPLATES
 from src.services.message_handler import handle_incoming_message
+from src.services.agent_loop import AgentResult
 
 
 def _make_member(
@@ -125,6 +126,32 @@ async def test_router_receives_correct_text(mock_auth, mock_parse, mock_exec, mo
     await handle_incoming_message(mock_db, "972501234567", "משימה חדשה: קניות", "msg1")
     call_args = mock_parse.call_args
     assert call_args[0][0] == "משימה חדשה: קניות"
+
+
+@pytest.mark.asyncio
+@patch("src.services.message_handler._save_conversation")
+@patch("src.services.message_handler.execute")
+@patch("src.services.message_handler.parse_command")
+@patch("src.services.message_handler.get_family_member_by_phone")
+async def test_agent_text_for_structured_command_forces_regex_fallback(
+    mock_auth, mock_parse, mock_exec, mock_conv, mock_db
+) -> None:
+    """If the agent answers in text for a known command, execute the structured path instead."""
+    from src.skills.base_skill import Command, Result
+
+    member = _make_member()
+    mock_auth.return_value = member
+    mock_parse.return_value = Command(skill="task", action="create", params={"title": "קניות"})
+    mock_exec.return_value = Result(success=True, message="יצרתי משימה: קניות ✅")
+
+    with patch(
+        "src.services.agent_loop.run",
+        new=AsyncMock(return_value=AgentResult(response="יצרתי משימה בלי tool", tool_name=None, iterations=1)),
+    ):
+        result = await handle_incoming_message(mock_db, "972501234567", "משימה חדשה: קניות", "msg1")
+
+    assert result == "יצרתי משימה: קניות ✅"
+    mock_exec.assert_called_once()
 
 
 # ── MVP deterministic fallback tests ─────────────────────────────

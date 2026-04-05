@@ -51,6 +51,11 @@ async def _run_regex_path(db: Session, member, message_text: str, pii_stripped: 
     return PERSONALITY_TEMPLATES["cant_understand"], "strict.unknown"
 
 
+def _structured_command_available(message_text: str) -> bool:
+    """Return True when the deterministic parser can handle this message."""
+    return parse_command(message_text, registry) is not None
+
+
 async def handle_incoming_message(
     db: Session,
     phone: str,
@@ -114,13 +119,24 @@ async def handle_incoming_message(
                     "message_handler: regex_fallback_used member=%s", member.name,
                 )
             else:
-                response = agent_result.response or ""
                 tool = agent_result.tool_name
-                intent = f"agent.{tool}" if tool else "agent.chat"
-                logger.info(
-                    "message_handler: agent_response member=%s intent=%s iterations=%d",
-                    member.name, intent, agent_result.iterations,
-                )
+                if tool is None and _structured_command_available(message_text):
+                    # If the LLM answered in free text for a command we can handle
+                    # deterministically, prefer the structured path so actions are
+                    # actually executed instead of only described.
+                    response, intent = await _run_regex_path(db, member, message_text, pii_stripped)
+                    logger.warning(
+                        "message_handler: forced_structured_fallback member=%s text=%s",
+                        member.name,
+                        message_text[:120],
+                    )
+                else:
+                    response = agent_result.response or ""
+                    intent = f"agent.{tool}" if tool else "agent.chat"
+                    logger.info(
+                        "message_handler: agent_response member=%s intent=%s iterations=%d",
+                        member.name, intent, agent_result.iterations,
+                    )
         else:
             # AGENT_ENABLED=false — use regex path directly
             logger.info("message_handler: agent_disabled using regex fallback member=%s", member.name)

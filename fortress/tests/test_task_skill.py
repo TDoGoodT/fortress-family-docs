@@ -63,7 +63,7 @@ class TestTaskSkillStructure:
         assert "משימות" in desc
 
     def test_commands_count(self):
-        assert len(TaskSkill().commands) == 24
+        assert len(TaskSkill().commands) == 25
 
     def test_get_help_returns_string(self):
         help_text = TaskSkill().get_help()
@@ -204,6 +204,21 @@ class TestCreate:
             mock_db, "ניסיון ניסיון", member.id, assigned_to=assignee.id
         )
         assert "לחן" in result.message
+
+    @patch("src.skills.task_skill.update_state")
+    @patch("src.skills.task_skill.tasks.list_tasks")
+    @patch("src.skills.task_skill.check_perm", return_value=None)
+    def test_list_phrase_what_are_my_tasks(self, _perm, mock_list, mock_update, mock_db: MagicMock):
+        task = _task(title="ניסיון ניסיון")
+        mock_list.return_value = [task]
+
+        skill = TaskSkill()
+        member = _member(name="חן")
+        cmd = Command(skill="task", action="list", params={})
+        result = skill.execute(mock_db, member, cmd)
+
+        assert result.success
+        assert "ניסיון ניסיון" in result.message
 
 # ---------------------------------------------------------------------------
 # _list
