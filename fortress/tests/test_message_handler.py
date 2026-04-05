@@ -189,6 +189,30 @@ async def test_agent_text_for_register_task_for_assignee_forces_regex_fallback(
     mock_exec.assert_called_once()
 
 
+@pytest.mark.asyncio
+@patch("src.services.message_handler._save_conversation")
+@patch("src.services.message_handler.execute")
+@patch("src.services.message_handler.parse_command")
+@patch("src.services.message_handler.get_family_member_by_phone")
+async def test_task_commands_bypass_agent_and_run_structured_first(
+    mock_auth, mock_parse, mock_exec, mock_conv, mock_db
+) -> None:
+    """Structured task commands should not go through the LLM agent first."""
+    from src.skills.base_skill import Command, Result
+
+    member = _make_member()
+    mock_auth.return_value = member
+    mock_parse.return_value = Command(skill="task", action="list", params={})
+    mock_exec.return_value = Result(success=True, message="📋 המשימות שלך:")
+
+    with patch("src.services.agent_loop.run", new=AsyncMock()) as mock_agent_run:
+        result = await handle_incoming_message(mock_db, "972501234567", "משימות", "msg1")
+
+    assert result == "📋 המשימות שלך:"
+    mock_exec.assert_called_once()
+    mock_agent_run.assert_not_awaited()
+
+
 # ── MVP deterministic fallback tests ─────────────────────────────
 
 

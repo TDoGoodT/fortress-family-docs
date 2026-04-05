@@ -56,6 +56,19 @@ def _structured_command_available(message_text: str) -> bool:
     return parse_command(message_text, registry) is not None
 
 
+def _should_prefer_structured_path(message_text: str) -> bool:
+    """Return True when we should bypass the agent and execute deterministically.
+
+    Task flows are fully deterministic and stateful, so routing them through the
+    agent can produce free-text claims or fragmented tool calls that diverge
+    from the underlying DB operation.
+    """
+    command = parse_command(message_text, registry)
+    if command is None:
+        return False
+    return command.skill in {"task", "system"}
+
+
 async def handle_incoming_message(
     db: Session,
     phone: str,
@@ -108,7 +121,14 @@ async def handle_incoming_message(
             return _sanitize_response(response)
 
         # Text messages → Agent Loop (or regex fallback if disabled)
-        if AGENT_ENABLED:
+        if _should_prefer_structured_path(message_text):
+            response, intent = await _run_regex_path(db, member, message_text, pii_stripped)
+            logger.info(
+                "message_handler: preferred_structured_path member=%s skill_message=%s",
+                member.name,
+                message_text[:120],
+            )
+        elif AGENT_ENABLED:
             from src.services.agent_loop import run as agent_run
             agent_result = await agent_run(db, member, message_text)
 
