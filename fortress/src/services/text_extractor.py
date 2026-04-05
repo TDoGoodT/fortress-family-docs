@@ -39,7 +39,7 @@ def extract_text(file_path: str) -> str:
 
 
 def _extract_pdf(file_path: str) -> str:
-    """Extract text from a PDF using pdfplumber."""
+    """Extract text from a PDF using pdfplumber, with OCR fallback for scanned PDFs."""
     try:
         import pdfplumber
     except ImportError:
@@ -54,8 +54,42 @@ def _extract_pdf(file_path: str) -> str:
                 pages_text.append(text)
 
     result = "\n\n".join(pages_text)
+
+    # If pdfplumber found no text, this is likely a scanned PDF — try OCR
+    if not result.strip():
+        logger.info("text_extractor: pdfplumber returned empty for %s, trying OCR fallback", os.path.basename(file_path))
+        result = _ocr_pdf(file_path)
+
     logger.info("text_extractor: extracted %d chars from PDF %s", len(result), os.path.basename(file_path))
     return result
+
+
+def _ocr_pdf(file_path: str) -> str:
+    """OCR a scanned PDF by converting pages to images and running pytesseract."""
+    try:
+        import pytesseract
+        from pdf2image import convert_from_path
+    except ImportError:
+        logger.info("text_extractor: pdf2image/pytesseract not installed, skipping PDF OCR")
+        return ""
+
+    try:
+        images = convert_from_path(file_path, dpi=300, first_page=1, last_page=10)
+        pages_text: list[str] = []
+        for i, img in enumerate(images):
+            text = pytesseract.image_to_string(img, lang="heb+eng")
+            if text and text.strip():
+                pages_text.append(text.strip())
+        result = "\n\n".join(pages_text)
+        logger.info("text_extractor: OCR extracted %d chars from %d pages of %s",
+                     len(result), len(images), os.path.basename(file_path))
+        return result
+    except pytesseract.TesseractNotFoundError:
+        logger.warning("text_extractor: Tesseract not installed, skipping PDF OCR")
+        return ""
+    except Exception:
+        logger.exception("text_extractor: PDF OCR failed for %s", os.path.basename(file_path))
+        return ""
 
 
 def _extract_docx(file_path: str) -> str:
