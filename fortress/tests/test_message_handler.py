@@ -154,6 +154,41 @@ async def test_agent_text_for_structured_command_forces_regex_fallback(
     mock_exec.assert_called_once()
 
 
+@pytest.mark.asyncio
+@patch("src.services.message_handler._save_conversation")
+@patch("src.services.message_handler.execute")
+@patch("src.services.message_handler.parse_command")
+@patch("src.services.message_handler.get_family_member_by_phone")
+async def test_agent_text_for_register_task_for_assignee_forces_regex_fallback(
+    mock_auth, mock_parse, mock_exec, mock_conv, mock_db
+) -> None:
+    """Phrases like 'תרשום משימה לחן - ...' should be executed structurally."""
+    from src.skills.base_skill import Command, Result
+
+    member = _make_member()
+    mock_auth.return_value = member
+    mock_parse.return_value = Command(
+        skill="task",
+        action="create",
+        params={"title": "אני אוהב אותך", "assignee_name": "חן"},
+    )
+    mock_exec.return_value = Result(success=True, message="יצרתי את המשימה לחן ✅")
+
+    with patch(
+        "src.services.agent_loop.run",
+        new=AsyncMock(return_value=AgentResult(response="יצרתי משימה לחן ✅", tool_name=None, iterations=1)),
+    ):
+        result = await handle_incoming_message(
+            mock_db,
+            "972501234567",
+            "תרשום משימה לחן - אני אוהב אותך",
+            "msg1",
+        )
+
+    assert result == "יצרתי את המשימה לחן ✅"
+    mock_exec.assert_called_once()
+
+
 # ── MVP deterministic fallback tests ─────────────────────────────
 
 

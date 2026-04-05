@@ -37,7 +37,9 @@ class TaskSkill(BaseSkill):
     @property
     def commands(self) -> list[tuple[re.Pattern, str]]:
         return [
+            (re.compile(r"^תרשום\s+משימה\s+ל(?P<assignee_name>[^\s]+)(?:\s*[-:])?\s*(?P<title>.+)$", re.IGNORECASE), "create"),
             (re.compile(r"^תרשום ל(?P<assignee_name>[^\s]+)\s+משימה(?:\s*[-:])?\s*(?P<title>.+)$", re.IGNORECASE), "create"),
+            (re.compile(r"^תוסיף\s+משימה\s+ל(?P<assignee_name>[^\s]+)(?:\s*[-:])?\s*(?P<title>.+)$", re.IGNORECASE), "create"),
             (re.compile(r"^תוסיף ל(?P<assignee_name>[^\s]+)\s+משימה(?:\s*[-:])?\s*(?P<title>.+)$", re.IGNORECASE), "create"),
             (re.compile(r"^למשימות של\s+(?P<assignee_name>[^\s]+)\s+תוסיף\s+(?P<title>.+)$", re.IGNORECASE), "create"),
             (re.compile(r"^משימה ל(?P<assignee_name>[^\s]+)(?:\s*[-:])?\s*(?P<title>.+)$", re.IGNORECASE), "create"),
