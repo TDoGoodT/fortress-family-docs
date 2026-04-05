@@ -37,6 +37,14 @@ class TaskSkill(BaseSkill):
     @property
     def commands(self) -> list[tuple[re.Pattern, str]]:
         return [
+            (re.compile(r"^תרשום ל(?P<assignee_name>[^\s]+)\s+משימה(?:\s*[-:])?\s*(?P<title>.+)$", re.IGNORECASE), "create"),
+            (re.compile(r"^תוסיף ל(?P<assignee_name>[^\s]+)\s+משימה(?:\s*[-:])?\s*(?P<title>.+)$", re.IGNORECASE), "create"),
+            (re.compile(r"^למשימות של\s+(?P<assignee_name>[^\s]+)\s+תוסיף\s+(?P<title>.+)$", re.IGNORECASE), "create"),
+            (re.compile(r"^משימה ל(?P<assignee_name>[^\s]+)(?:\s*[-:])?\s*(?P<title>.+)$", re.IGNORECASE), "create"),
+            (re.compile(r"^משימה\s+(?P<index>\d+)\s+היא\s+של\s+(?P<assignee_name>[^\s]+)$", re.IGNORECASE), "reassign"),
+            (re.compile(r"^תשייך\s+את\s+משימה\s+(?P<index>\d+)\s+ל(?P<assignee_name>[^\s]+)$", re.IGNORECASE), "reassign"),
+            (re.compile(r"^זה\s+שייך\s+ל(?P<assignee_name>[^\s]+)$", re.IGNORECASE), "reassign"),
+            (re.compile(r"^המשימה\s+הזאת\s+של\s+(?P<assignee_name>[^\s]+)$", re.IGNORECASE), "reassign"),
             (re.compile(r"^משימה חדשה[:\s]+(?P<title>.+)$", re.IGNORECASE), "create"),
             (re.compile(r"^משימה[:\s\-]+(?P<title>.+)$", re.IGNORECASE), "create"),
             (re.compile(r"^new task[:\s]+(?P<title>.+)$", re.IGNORECASE), "create"),
@@ -58,6 +66,7 @@ class TaskSkill(BaseSkill):
     def execute(self, db: Session, member: FamilyMember, command: Command) -> Result:
         dispatch = {
             "create": self._create,
+            "reassign": self._reassign,
             "list": self._list,
             "delete": self._delete,
             "delete_all": self._delete_all,
@@ -89,6 +98,10 @@ class TaskSkill(BaseSkill):
             return denied
 
         title = params.get("title", "").strip()
+        assignee = self._resolve_assignee_member(db, params.get("assignee_name"))
+        if isinstance(assignee, Result):
+            return assignee
+        assignee_id = assignee.id if assignee is not None else member.id
 
         # Duplicate detection: same title, same member, open, last 5 minutes
         cutoff = datetime.now(timezone.utc) - timedelta(minutes=5)
@@ -114,13 +127,49 @@ class TaskSkill(BaseSkill):
                 ),
             )
 
-        task = tasks.create_task(db, title, member.id, assigned_to=member.id)
+        task = tasks.create_task(db, title, member.id, assigned_to=assignee_id)
+        if assignee_id == member.id:
+            message = format_task_created(title)
+        else:
+            message = f"יצרתי את המשימה ל{assignee.name} ✅"
         return Result(
             success=True,
-            message=format_task_created(title),
+            message=message,
             entity_type="task",
             entity_id=task.id,
             action="created",
+        )
+
+    def _reassign(self, db: Session, member: FamilyMember, params: dict) -> Result:
+        denied = check_perm(db, member, "tasks", "write")
+        if denied:
+            return denied
+
+        assignee = self._resolve_assignee_member(db, params.get("assignee_name"))
+        if isinstance(assignee, Result):
+            return assignee
+        if assignee is None:
+            return Result(success=False, message="למי לשייך את המשימה? 🤔")
+
+        task_id = self._resolve_task_id(db, member, params)
+        if isinstance(task_id, Result):
+            if params.get("index") is None:
+                return Result(
+                    success=False,
+                    message="לא בטוח לאיזו משימה התכוונת. אפשר לציין מספר משימה? 🙏",
+                )
+            return task_id
+
+        task = tasks.reassign_task(db, task_id, assignee.id, actor_id=member.id)
+        if task is None:
+            return Result(success=False, message=TEMPLATES["task_not_found"])
+
+        return Result(
+            success=True,
+            message=f"שייכתי את המשימה ל{assignee.name} ✅",
+            entity_type="task",
+            entity_id=task.id,
+            action="updated",
         )
 
     def _list(self, db: Session, member: FamilyMember, params: dict) -> Result:
@@ -358,6 +407,66 @@ class TaskSkill(BaseSkill):
             return state.last_entity_id
 
         return Result(success=False, message=TEMPLATES["task_not_found"])
+
+    def _resolve_assignee_member(
+        self,
+        db: Session,
+        assignee_name: str | None,
+    ) -> FamilyMember | Result | None:
+        """Resolve assignee by normalized name. Returns None when not specified."""
+        if not assignee_name:
+            return None
+
+        normalized_target = self._normalize_member_name(assignee_name)
+        if not normalized_target:
+            return None
+
+        family_members = (
+            db.query(FamilyMember)
+            .filter(FamilyMember.is_active.is_(True))
+            .all()
+        )
+
+        exact_matches = [
+            m for m in family_members
+            if self._normalize_member_name(m.name) == normalized_target
+        ]
+        if len(exact_matches) == 1:
+            return exact_matches[0]
+        if len(exact_matches) > 1:
+            options = ", ".join(m.name for m in exact_matches[:3])
+            return Result(
+                success=False,
+                message=f"יש כמה בני משפחה בשם הזה: {options}. למי התכוונת?",
+            )
+
+        partial_matches = [
+            m for m in family_members
+            if normalized_target in self._normalize_member_name(m.name)
+        ]
+        if len(partial_matches) == 1:
+            return partial_matches[0]
+        if len(partial_matches) > 1:
+            options = ", ".join(m.name for m in partial_matches[:3])
+            return Result(
+                success=False,
+                message=f"מצאתי כמה התאמות: {options}. אפשר לדייק את השם?",
+            )
+
+        return Result(
+            success=False,
+            message=f"לא מצאתי בן משפחה בשם '{assignee_name}'.",
+        )
+
+    @staticmethod
+    def _normalize_member_name(name: str) -> str:
+        """Normalize household member name for deterministic matching."""
+        value = re.sub(r"\s+", " ", name.strip().lower())
+        if value.startswith("ל"):
+            value = value[1:]
+        if value.startswith("של "):
+            value = value[3:]
+        return value.strip()
 
     @staticmethod
     def _parse_and_apply_changes(task: Task, changes_text: str) -> str:

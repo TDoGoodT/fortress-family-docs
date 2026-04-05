@@ -10,6 +10,7 @@ from src.services.tasks import (
     complete_task,
     create_task,
     list_tasks,
+    reassign_task,
     update_task_status,
 )
 
@@ -148,3 +149,21 @@ def test_update_task_status_custom_completed_at(
     assert result is not None
     assert task.completed_at == custom_time
     assert task.status == "done"
+
+
+@patch("src.services.tasks.log_action")
+@patch("src.services.tasks.get_task")
+def test_reassign_task_updates_assignee(
+    mock_get: MagicMock, mock_log: MagicMock, mock_db: MagicMock
+) -> None:
+    """reassign_task updates assigned_to and logs reassignment."""
+    task = _make_task(assigned_to=uuid.uuid4())
+    new_assignee = uuid.uuid4()
+    mock_get.return_value = task
+
+    result = reassign_task(mock_db, task.id, new_assignee, actor_id=_ACTOR_ID)
+
+    assert result is task
+    assert task.assigned_to == new_assignee
+    mock_db.flush.assert_called_once()
+    mock_log.assert_called_once()

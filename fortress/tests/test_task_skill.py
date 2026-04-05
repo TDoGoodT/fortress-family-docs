@@ -63,7 +63,7 @@ class TestTaskSkillStructure:
         assert "משימות" in desc
 
     def test_commands_count(self):
-        assert len(TaskSkill().commands) == 16
+        assert len(TaskSkill().commands) == 24
 
     def test_get_help_returns_string(self):
         help_text = TaskSkill().get_help()
@@ -101,6 +101,30 @@ class TestCreate:
         assert result.entity_id == task.id
         assert result.action == "created"
         mock_create.assert_called_once()
+
+    @patch("src.skills.task_skill.tasks.create_task")
+    @patch("src.skills.task_skill.check_perm", return_value=None)
+    def test_create_with_explicit_assignee(self, _perm, mock_create, mock_db: MagicMock):
+        task = _task(title="לברר קוד לגן")
+        assignee = _member(name="חן")
+        mock_create.return_value = task
+        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.query.return_value.filter.return_value.all.return_value = [assignee]
+
+        skill = TaskSkill()
+        member = _member(name="שגב")
+        cmd = Command(
+            skill="task",
+            action="create",
+            params={"title": "לברר קוד לגן", "assignee_name": "חן"},
+        )
+        result = skill.execute(mock_db, member, cmd)
+
+        assert result.success
+        mock_create.assert_called_once_with(
+            mock_db, "לברר קוד לגן", member.id, assigned_to=assignee.id
+        )
+        assert "לחן" in result.message
 
     @patch("src.skills.task_skill.tasks.create_task")
     @patch("src.skills.task_skill.check_perm", return_value=None)
@@ -143,6 +167,23 @@ class TestCreate:
         assert result.success
         assert "לקנות חלב" in result.message
         mock_confirm.assert_called_once()
+
+    @patch("src.skills.task_skill.tasks.create_task")
+    @patch("src.skills.task_skill.check_perm", return_value=None)
+    def test_create_without_assignee_defaults_to_sender(self, _perm, mock_create, mock_db: MagicMock):
+        task = _task(title="לקנות חלב")
+        mock_create.return_value = task
+        mock_db.query.return_value.filter.return_value.first.return_value = None
+
+        skill = TaskSkill()
+        member = _member(name="שגב")
+        cmd = Command(skill="task", action="create", params={"title": "לקנות חלב"})
+        result = skill.execute(mock_db, member, cmd)
+
+        assert result.success
+        mock_create.assert_called_once_with(
+            mock_db, "לקנות חלב", member.id, assigned_to=member.id
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -497,6 +538,60 @@ class TestUpdate:
         result = skill.execute(mock_db, member, cmd)
 
         assert not result.success
+
+
+# ---------------------------------------------------------------------------
+# _reassign
+# ---------------------------------------------------------------------------
+
+class TestReassign:
+    @patch("src.skills.task_skill.tasks.reassign_task")
+    @patch("src.skills.task_skill.tasks.get_task")
+    @patch("src.skills.task_skill.get_state")
+    @patch("src.skills.task_skill.check_perm", return_value=None)
+    def test_reassign_by_index(
+        self, _perm, mock_state, mock_get_task, mock_reassign, mock_db: MagicMock
+    ):
+        tid = uuid.uuid4()
+        assignee = _member(name="חן")
+        task = _task(id=tid, title="לברר קוד לגן")
+        mock_state.return_value = _state(context={"task_list_order": [str(tid)]})
+        mock_get_task.return_value = task
+        mock_reassign.return_value = task
+        mock_db.query.return_value.filter.return_value.all.return_value = [assignee]
+
+        skill = TaskSkill()
+        member = _member(name="שגב")
+        cmd = Command(
+            skill="task",
+            action="reassign",
+            params={"index": "1", "assignee_name": "חן"},
+        )
+        result = skill.execute(mock_db, member, cmd)
+
+        assert result.success
+        mock_reassign.assert_called_once_with(
+            mock_db, tid, assignee.id, actor_id=member.id
+        )
+        assert "לחן" in result.message
+
+    @patch("src.skills.task_skill.check_perm", return_value=None)
+    def test_reassign_ambiguous_assignee(self, _perm, mock_db: MagicMock):
+        m1 = _member(name="חן")
+        m2 = _member(name="חן")
+        mock_db.query.return_value.filter.return_value.all.return_value = [m1, m2]
+
+        skill = TaskSkill()
+        member = _member(name="שגב")
+        cmd = Command(
+            skill="task",
+            action="reassign",
+            params={"index": "1", "assignee_name": "חן"},
+        )
+        result = skill.execute(mock_db, member, cmd)
+
+        assert not result.success
+        assert "כמה" in result.message
 
 
 # ---------------------------------------------------------------------------

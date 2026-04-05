@@ -121,3 +121,33 @@ def complete_task(db: Session, task_id: UUID) -> Task | None:
 def archive_task(db: Session, task_id: UUID) -> Task | None:
     """Set a task's status to archived."""
     return update_task_status(db, task_id, "archived")
+
+
+def reassign_task(
+    db: Session,
+    task_id: UUID,
+    assigned_to: UUID,
+    *,
+    actor_id: UUID,
+) -> Task | None:
+    """Update a task assignee and log the reassignment."""
+    task = get_task(db, task_id)
+    if task is None:
+        return None
+
+    previous_assignee = task.assigned_to
+    task.assigned_to = assigned_to
+    db.flush()
+
+    log_action(
+        db,
+        actor_id=actor_id,
+        action="task_reassigned",
+        resource_type="task",
+        resource_id=task.id,
+        details={
+            "previous_assignee": str(previous_assignee) if previous_assignee else None,
+            "new_assignee": str(assigned_to),
+        },
+    )
+    return task

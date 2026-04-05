@@ -90,6 +90,26 @@ def test_mixed_hebrew_english():
     assert cmd.params.get("title") == "buy milk"
 
 
+def test_explicit_assignee_create_phrase_parses():
+    """Explicit assignee create phrase should route to task.create with assignee."""
+    cmd = parse_command("תרשום לחן משימה - לברר מה הקוד", registry)
+    assert cmd is not None
+    assert cmd.skill == "task"
+    assert cmd.action == "create"
+    assert cmd.params.get("assignee_name") == "חן"
+    assert cmd.params.get("title") == "לברר מה הקוד"
+
+
+def test_reassign_phrase_parses():
+    """Post-create correction phrase should route to task.reassign."""
+    cmd = parse_command("משימה 2 היא של חן", registry)
+    assert cmd is not None
+    assert cmd.skill == "task"
+    assert cmd.action == "reassign"
+    assert cmd.params.get("index") == "2"
+    assert cmd.params.get("assignee_name") == "חן"
+
+
 # ── 8. Emoji-only → None (LLM fallback) ─────────────────────────
 
 def test_emoji_only_llm_fallback():
