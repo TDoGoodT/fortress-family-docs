@@ -63,7 +63,7 @@ class TestTaskSkillStructure:
         assert "משימות" in desc
 
     def test_commands_count(self):
-        assert len(TaskSkill().commands) == 28
+        assert len(TaskSkill().commands) == 30
 
     def test_get_help_returns_string(self):
         help_text = TaskSkill().get_help()
@@ -76,6 +76,28 @@ class TestTaskSkillStructure:
         cmd = Command(skill="task", action="unknown", params={})
         result = skill.execute(mock_db, member, cmd)
         assert not result.success
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "מה המשימות שלי ?",
+            "מה המשימות הפתוחות שלי?",
+            "איזה משימות ?",
+            "איזה משימות יש לי?",
+            "יש לי עוד משימות?",
+        ],
+    )
+    def test_list_variants_match_task_list_intent(self, text: str):
+        from src.engine.command_parser import parse_command
+        from src.skills.registry import SkillRegistry
+
+        registry = SkillRegistry()
+        registry.register(TaskSkill())
+
+        command = parse_command(text, registry)
+        assert command is not None
+        assert command.skill == "task"
+        assert command.action == "list"
 
 
 # ---------------------------------------------------------------------------
