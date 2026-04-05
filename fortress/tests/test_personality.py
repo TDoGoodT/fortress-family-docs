@@ -103,6 +103,11 @@ REQUIRED_TEMPLATE_KEYS = {
     "document_recent_header",
     "document_clarify",
     "document_clarify_option",
+    # Knowledge layer: recipes
+    "recipe_list_header",
+    "recipe_list_empty",
+    "recipe_search_empty",
+    "recipe_not_found",
 }
 
 

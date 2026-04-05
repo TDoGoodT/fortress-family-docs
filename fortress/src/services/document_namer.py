@@ -23,6 +23,7 @@ DOC_TYPE_LABEL_MAP: dict[str, str] = {
     "insurance": "ביטוח",
     "warranty": "אחריות",
     "official_letter": "מכתב רשמי",
+    "recipe": "מתכון",
     "other": "מסמך",
 }
 

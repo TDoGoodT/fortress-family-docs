@@ -19,6 +19,7 @@ SUPPORTED_CATEGORIES: list[str] = [
     "insurance",
     "warranty",
     "official_letter",
+    "recipe",
     "other",
 ]
 
@@ -32,6 +33,11 @@ ALLOWED_FACT_KEYS: list[str] = [
     "period_end",
     "policy_number",
     "contract_end_date",
+    "recipe_name",
+    "ingredients",
+    "instructions",
+    "servings",
+    "prep_time",
 ]
 
 MAX_SOURCE_EXCERPT_LENGTH: int = 250
@@ -47,6 +53,7 @@ _KEYWORD_RULES: list[tuple[str, list[str]]] = [
     ("insurance", ["insurance", "ביטוח", "פוליסה", "policy", "insured"]),
     ("warranty", ["warranty", "אחריות", "guarantee", "תעודת אחריות"]),
     ("official_letter", ["official", "רשמי", "עירייה", "משרד", "municipality", "government", "ministry"]),
+    ("recipe", ["מתכון", "מצרכים", "אופן הכנה", "הוראות הכנה", "recipe", "ingredients", "instructions", "כוסות", "כפות", "גרם"]),
 ]
 
 _SPREADSHEET_EXTENSIONS = {".xls", ".xlsx"}

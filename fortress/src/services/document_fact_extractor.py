@@ -42,6 +42,7 @@ _CATEGORY_FACT_KEYS: dict[str, list[str]] = {
     "warranty": ["source_date", "counterparty", "period_end"],
     "official_letter": ["source_date", "counterparty", "document_reference"],
     "other": ["source_date", "counterparty", "amount", "currency"],
+    "recipe": ["recipe_name", "ingredients", "instructions", "servings", "prep_time"],
 }
 
 
@@ -97,6 +98,127 @@ def _extract_amounts_regex(text: str) -> list[dict[str, Any]]:
     return facts
 
 
+async def _extract_recipe_facts(raw_text: str, filename: str) -> list[dict[str, Any]]:
+    """Extract structured recipe facts from raw_text using LLM.
+
+    Handles both single-recipe and multi-recipe documents.
+    Returns list of fact dicts with fact_type="recipe".
+    Each recipe produces: recipe_name, ingredients, instructions,
+    and optionally servings and prep_time.
+    For multi-recipe docs, source_excerpt contains the recipe name
+    to associate related facts.
+    """
+    try:
+        truncated_text = raw_text[:4000]
+        prompt = (
+            "Extract all recipes from this document.\n"
+            "For each recipe, return a JSON object with these fields:\n"
+            '  - "recipe_name": the name/title of the recipe (required)\n'
+            '  - "ingredients": the full ingredients list as text (required)\n'
+            '  - "instructions": the preparation steps as text (required)\n'
+            '  - "servings": number of servings if mentioned (optional, omit if not found)\n'
+            '  - "prep_time": preparation time if mentioned (optional, omit if not found)\n\n'
+            "Respond with a JSON array of recipe objects only.\n"
+            "If there is one recipe, return an array with one object.\n"
+            "If there are multiple recipes, return an array with one object per recipe.\n\n"
+            f"Document text:\n{truncated_text}"
+        )
+        system = "You are a recipe extractor. Respond only with a valid JSON array of recipe objects."
+        raw = await llm_generate(prompt, system, "lite")
+
+        if not raw:
+            logger.warning("fact_extractor: recipe LLM returned empty doc=%s", filename)
+            return []
+
+        # Extract JSON array from response
+        match = re.search(r'\[.*\]', raw, re.DOTALL)
+        if not match:
+            logger.warning("fact_extractor: recipe LLM no JSON array found doc=%s", filename)
+            return []
+
+        recipes = json.loads(match.group())
+        if not isinstance(recipes, list) or not recipes:
+            logger.warning("fact_extractor: recipe LLM returned empty/invalid array doc=%s", filename)
+            return []
+
+        facts: list[dict[str, Any]] = []
+        is_multi = len(recipes) > 1
+
+        for recipe in recipes:
+            try:
+                recipe_name = str(recipe.get("recipe_name", "")).strip()
+                if not recipe_name:
+                    continue
+
+                excerpt = _truncate_excerpt(recipe_name) if is_multi else ""
+
+                # Required fields
+                facts.append({
+                    "fact_type": "recipe",
+                    "fact_key": "recipe_name",
+                    "fact_value": recipe_name,
+                    "confidence": 0.7,
+                    "source_excerpt": excerpt,
+                })
+
+                ingredients = str(recipe.get("ingredients", "")).strip()
+                if ingredients:
+                    facts.append({
+                        "fact_type": "recipe",
+                        "fact_key": "ingredients",
+                        "fact_value": ingredients,
+                        "confidence": 0.7,
+                        "source_excerpt": excerpt,
+                    })
+
+                instructions = str(recipe.get("instructions", "")).strip()
+                if instructions:
+                    facts.append({
+                        "fact_type": "recipe",
+                        "fact_key": "instructions",
+                        "fact_value": instructions,
+                        "confidence": 0.7,
+                        "source_excerpt": excerpt,
+                    })
+
+                # Optional fields
+                servings = str(recipe.get("servings", "")).strip()
+                if servings:
+                    facts.append({
+                        "fact_type": "recipe",
+                        "fact_key": "servings",
+                        "fact_value": servings,
+                        "confidence": 0.6,
+                        "source_excerpt": excerpt,
+                    })
+
+                prep_time = str(recipe.get("prep_time", "")).strip()
+                if prep_time:
+                    facts.append({
+                        "fact_type": "recipe",
+                        "fact_key": "prep_time",
+                        "fact_value": prep_time,
+                        "confidence": 0.6,
+                        "source_excerpt": excerpt,
+                    })
+            except Exception as exc:
+                logger.warning(
+                    "fact_extractor: recipe partial failure doc=%s recipe=%s error=%s: %s",
+                    filename, recipe.get("recipe_name", "unknown"), type(exc).__name__, exc,
+                )
+                continue
+
+        if is_multi:
+            recipe_count = sum(1 for f in facts if f["fact_key"] == "recipe_name")
+            logger.info("fact_extractor: multi-recipe doc=%s recipes_extracted=%d", filename, recipe_count)
+
+        return facts
+
+    except Exception as exc:
+        logger.error("fact_extractor: recipe extraction failed doc=%s error=%s: %s", filename, type(exc).__name__, exc)
+        return []
+
+
 async def extract_facts(raw_text: str, doc_type: str, filename: str) -> list[dict[str, Any]]:
     """Extract structured facts from raw_text.
 
@@ -128,48 +250,56 @@ async def extract_facts(raw_text: str, doc_type: str, filename: str) -> list[dic
         logger.warning("fact_extractor: phase1 failed doc=%s error=%s: %s", filename, type(exc).__name__, exc)
 
     # Phase 2: LLM for remaining target keys
-    target_keys = _CATEGORY_FACT_KEYS.get(doc_type, _CATEGORY_FACT_KEYS["other"])
-    remaining_keys = [k for k in target_keys if k not in extracted_keys]
-
-    if remaining_keys:
+    if doc_type == "recipe":
+        # Recipe-specific extraction replaces generic Phase 2
         try:
-            truncated_text = raw_text[:2000]
-            prompt = (
-                f"Extract the following facts from this document.\n"
-                f"Facts to extract: {', '.join(remaining_keys)}\n"
-                f"Document type: {doc_type}\n"
-                f"Filename: {filename}\n\n"
-                f"Document text:\n{truncated_text}\n\n"
-                f"Respond with a JSON array only. Each item: "
-                f'{{\"fact_key\": \"<key>\", \"fact_value\": \"<value>\", '
-                f'\"confidence\": <0.0-1.0>, \"source_excerpt\": \"<short quote>\"}}\n'
-                f"Only include facts you can find in the text. Allowed keys: {', '.join(ALLOWED_FACT_KEYS)}"
-            )
-            system = "You are a document fact extractor. Respond only with a valid JSON array."
-            raw = await llm_generate(prompt, system, "lite")
-
-            if raw:
-                # Extract JSON array from response
-                match = re.search(r'\[.*\]', raw, re.DOTALL)
-                if match:
-                    items = json.loads(match.group())
-                    for item in items:
-                        key = item.get("fact_key", "")
-                        value = str(item.get("fact_value", "")).strip()
-                        if key not in ALLOWED_FACT_KEYS or not value:
-                            continue
-                        if key in extracted_keys:
-                            continue
-                        facts.append({
-                            "fact_type": doc_type,
-                            "fact_key": key,
-                            "fact_value": value,
-                            "confidence": float(item.get("confidence", 0.5)),
-                            "source_excerpt": _truncate_excerpt(str(item.get("source_excerpt", ""))),
-                        })
-                        extracted_keys.add(key)
+            recipe_facts = await _extract_recipe_facts(raw_text, filename)
+            facts.extend(recipe_facts)
         except Exception as exc:
-            logger.warning("fact_extractor: phase2 failed doc=%s error=%s: %s", filename, type(exc).__name__, exc)
+            logger.warning("fact_extractor: recipe phase2 failed doc=%s error=%s: %s", filename, type(exc).__name__, exc)
+    else:
+        target_keys = _CATEGORY_FACT_KEYS.get(doc_type, _CATEGORY_FACT_KEYS["other"])
+        remaining_keys = [k for k in target_keys if k not in extracted_keys]
+
+        if remaining_keys:
+            try:
+                truncated_text = raw_text[:2000]
+                prompt = (
+                    f"Extract the following facts from this document.\n"
+                    f"Facts to extract: {', '.join(remaining_keys)}\n"
+                    f"Document type: {doc_type}\n"
+                    f"Filename: {filename}\n\n"
+                    f"Document text:\n{truncated_text}\n\n"
+                    f"Respond with a JSON array only. Each item: "
+                    f'{{\"fact_key\": \"<key>\", \"fact_value\": \"<value>\", '
+                    f'\"confidence\": <0.0-1.0>, \"source_excerpt\": \"<short quote>\"}}\n'
+                    f"Only include facts you can find in the text. Allowed keys: {', '.join(ALLOWED_FACT_KEYS)}"
+                )
+                system = "You are a document fact extractor. Respond only with a valid JSON array."
+                raw = await llm_generate(prompt, system, "lite")
+
+                if raw:
+                    # Extract JSON array from response
+                    match = re.search(r'\[.*\]', raw, re.DOTALL)
+                    if match:
+                        items = json.loads(match.group())
+                        for item in items:
+                            key = item.get("fact_key", "")
+                            value = str(item.get("fact_value", "")).strip()
+                            if key not in ALLOWED_FACT_KEYS or not value:
+                                continue
+                            if key in extracted_keys:
+                                continue
+                            facts.append({
+                                "fact_type": doc_type,
+                                "fact_key": key,
+                                "fact_value": value,
+                                "confidence": float(item.get("confidence", 0.5)),
+                                "source_excerpt": _truncate_excerpt(str(item.get("source_excerpt", ""))),
+                            })
+                            extracted_keys.add(key)
+            except Exception as exc:
+                logger.warning("fact_extractor: phase2 failed doc=%s error=%s: %s", filename, type(exc).__name__, exc)
 
     logger.info("fact_extractor: doc=%s doc_type=%s facts_count=%d", filename, doc_type, len(facts))
     return facts

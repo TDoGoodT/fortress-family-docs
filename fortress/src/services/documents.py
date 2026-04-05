@@ -233,6 +233,16 @@ async def process_document(
                     except (ValueError, TypeError):
                         pass
 
+        # Promote recipe_name to vendor for better deterministic display naming
+        if doc.doc_type == "recipe" and not dn_vendor:
+            recipe_names = [
+                f.get("fact_value", "")
+                for f in extracted_facts
+                if f.get("fact_key") == "recipe_name" and f.get("fact_value", "").strip()
+            ]
+            if len(recipe_names) == 1:
+                dn_vendor = recipe_names[0]
+
         display_name = generate_display_name(
             doc_type=doc.doc_type,
             vendor=dn_vendor,

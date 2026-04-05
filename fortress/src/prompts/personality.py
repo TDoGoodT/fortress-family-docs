@@ -155,6 +155,11 @@ TEMPLATES: dict[str, str] = {
     "deploy_restarted": "המערכת הופעלה מחדש ✅",
     "deploy_not_configured": "Deploy secret לא מוגדר. הגדר DEPLOY_SECRET ב-.env",
     "deploy_rate_limited": "יותר מדי בקשות. נסה שוב בעוד 10 דקות ⏰",
+    # Knowledge layer: recipes
+    "recipe_list_header": "🍳 המתכונים שלך:\n",
+    "recipe_list_empty": "אין מתכונים שמורים 📂",
+    "recipe_search_empty": "לא נמצאו מתכונים תואמים 🍳",
+    "recipe_not_found": "לא מצאתי את המתכון הזה 🤷",
 }
 
 _PRIORITY_EMOJI: dict[str, str] = {
@@ -223,6 +228,8 @@ _DOC_TYPE_EMOJI: dict[str, str] = {
     "insurance": "🛡️",
     "warranty": "✅",
     "official_letter": "📬",
+    # Knowledge layer: recipe
+    "recipe": "🍳",
 }
 
 
@@ -324,5 +331,69 @@ def format_search_results(documents: list) -> str:
         created_at = getattr(doc, "created_at", None)
         date_text = str(created_at)[:10] if created_at else ""
         lines.append(f"{emoji} {i}. {title}\n   📅 {date_text} | {doc_type}")
+
+    return "\n".join(lines)
+
+
+def format_recipe_list(recipes: list[dict]) -> str:
+    """Return a formatted Hebrew recipe list, or the empty-list template.
+
+    Each item: ``🍳 1. {recipe_name}\\n   מתוך: {display_name}``
+    """
+    if not recipes:
+        return TEMPLATES["recipe_list_empty"]
+
+    lines: list[str] = [TEMPLATES["recipe_list_header"]]
+    for i, recipe in enumerate(recipes, 1):
+        recipe_name = recipe.get("recipe_name", "")
+        display_name = recipe.get("display_name", "")
+        lines.append(f"🍳 {i}. {recipe_name}\n   מתוך: {display_name}")
+
+    return "\n".join(lines)
+
+
+def format_recipe_details(recipe: dict) -> str:
+    """Return WhatsApp-friendly formatted recipe details.
+
+    Sections: recipe name, ingredients list, instructions steps,
+    optional servings and prep_time.
+    """
+    recipe_name = recipe.get("recipe_name", "")
+    ingredients = recipe.get("ingredients", "")
+    instructions = recipe.get("instructions", "")
+    servings = recipe.get("servings")
+    prep_time = recipe.get("prep_time")
+
+    lines: list[str] = [f"🍳 *{recipe_name}*"]
+
+    if servings:
+        lines.append(f"🍽️ מנות: {servings}")
+    if prep_time:
+        lines.append(f"⏱️ זמן הכנה: {prep_time}")
+
+    lines.append("")
+    lines.append("*מצרכים:*")
+    lines.append(ingredients)
+
+    lines.append("")
+    lines.append("*אופן הכנה:*")
+    lines.append(instructions)
+
+    return "\n".join(lines)
+
+
+def format_recipe_search_results(results: list[dict]) -> str:
+    """Return a formatted Hebrew recipe search results list.
+
+    Each item: ``🍳 1. {recipe_name} (מתוך {display_name})``
+    """
+    if not results:
+        return TEMPLATES["recipe_search_empty"]
+
+    lines: list[str] = [TEMPLATES["recipe_list_header"]]
+    for i, result in enumerate(results, 1):
+        recipe_name = result.get("recipe_name", "")
+        display_name = result.get("display_name", "")
+        lines.append(f"🍳 {i}. {recipe_name} (מתוך {display_name})")
 
     return "\n".join(lines)

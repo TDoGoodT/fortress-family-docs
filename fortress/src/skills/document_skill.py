@@ -16,13 +16,17 @@ from src.services.conversation_state import update_state
 from src.services.document_query_service import (
     QAResult,
     answer_document_question,
+    get_document_recipes,
+    get_recipe_details,
     get_recent_documents,
     get_view_filters,
+    list_member_recipes,
     merge_tags,
     normalize_tag,
     resolve_document_reference,
     search_by_name,
     search_documents,
+    search_recipes,
 )
 from src.skills.base_skill import BaseSkill, Command, Result
 from src.skills.permissions import check_perm
@@ -79,6 +83,14 @@ class DocumentSkill(BaseSkill):
             (re.compile(r'^(?:תביא|תראה|מצא|תמצא)\s+לי\s+(?P<doc_name>.+)', re.IGNORECASE), 'fetch'),
             # New: document questions (deterministic, owned by DocumentSkill)
             (re.compile(r'^(?P<question>(?:מה סוג|what type|כמה עולה|what.+amount|מי ה|who.+counterparty|תן לי סיכום|give me a summary|מה הסכום|what is the amount|מה התאריך|what is the date).+)', re.IGNORECASE), 'query'),
+            # Recipe commands: list
+            (re.compile(r'^(מתכונים|מתכונים שלי|הראה מתכונים)$', re.IGNORECASE), 'recipe_list'),
+            # Recipe commands: search
+            (re.compile(r'^(?:חפש מתכון|יש מתכון ל)\s*(?P<recipe_query>.+)', re.IGNORECASE), 'recipe_search'),
+            # Recipe commands: how-to / preparation
+            (re.compile(r'^(?:איך מכינים|מה המתכון ל)\s*(?P<recipe_name>.+)', re.IGNORECASE), 'recipe_howto'),
+            # Recipe commands: recipes in a document
+            (re.compile(r'^(?:מה יש ב|מתכונים של|מתכונים ב)\s*(?P<doc_query>.+)', re.IGNORECASE), 'recipe_in_doc'),
             # Catch-all: document-oriented Hebrew keywords — MUST be LAST to avoid shadowing
             (re.compile(r'(?:מסמך|חשבונית|ביטוח|חוזה|קבלה|פוליסה|תשלום|הסכם|חשבון|אחריות|ערבות|שטר|תעודה)', re.IGNORECASE), 'doc_search_fallback'),
         ]
@@ -100,6 +112,10 @@ class DocumentSkill(BaseSkill):
             "view_recent_invoices": self._view_recent_invoices,
             "view_needs_review": self._view_needs_review,
             "query": self._query,
+            "recipe_list": self._recipe_list,
+            "recipe_search": self._recipe_search,
+            "recipe_howto": self._recipe_howto,
+            "recipe_in_doc": self._recipe_in_doc,
             "doc_search_fallback": self._doc_search_fallback,
             "delete_documents": self._delete_documents,
         }
@@ -447,6 +463,100 @@ class DocumentSkill(BaseSkill):
             entity_id=doc.id,
             action="queried",
         )
+
+    # ------------------------------------------------------------------
+    # Recipe handlers
+    # ------------------------------------------------------------------
+
+    def _recipe_list(self, db: Session, member: FamilyMember, params: dict) -> Result:
+        """List all recipes for the member."""
+        denied = check_perm(db, member, "documents", "read")
+        if denied:
+            return denied
+
+        recipes = list_member_recipes(db, member.id)
+        if not recipes:
+            return Result(success=True, message=TEMPLATES.get("recipe_list_empty", "אין מתכונים שמורים 📂"))
+
+        lines = [TEMPLATES.get("recipe_list_header", "🍳 המתכונים שלך:\n")]
+        for i, r in enumerate(recipes, 1):
+            lines.append(f"🍳 {i}. {r['recipe_name']}\n   מתוך: {r['display_name']}")
+        return Result(success=True, message="\n".join(lines))
+
+    def _recipe_search(self, db: Session, member: FamilyMember, params: dict) -> Result:
+        """Search recipes by name or ingredient."""
+        denied = check_perm(db, member, "documents", "read")
+        if denied:
+            return denied
+
+        query = (params.get("recipe_query") or "").strip()
+        if not query:
+            return Result(success=False, message=TEMPLATES["error_fallback"])
+
+        results = search_recipes(db, member.id, query)
+        if not results:
+            return Result(success=True, message=TEMPLATES.get("recipe_search_empty", "לא נמצאו מתכונים תואמים 🍳"))
+
+        lines = ["🔍 תוצאות חיפוש מתכונים:"]
+        for i, r in enumerate(results, 1):
+            lines.append(f"🍳 {i}. {r['recipe_name']} (מתוך {r['display_name']})")
+        return Result(success=True, message="\n".join(lines))
+
+    def _recipe_howto(self, db: Session, member: FamilyMember, params: dict) -> Result:
+        """Return preparation instructions for a specific recipe."""
+        denied = check_perm(db, member, "documents", "read")
+        if denied:
+            return denied
+
+        recipe_name = (params.get("recipe_name") or "").strip()
+        if not recipe_name:
+            return Result(success=False, message=TEMPLATES["error_fallback"])
+
+        details = get_recipe_details(db, member.id, recipe_name)
+        if not details:
+            return Result(success=True, message=TEMPLATES.get("recipe_not_found", "לא מצאתי את המתכון הזה 🤷"))
+
+        lines = [f"🍳 {details['recipe_name']}"]
+        if details.get("ingredients"):
+            lines.append(f"\n📝 מצרכים:\n{details['ingredients']}")
+        if details.get("instructions"):
+            lines.append(f"\n👩‍🍳 הוראות הכנה:\n{details['instructions']}")
+        if details.get("servings"):
+            lines.append(f"\n🍽️ מנות: {details['servings']}")
+        if details.get("prep_time"):
+            lines.append(f"\n⏱️ זמן הכנה: {details['prep_time']}")
+        if details.get("display_name"):
+            lines.append(f"\nמתוך: {details['display_name']}")
+        return Result(success=True, message="\n".join(lines))
+
+    def _recipe_in_doc(self, db: Session, member: FamilyMember, params: dict) -> Result:
+        """List recipes within a specific document."""
+        denied = check_perm(db, member, "documents", "read")
+        if denied:
+            return denied
+
+        doc_query = (params.get("doc_query") or "").strip()
+        if not doc_query:
+            return Result(success=False, message=TEMPLATES["error_fallback"])
+
+        # Resolve the document by name
+        result = search_by_name(db, member.id, doc_query)
+        if result is None:
+            return Result(success=True, message="לא נמצא מסמך בשם זה 📂")
+
+        # If multiple matches, use the first one
+        doc = result[0] if isinstance(result, list) else result
+
+        recipes = get_document_recipes(db, member.id, doc.id)
+        if not recipes:
+            return Result(success=True, message=TEMPLATES.get("recipe_list_empty", "אין מתכונים שמורים 📂"))
+
+        dn = getattr(doc, "display_name", None)
+        doc_title = dn if isinstance(dn, str) and dn else doc.original_filename
+        lines = [f"🍳 מתכונים ב{doc_title}:"]
+        for i, r in enumerate(recipes, 1):
+            lines.append(f"{i}. {r['recipe_name']}")
+        return Result(success=True, message="\n".join(lines))
 
     # ------------------------------------------------------------------
     # Catch-all fallback for document-oriented messages

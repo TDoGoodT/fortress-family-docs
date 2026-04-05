@@ -159,6 +159,77 @@ async def answer_document_question(
     except Exception as exc:
         logger.warning("query_service: fact lookup failed doc=%s error=%s", doc.id, exc)
 
+    # 2.5. Recipe-aware path: check if question is recipe-related
+    if any(kw in question_lower for kw in _RECIPE_KEYWORDS):
+        try:
+            # Check if this is a recipe document or if user is asking about recipes generally
+            if getattr(doc, "doc_type", None) == "recipe":
+                # Get recipe details from this document
+                recipe_facts = db.query(DocumentFact).filter(
+                    DocumentFact.document_id == doc.id,
+                    DocumentFact.fact_type == "recipe",
+                ).all()
+
+                if recipe_facts:
+                    recipe_names = [f.fact_value for f in recipe_facts if f.fact_key == "recipe_name"]
+                    recipe_count = len(recipe_names)
+
+                    # "What recipes do I have?" / list recipes
+                    if any(kw in question_lower for kw in ["מתכונים", "איזה מתכונים"]):
+                        display = getattr(doc, "display_name", None) or ""
+                        if recipe_count > 0:
+                            names_text = ", ".join(recipe_names)
+                            answer = f"יש {recipe_count} מתכונים ב{display}: {names_text}"
+                            return QAResult(
+                                answer_text=answer,
+                                source="document_fact",
+                                confidence=0.9,
+                                field_used="recipe_name",
+                            )
+
+                    # "How to make X?" / recipe instructions
+                    if any(kw in question_lower for kw in ["איך מכינים", "הוראות"]):
+                        for fact in recipe_facts:
+                            if fact.fact_key == "instructions":
+                                return QAResult(
+                                    answer_text=fact.fact_value,
+                                    source="document_fact",
+                                    confidence=0.8,
+                                    field_used="instructions",
+                                )
+
+                    # "What ingredients?" / recipe ingredients
+                    if "מצרכים" in question_lower:
+                        for fact in recipe_facts:
+                            if fact.fact_key == "ingredients":
+                                return QAResult(
+                                    answer_text=fact.fact_value,
+                                    source="document_fact",
+                                    confidence=0.8,
+                                    field_used="ingredients",
+                                )
+
+                    # Generic recipe question — return recipe name(s)
+                    if recipe_names:
+                        display = getattr(doc, "display_name", None) or ""
+                        names_text = ", ".join(recipe_names)
+                        answer = f"נמצאו {recipe_count} מתכונים ב{display}: {names_text}"
+                        return QAResult(
+                            answer_text=answer,
+                            source="document_fact",
+                            confidence=0.8,
+                            field_used="recipe_name",
+                        )
+                else:
+                    return QAResult(
+                        answer_text="לא נמצאו מתכונים במסמך הזה",
+                        source="not_found",
+                        confidence=0.0,
+                        field_used=None,
+                    )
+        except Exception as exc:
+            logger.warning("query_service: recipe-aware path failed doc=%s error=%s", doc.id, exc)
+
     # 3. LLM grounded extraction from raw_text (haiku tier)
     if doc.raw_text and doc.raw_text.strip():
         try:
@@ -188,6 +259,235 @@ async def answer_document_question(
         confidence=0.0,
         field_used=None,
     )
+
+
+# Hebrew keywords that indicate a recipe-related question
+_RECIPE_KEYWORDS = ["מתכון", "מתכונים", "מצרכים", "איך מכינים", "recipe"]
+
+
+def list_member_recipes(
+    db: Session,
+    member_id: UUID,
+) -> list[dict]:
+    """Return all recipe names for a member with source document info.
+
+    Returns list of dicts: {recipe_name, document_id, display_name}
+    """
+    try:
+        results = (
+            db.query(DocumentFact, Document.display_name)
+            .join(Document, DocumentFact.document_id == Document.id)
+            .filter(
+                Document.uploaded_by == member_id,
+                DocumentFact.fact_type == "recipe",
+                DocumentFact.fact_key == "recipe_name",
+            )
+            .all()
+        )
+        return [
+            {
+                "recipe_name": fact.fact_value,
+                "document_id": fact.document_id,
+                "display_name": display_name or "",
+            }
+            for fact, display_name in results
+        ]
+    except Exception as exc:
+        logger.warning("query_service: list_member_recipes failed member=%s error=%s", member_id, exc)
+        return []
+
+
+def search_recipes(
+    db: Session,
+    member_id: UUID,
+    query: str,
+) -> list[dict]:
+    """Search recipes by name or ingredient across member's documents.
+
+    Searches recipe_name and ingredients fact_values using ILIKE.
+    Returns list of dicts: {recipe_name, document_id, display_name, match_type}
+    Each matching recipe as a separate result item.
+    """
+    if not query or not query.strip():
+        return []
+
+    pattern = f"%{query.strip()}%"
+    try:
+        # Search recipe_name facts
+        name_matches = (
+            db.query(DocumentFact, Document.display_name)
+            .join(Document, DocumentFact.document_id == Document.id)
+            .filter(
+                Document.uploaded_by == member_id,
+                DocumentFact.fact_type == "recipe",
+                DocumentFact.fact_key == "recipe_name",
+                DocumentFact.fact_value.ilike(pattern),
+            )
+            .all()
+        )
+
+        # Search ingredients facts
+        ingredient_matches = (
+            db.query(DocumentFact, Document.display_name)
+            .join(Document, DocumentFact.document_id == Document.id)
+            .filter(
+                Document.uploaded_by == member_id,
+                DocumentFact.fact_type == "recipe",
+                DocumentFact.fact_key == "ingredients",
+                DocumentFact.fact_value.ilike(pattern),
+            )
+            .all()
+        )
+
+        results: list[dict] = []
+        seen_recipes: set[str] = set()
+
+        # Add name matches first
+        for fact, display_name in name_matches:
+            key = f"{fact.document_id}:{fact.fact_value}"
+            if key not in seen_recipes:
+                seen_recipes.add(key)
+                results.append({
+                    "recipe_name": fact.fact_value,
+                    "document_id": fact.document_id,
+                    "display_name": display_name or "",
+                    "match_type": "name",
+                })
+
+        # For ingredient matches, resolve the recipe_name via source_excerpt
+        for fact, display_name in ingredient_matches:
+            recipe_name = fact.source_excerpt or ""
+            if not recipe_name:
+                # Fallback: find recipe_name fact for same document
+                name_fact = (
+                    db.query(DocumentFact)
+                    .filter(
+                        DocumentFact.document_id == fact.document_id,
+                        DocumentFact.fact_type == "recipe",
+                        DocumentFact.fact_key == "recipe_name",
+                    )
+                    .first()
+                )
+                recipe_name = name_fact.fact_value if name_fact else ""
+
+            key = f"{fact.document_id}:{recipe_name}"
+            if key not in seen_recipes and recipe_name:
+                seen_recipes.add(key)
+                results.append({
+                    "recipe_name": recipe_name,
+                    "document_id": fact.document_id,
+                    "display_name": display_name or "",
+                    "match_type": "ingredient",
+                })
+
+        return results
+    except Exception as exc:
+        logger.warning("query_service: search_recipes failed member=%s query=%s error=%s", member_id, query, exc)
+        return []
+
+
+def get_recipe_details(
+    db: Session,
+    member_id: UUID,
+    recipe_name: str,
+) -> dict | None:
+    """Get full recipe details (ingredients, instructions, servings, prep_time).
+
+    Finds the recipe_name fact, then loads all related facts
+    from the same document with matching source_excerpt.
+    Returns dict with all recipe fields and display_name, or None.
+    """
+    if not recipe_name or not recipe_name.strip():
+        return None
+
+    try:
+        # Find the recipe_name fact
+        name_result = (
+            db.query(DocumentFact, Document.display_name)
+            .join(Document, DocumentFact.document_id == Document.id)
+            .filter(
+                Document.uploaded_by == member_id,
+                DocumentFact.fact_type == "recipe",
+                DocumentFact.fact_key == "recipe_name",
+                DocumentFact.fact_value.ilike(f"%{recipe_name.strip()}%"),
+            )
+            .first()
+        )
+
+        if not name_result:
+            return None
+
+        name_fact, display_name = name_result
+
+        # Load all related facts from same document with matching source_excerpt
+        excerpt = name_fact.source_excerpt or name_fact.fact_value
+        related_facts = (
+            db.query(DocumentFact)
+            .filter(
+                DocumentFact.document_id == name_fact.document_id,
+                DocumentFact.fact_type == "recipe",
+                or_(
+                    DocumentFact.source_excerpt == excerpt,
+                    DocumentFact.fact_key == "recipe_name",
+                ),
+            )
+            .all()
+        )
+
+        # Build result dict
+        result: dict = {
+            "recipe_name": name_fact.fact_value,
+            "document_id": name_fact.document_id,
+            "display_name": display_name or "",
+            "ingredients": None,
+            "instructions": None,
+            "servings": None,
+            "prep_time": None,
+        }
+
+        for fact in related_facts:
+            if fact.fact_key in ("ingredients", "instructions", "servings", "prep_time"):
+                # For multi-recipe docs, only include facts matching our recipe
+                if fact.source_excerpt == excerpt or not fact.source_excerpt:
+                    result[fact.fact_key] = fact.fact_value
+
+        return result
+    except Exception as exc:
+        logger.warning("query_service: get_recipe_details failed member=%s recipe=%s error=%s", member_id, recipe_name, exc)
+        return None
+
+
+def get_document_recipes(
+    db: Session,
+    member_id: UUID,
+    document_id: UUID,
+) -> list[dict]:
+    """Return all recipe names from a specific document.
+
+    Returns list of dicts: {recipe_name, document_id}
+    """
+    try:
+        results = (
+            db.query(DocumentFact)
+            .join(Document, DocumentFact.document_id == Document.id)
+            .filter(
+                Document.uploaded_by == member_id,
+                DocumentFact.document_id == document_id,
+                DocumentFact.fact_type == "recipe",
+                DocumentFact.fact_key == "recipe_name",
+            )
+            .all()
+        )
+        return [
+            {
+                "recipe_name": fact.fact_value,
+                "document_id": fact.document_id,
+            }
+            for fact in results
+        ]
+    except Exception as exc:
+        logger.warning("query_service: get_document_recipes failed doc=%s error=%s", document_id, exc)
+        return []
 
 
 def search_documents(
