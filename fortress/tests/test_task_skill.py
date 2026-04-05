@@ -185,6 +185,25 @@ class TestCreate:
             mock_db, "לקנות חלב", member.id, assigned_to=member.id
         )
 
+    @patch("src.skills.task_skill.tasks.create_task")
+    @patch("src.skills.task_skill.check_perm", return_value=None)
+    def test_create_with_title_shorthand_assigns_other_member(self, _perm, mock_create, mock_db: MagicMock):
+        assignee = _member(name="חן")
+        task = _task(title="ניסיון ניסיון", assigned_to=assignee.id)
+        mock_create.return_value = task
+        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.query.return_value.filter.return_value.all.return_value = [assignee]
+
+        skill = TaskSkill()
+        member = _member(name="שגב")
+        cmd = Command(skill="task", action="create", params={"title": "ניסיון ניסיון", "assignee_name": "חן"})
+        result = skill.execute(mock_db, member, cmd)
+
+        assert result.success
+        mock_create.assert_called_once_with(
+            mock_db, "ניסיון ניסיון", member.id, assigned_to=assignee.id
+        )
+        assert "לחן" in result.message
 
 # ---------------------------------------------------------------------------
 # _list

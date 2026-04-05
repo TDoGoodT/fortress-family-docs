@@ -1,6 +1,11 @@
 """Unit tests for phone number utilities."""
 
-from src.utils.phone import is_valid_israeli_phone, normalize_phone
+from src.utils.phone import (
+    canonicalize_phone,
+    is_valid_israeli_phone,
+    normalize_phone,
+    phone_lookup_candidates,
+)
 
 
 def test_normalize_strips_c_us() -> None:
@@ -21,6 +26,22 @@ def test_normalize_local_number() -> None:
 
 def test_normalize_combined() -> None:
     assert normalize_phone("+972-50-123-4567@c.us") == "972501234567"
+
+
+def test_normalize_lid() -> None:
+    assert normalize_phone("972501234567@lid") == "972501234567"
+
+
+def test_phone_lookup_candidates_include_local_and_international() -> None:
+    candidates = phone_lookup_candidates("972501234567@c.us")
+    assert "972501234567" in candidates
+    assert "+972501234567" in candidates
+    assert "0501234567" in candidates
+    assert "+0501234567" in candidates
+
+
+def test_canonicalize_local_to_international() -> None:
+    assert canonicalize_phone("0501234567") == "972501234567"
 
 
 def test_valid_israeli_972() -> None:

@@ -18,6 +18,21 @@ def normalize_phone(raw: str) -> str:
     return phone
 
 
+def canonicalize_phone(raw: str) -> str:
+    """Return a stable canonical phone representation for matching.
+
+    Israeli mobile numbers are canonicalized to the international 972 format
+    without ``+``. Unknown formats fall back to the normalized digit-only
+    string so callers still get deterministic behavior.
+    """
+    normalized = normalize_phone(raw)
+    if not normalized:
+        return ""
+    if normalized.startswith("0") and len(normalized) == 10:
+        return f"972{normalized[1:]}"
+    return normalized
+
+
 def phone_lookup_candidates(raw: str) -> list[str]:
     """Return normalized variants that may match the same person.
 

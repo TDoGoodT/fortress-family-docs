@@ -71,6 +71,7 @@ _TOOL_SCHEMAS: list[ToolSchema] = [
                     "type": "object",
                     "properties": {
                         "title": {"type": "string", "description": "שם המשימה"},
+                        "assignee_name": {"type": "string", "description": "שם בן המשפחה שהמשימה מיועדת לו"},
                         "due_date": {"type": "string", "description": "תאריך יעד בפורמט YYYY-MM-DD (אופציונלי)"},
                         "priority": {
                             "type": "string",

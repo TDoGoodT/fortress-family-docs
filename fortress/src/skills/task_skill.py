@@ -469,6 +469,18 @@ class TaskSkill(BaseSkill):
         return value.strip()
 
     @staticmethod
+    def _extract_assignee_from_title(title: str) -> tuple[str | None, str]:
+        """Extract ``ל<name> - <task>`` shorthand assignment syntax."""
+        match = re.match(
+            r"^\s*(?:ל|עבור\s+)(?P<assignee_name>[^:-]+?)\s*[:\-]\s*(?P<title>.+?)\s*$",
+            title,
+            re.IGNORECASE,
+        )
+        if not match:
+            return None, title
+        return match.group("assignee_name").strip(), match.group("title").strip()
+
+    @staticmethod
     def _parse_and_apply_changes(task: Task, changes_text: str) -> str:
         """Parse free-text changes and apply them to the task object.
 

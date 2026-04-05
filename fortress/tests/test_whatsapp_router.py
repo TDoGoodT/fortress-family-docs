@@ -3,6 +3,40 @@
 from unittest.mock import AsyncMock, patch
 
 
+def test_webhook_extracts_text_and_phone_from_c_us_payload(client, mock_db) -> None:
+    body = {
+        "event": "message",
+        "payload": {
+            "id": "msg-1",
+            "from": "972501234567@c.us",
+            "fromMe": False,
+            "body": "מה המשימות שלי?",
+            "hasMedia": False,
+        },
+    }
+
+    with patch(
+        "src.routers.whatsapp.handle_incoming_message",
+        new=AsyncMock(return_value="אין משימות פתוחות! 🎉 יום נקי."),
+    ) as mock_handle, patch(
+        "src.routers.whatsapp.send_text_message",
+        new=AsyncMock(return_value=True),
+    ) as mock_send:
+        response = client.post("/webhook/whatsapp", json=body)
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "processed"}
+    mock_handle.assert_awaited_once_with(
+        mock_db,
+        "972501234567",
+        "מה המשימות שלי?",
+        "msg-1",
+        has_media=False,
+        media_file_path=None,
+    )
+    mock_send.assert_awaited_once_with("972501234567", "אין משימות פתוחות! 🎉 יום נקי.")
+
+
 def test_webhook_extracts_text_and_phone_from_noweb_lid_payload(client, mock_db) -> None:
     body = {
         "event": "message",

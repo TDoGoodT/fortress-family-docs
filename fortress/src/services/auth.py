@@ -1,18 +1,62 @@
 from __future__ import annotations
 """Fortress 2.0 auth service — phone-based lookup and permission checks."""
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from src.models.schema import FamilyMember, Permission
-from src.utils.phone import phone_lookup_candidates
+from src.utils.phone import canonicalize_phone, phone_lookup_candidates
 
 
 def get_family_member_by_phone(db: Session, phone: str) -> FamilyMember | None:
-    """Return the family member matching *phone*, or None."""
+    """Return the family member matching *phone*, or None.
+
+    If multiple rows match different phone representations for the same
+    canonical number, prefer the oldest row to keep identity resolution stable.
+    """
     candidates = phone_lookup_candidates(phone)
     if not candidates:
         return None
-    return db.query(FamilyMember).filter(FamilyMember.phone.in_(candidates)).first()
+    matches = (
+        db.query(FamilyMember)
+        .filter(FamilyMember.phone.in_(candidates))
+        .all()
+    )
+    if not matches:
+        return None
+
+    canonical = canonicalize_phone(phone)
+    canonical_matches = [
+        member
+        for member in matches
+        if canonicalize_phone(member.phone) == canonical
+    ]
+    if canonical_matches:
+        matches = canonical_matches
+
+    matches.sort(
+        key=lambda member: (
+            member.created_at is None,
+            member.created_at,
+            str(member.id),
+        )
+    )
+    return matches[0]
+
+
+def get_family_member_by_name(db: Session, name: str) -> FamilyMember | None:
+    """Return an active family member matching *name* case-insensitively."""
+    cleaned = (name or "").strip()
+    if not cleaned:
+        return None
+    return (
+        db.query(FamilyMember)
+        .filter(
+            func.lower(FamilyMember.name) == cleaned.lower(),
+            FamilyMember.is_active == True,
+        )
+        .first()
+    )
 
 
 def get_permissions_for_role(db: Session, role: str) -> list[Permission]:
