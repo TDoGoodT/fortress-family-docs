@@ -23,6 +23,8 @@ registry.register(ChatSkill())      # MVP ✅ (greet only — deterministic)
 from src.skills.recurring_skill import RecurringSkill
 from src.skills.morning_skill import MorningSkill
 from src.skills.memory_skill import MemorySkill
+from src.skills.fact_skill import FactSkill
 registry.register(RecurringSkill())
 registry.register(MorningSkill())
 registry.register(MemorySkill())
+registry.register(FactSkill())
