@@ -422,3 +422,28 @@ class ConversationState(Base):
     created_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), server_default=text("now()"))
 
     family_member: Mapped["FamilyMember"] = relationship(back_populates="conversation_state", uselist=False)
+
+
+class CanonicalFact(Base):
+    __tablename__ = "canonical_facts"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    subject_member_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("family_members.id"), nullable=True
+    )
+    location_key: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    fact_key: Mapped[str] = mapped_column(Text, nullable=False)
+    fact_value: Mapped[str] = mapped_column(Text, nullable=False)
+    category: Mapped[str] = mapped_column(Text, nullable=False)
+    created_by: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("family_members.id"), nullable=True
+    )
+    is_active: Mapped[bool] = mapped_column(Boolean, server_default=text("true"))
+    fact_metadata: Mapped[Optional[dict]] = mapped_column(
+        "metadata", JSONB, server_default=text("'{}'")
+    )
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=text("now()")
+    )

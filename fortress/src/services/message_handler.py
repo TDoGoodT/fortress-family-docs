@@ -66,7 +66,7 @@ def _should_prefer_structured_path(message_text: str) -> bool:
     command = parse_command(message_text, registry)
     if command is None:
         return False
-    return command.skill in {"task", "system"}
+    return command.skill in {"task", "system", "fact"}
 
 
 async def handle_incoming_message(
