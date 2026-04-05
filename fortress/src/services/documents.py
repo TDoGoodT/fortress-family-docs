@@ -319,3 +319,199 @@ async def process_document(
     )
 
     return doc
+
+
+async def process_text(
+    db: Session,
+    raw_text: str,
+    uploaded_by: UUID,
+    title: str | None = None,
+) -> Document:
+    """Ingest raw text through the enrichment pipeline.
+
+    Like process_document but skips file-copy and text-extraction steps.
+    Persists the text as a .txt file and creates a Document record with
+    source="text_message".
+
+    Each enrichment step is wrapped in try/except — the raw text is saved
+    to the database before any enrichment runs, so it's never lost.
+    """
+    if not raw_text or not raw_text.strip():
+        raise ValueError("process_text: raw_text is empty or whitespace")
+
+    logger.info("[PIPELINE] text_received chars=%d source=text_message", len(raw_text))
+
+    now = datetime.now(timezone.utc)
+    unique_id = uuid_mod.uuid4().hex[:8]
+    initial_filename = title if title else f"text_{now.strftime('%Y-%m-%d')}.txt"
+
+    # ── Step 0: Write .txt file + DB record ──────────────────────────────
+    storage_dir = os.path.join(STORAGE_PATH, str(now.year), f"{now.month:02d}")
+    os.makedirs(storage_dir, exist_ok=True)
+    storage_filename = f"{unique_id}_{initial_filename}"
+    if not storage_filename.endswith(".txt"):
+        storage_filename += ".txt"
+    storage_path = os.path.join(storage_dir, storage_filename)
+
+    with open(storage_path, "w", encoding="utf-8") as f:
+        f.write(raw_text)
+    logger.info("[PIPELINE] step=text_file_write filename=%s path=%s", initial_filename, storage_path)
+
+    doc = Document(
+        file_path=storage_path,
+        original_filename=initial_filename,
+        raw_text=raw_text,
+        doc_type="other",
+        uploaded_by=uploaded_by,
+        source="text_message",
+        review_state="pending",
+        confidence=0.0,
+        tags=[],
+    )
+    db.add(doc)
+    db.commit()
+    db.refresh(doc)
+    doc_id = str(doc.id)
+    logger.info("[PIPELINE] step=db_record doc_id=%s filename=%s source=text_message", doc_id, initial_filename)
+
+    steps_ok: list[str] = []
+    steps_failed: list[str] = []
+
+    # ── Step 1: Classification ────────────────────────────────────────────
+    classification_confidence = 0.0
+    try:
+        category, confidence = await classify_document(raw_text, initial_filename)
+        doc.doc_type = category
+        doc.confidence = confidence
+        classification_confidence = confidence
+        # Update filename to reflect classified type if no title was provided
+        if not title:
+            doc.original_filename = f"{category}_{now.strftime('%Y-%m-%d')}.txt"
+        _log_step("classification", doc_id, doc.original_filename, "success",
+                  category=category, confidence=f"{confidence:.2f}")
+        steps_ok.append("classification")
+    except Exception as exc:
+        _log_step("classification", doc_id, initial_filename, "failed",
+                  error=f"{type(exc).__name__}: {exc}")
+        steps_failed.append("classification")
+
+    # ── Step 2: Fact extraction ───────────────────────────────────────────
+    fact_count = 0
+    extracted_facts: list[dict] = []
+    try:
+        extracted_facts = await extract_facts(raw_text, doc.doc_type, doc.original_filename)
+        for fact_data in extracted_facts:
+            fact = DocumentFact(
+                document_id=doc.id,
+                fact_type=fact_data["fact_type"],
+                fact_key=fact_data["fact_key"],
+                fact_value=fact_data["fact_value"],
+                confidence=fact_data.get("confidence", 0.5),
+                source_excerpt=fact_data.get("source_excerpt", ""),
+            )
+            db.add(fact)
+        fact_count = len(extracted_facts)
+        _log_step("fact_extraction", doc_id, doc.original_filename, "success",
+                  facts_count=fact_count)
+        steps_ok.append("fact_extraction")
+    except Exception as exc:
+        _log_step("fact_extraction", doc_id, doc.original_filename, "failed",
+                  error=f"{type(exc).__name__}: {exc}")
+        steps_failed.append("fact_extraction")
+
+    # ── Step 3: Summary generation ────────────────────────────────────────
+    try:
+        summary = await summarize_document(raw_text, doc.doc_type, doc.original_filename)
+        if summary:
+            doc.ai_summary = summary
+        _log_step("summary", doc_id, doc.original_filename, "success" if summary else "skipped")
+        steps_ok.append("summary")
+    except Exception as exc:
+        _log_step("summary", doc_id, doc.original_filename, "failed",
+                  error=f"{type(exc).__name__}: {exc}")
+        steps_failed.append("summary")
+
+    # ── Step 4: Display name generation ──────────────────────────────────
+    try:
+        dn_vendor = doc.vendor
+        dn_doc_date = doc.doc_date
+        if not dn_vendor or not dn_doc_date:
+            for fact_data in extracted_facts:
+                fk = fact_data.get("fact_key", "")
+                fv = fact_data.get("fact_value", "")
+                if not dn_vendor and fk == "counterparty" and fv:
+                    dn_vendor = fv
+                if not dn_doc_date and fk == "source_date" and fv:
+                    from datetime import date as _date_type
+                    try:
+                        dn_doc_date = _date_type.fromisoformat(fv)
+                    except (ValueError, TypeError):
+                        pass
+        if doc.doc_type == "recipe" and not dn_vendor:
+            recipe_names = [
+                f.get("fact_value", "")
+                for f in extracted_facts
+                if f.get("fact_key") == "recipe_name" and f.get("fact_value", "").strip()
+            ]
+            if len(recipe_names) == 1:
+                dn_vendor = recipe_names[0]
+
+        display_name = generate_display_name(
+            doc_type=doc.doc_type,
+            vendor=dn_vendor,
+            doc_date=dn_doc_date,
+            ai_summary=doc.ai_summary,
+        )
+        if display_name:
+            doc.display_name = display_name
+        _log_step("display_name", doc_id, doc.original_filename,
+                  "success" if display_name else "skipped",
+                  display_name=display_name or "")
+        steps_ok.append("display_name")
+    except Exception as exc:
+        _log_step("display_name", doc_id, doc.original_filename, "failed",
+                  error=f"{type(exc).__name__}: {exc}")
+        steps_failed.append("display_name")
+
+    # ── Step 5: Review state assignment ──────────────────────────────────
+    try:
+        signal_a = classification_confidence >= REVIEW_CONFIDENCE_THRESHOLD
+        signal_b = True  # text is always present for text_message source
+        signal_c = fact_count >= 1 or bool(doc.ai_summary)
+        if signal_a and signal_b and signal_c:
+            doc.review_state = "auto_verified"
+        else:
+            doc.review_state = "needs_review"
+        _log_step("review_state", doc_id, doc.original_filename, doc.review_state)
+        steps_ok.append("review_state")
+    except Exception as exc:
+        _log_step("review_state", doc_id, doc.original_filename, "failed",
+                  error=f"{type(exc).__name__}: {exc}")
+        doc.review_state = "needs_review"
+        steps_failed.append("review_state")
+
+    # ── Step 6: Auto-tagging ─────────────────────────────────────────────
+    try:
+        auto_tags = _generate_auto_tags(doc, extracted_facts, doc.original_filename)
+        doc.tags = merge_tags(doc.tags or [], auto_tags)
+        _log_step("tagging", doc_id, doc.original_filename, "success", tags_count=len(doc.tags or []))
+        steps_ok.append("tagging")
+    except Exception as exc:
+        _log_step("tagging", doc_id, doc.original_filename, "failed",
+                  error=f"{type(exc).__name__}: {exc}")
+        steps_failed.append("tagging")
+
+    # ── Step 7: Final persist ────────────────────────────────────────────
+    db.commit()
+    db.refresh(doc)
+
+    total = len(steps_ok) + len(steps_failed)
+    logger.info(
+        "[PIPELINE] doc_id=%s filename=%s source=text_message result=%s steps_ok=%d/%d failed=%s",
+        doc_id, doc.original_filename,
+        "complete" if not steps_failed else "partial",
+        len(steps_ok), total,
+        ",".join(steps_failed) if steps_failed else "none",
+    )
+
+    return doc

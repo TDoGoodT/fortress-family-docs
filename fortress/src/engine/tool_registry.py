@@ -46,6 +46,8 @@ _TOOL_MAP: dict[str, tuple[str, str]] = {
     # System
     "system_help":   ("system", "help"),
     "system_cancel": ("system", "cancel"),
+    # Knowledge ingestion
+    "save_text": ("document", "save_text"),
 }
 
 
@@ -388,6 +390,27 @@ _TOOL_SCHEMAS: list[ToolSchema] = [
             "name": "system_cancel",
             "description": "ביטול פעולה ממתינה. השתמש כשהמשתמש אומר לא, בטל, עזוב.",
             "inputSchema": {"json": {"type": "object", "properties": {}}},
+        }
+    },
+    # ── Knowledge ingestion ────────────────────────────────────────────
+    {
+        "toolSpec": {
+            "name": "save_text",
+            "description": (
+                "שמירת טקסט כמסמך ידע. השתמש כשהמשתמש משתף מידע לשמירה — "
+                "מתכונים, נתונים פיננסיים, הערות, או כל מידע מובנה. "
+                "אל תשתמש כשהמשתמש שואל שאלה או מנהל שיחה."
+            ),
+            "inputSchema": {
+                "json": {
+                    "type": "object",
+                    "properties": {
+                        "text": {"type": "string", "description": "הטקסט לשמירה"},
+                        "title": {"type": "string", "description": "כותרת למסמך (אופציונלי)"},
+                    },
+                    "required": ["text"],
+                }
+            },
         }
     },
 ]

@@ -126,6 +126,7 @@ class DocumentSkill(BaseSkill):
             "recipe_fallback": self._recipe_fallback,
             "doc_search_fallback": self._doc_search_fallback,
             "delete_documents": self._delete_documents,
+            "save_text": self._save_text,
             "summary": self._summary,
             "contextual_query": self._contextual_query,
         }
@@ -218,6 +219,67 @@ class DocumentSkill(BaseSkill):
             logger.error(
                 "DocumentSkill._save: failed file_path=%s error=%s: %s",
                 file_path, type(exc).__name__, exc,
+            )
+            return Result(success=False, message=TEMPLATES["error_fallback"])
+
+    def _save_text(self, db: Session, member: FamilyMember, params: dict) -> Result:
+        """Save pasted text as a document through the enrichment pipeline."""
+        denied = check_perm(db, member, "documents", "write")
+        if denied:
+            return denied
+
+        text = (params.get("text") or "").strip()
+        if not text:
+            return Result(success=False, message="לא ניתן לשמור טקסט ריק 📝")
+
+        title = params.get("title") or None
+
+        try:
+            import threading
+
+            result_holder: list = []
+            exc_holder: list = []
+
+            def run_in_thread():
+                import asyncio as _asyncio
+                new_loop = _asyncio.new_event_loop()
+                _asyncio.set_event_loop(new_loop)
+                try:
+                    doc = new_loop.run_until_complete(
+                        documents.process_text(db, text, member.id, title)
+                    )
+                    result_holder.append(doc)
+                except Exception as e:
+                    exc_holder.append(e)
+                finally:
+                    new_loop.close()
+
+            t = threading.Thread(target=run_in_thread, daemon=True)
+            t.start()
+            t.join(timeout=120)
+
+            if exc_holder:
+                raise exc_holder[0]
+            if not result_holder:
+                raise RuntimeError("process_text timed out after 120s")
+            doc = result_holder[0]
+
+            dn = getattr(doc, "display_name", None) or doc.original_filename or "מסמך"
+            doc_type = doc.doc_type or "other"
+
+            update_state(db, member.id, entity_type="document", entity_id=doc.id, intent="document.save_text")
+
+            return Result(
+                success=True,
+                message=f"שמרתי: {dn} ({doc_type}) ✅",
+                entity_type="document",
+                entity_id=doc.id,
+                action="saved",
+            )
+        except Exception as exc:
+            logger.error(
+                "DocumentSkill._save_text: failed error=%s: %s",
+                type(exc).__name__, exc,
             )
             return Result(success=False, message=TEMPLATES["error_fallback"])
 
