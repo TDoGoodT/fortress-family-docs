@@ -63,7 +63,7 @@ class TestTaskSkillStructure:
         assert "משימות" in desc
 
     def test_commands_count(self):
-        assert len(TaskSkill().commands) == 27
+        assert len(TaskSkill().commands) == 28
 
     def test_get_help_returns_string(self):
         help_text = TaskSkill().get_help()
@@ -448,6 +448,72 @@ class TestDeleteAll:
 
         assert result.success
         assert result.message == TEMPLATES["task_list_empty"]
+
+
+class TestDeleteMany:
+    @patch("src.skills.task_skill.set_pending_confirmation")
+    @patch("src.skills.task_skill.tasks.get_task")
+    @patch("src.skills.task_skill.get_state")
+    @patch("src.skills.task_skill.check_perm", return_value=None)
+    def test_delete_many_sets_confirmation(
+        self, _perm, mock_state, mock_get, mock_confirm, mock_db: MagicMock
+    ):
+        tid1 = uuid.uuid4()
+        tid2 = uuid.uuid4()
+        mock_state.return_value = _state(context={"task_list_order": [str(tid1), str(tid2)]})
+        mock_get.side_effect = [
+            _task(id=tid1, title="משימה 1", status="open"),
+            _task(id=tid2, title="משימה 2", status="open"),
+        ]
+
+        skill = TaskSkill()
+        member = _member()
+        cmd = Command(skill="task", action="delete_many", params={"indices_csv": "1, 2"})
+        result = skill.execute(mock_db, member, cmd)
+
+        assert result.success
+        assert "משימה 1" in result.message
+        assert "משימה 2" in result.message
+        mock_confirm.assert_called_once()
+
+    @patch("src.skills.task_skill.tasks.archive_task")
+    @patch("src.skills.task_skill.tasks.get_task")
+    @patch("src.skills.task_skill.check_perm", return_value=None)
+    def test_delete_many_confirmed_archives_tasks(
+        self, _perm, mock_get, mock_archive, mock_db: MagicMock
+    ):
+        tid1 = uuid.uuid4()
+        tid2 = uuid.uuid4()
+        mock_get.side_effect = [
+            _task(id=tid1, status="open"),
+            _task(id=tid2, status="open"),
+        ]
+
+        skill = TaskSkill()
+        member = _member()
+        cmd = Command(
+            skill="task",
+            action="delete_many",
+            params={"task_ids": [str(tid1), str(tid2)]},
+        )
+        result = skill.execute(mock_db, member, cmd)
+
+        assert result.success
+        assert "2" in result.message
+        assert mock_archive.call_count == 2
+
+    @patch("src.skills.task_skill.get_state")
+    @patch("src.skills.task_skill.check_perm", return_value=None)
+    def test_delete_many_requires_list_first(self, _perm, mock_state, mock_db: MagicMock):
+        mock_state.return_value = _state(context={})
+
+        skill = TaskSkill()
+        member = _member()
+        cmd = Command(skill="task", action="delete_many", params={"indices_csv": "1,2"})
+        result = skill.execute(mock_db, member, cmd)
+
+        assert not result.success
+        assert result.message == TEMPLATES["need_list_first"]
 
 
 # ---------------------------------------------------------------------------

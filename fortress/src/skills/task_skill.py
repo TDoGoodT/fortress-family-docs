@@ -56,6 +56,7 @@ class TaskSkill(BaseSkill):
             (re.compile(r"^מחק\s+את\s+(?P<index>\d+)$", re.IGNORECASE), "delete"),
             (re.compile(r"^מחיקה\s+(?P<index>\d+)$", re.IGNORECASE), "delete"),
             (re.compile(r"^מחיקה\s+את\s+(?P<index>\d+)$", re.IGNORECASE), "delete"),
+            (re.compile(r"^מחק\s+משימות\s+(?P<indices_csv>\d+(?:\s*,\s*\d+)*)$", re.IGNORECASE), "delete_many"),
             (re.compile(r"^(מחק הכל|נקה הכל|delete all)$", re.IGNORECASE), "delete_all"),
             (re.compile(r"^(סיים|סיום|בוצע|סיימתי)\s*(משימה)?\s*(?P<index>\d+)?$", re.IGNORECASE), "complete"),
             (re.compile(r"^(סיים|סיום|בוצע|סיימתי)[:\s]+(?P<title_query>.+)$", re.IGNORECASE), "complete"),
@@ -72,6 +73,7 @@ class TaskSkill(BaseSkill):
             "reassign": self._reassign,
             "list": self._list,
             "delete": self._delete,
+            "delete_many": self._delete_many,
             "delete_all": self._delete_all,
             "complete": self._complete,
             "update": self._update,
@@ -286,6 +288,44 @@ class TaskSkill(BaseSkill):
             ),
         )
 
+    def _delete_many(self, db: Session, member: FamilyMember, params: dict) -> Result:
+        denied = check_perm(db, member, "tasks", "write")
+        if denied:
+            return denied
+
+        if "task_ids" in params:
+            archived = 0
+            for tid in params["task_ids"]:
+                task = tasks.get_task(db, UUID(tid))
+                if task and task.status == "open":
+                    tasks.archive_task(db, UUID(tid))
+                    archived += 1
+            logger.info("Delete many confirmed: archived %d tasks", archived)
+            return Result(
+                success=True,
+                message=TEMPLATES["bulk_deleted"].format(count=archived),
+            )
+
+        selected_tasks = self._resolve_tasks_from_indices_csv(db, member, params.get("indices_csv", ""))
+        if isinstance(selected_tasks, Result):
+            return selected_tasks
+        if not selected_tasks:
+            return Result(success=False, message=TEMPLATES["task_not_found"])
+
+        task_list_text = format_task_list(selected_tasks)
+        set_pending_confirmation(
+            db,
+            member.id,
+            "task.delete_many",
+            {"task_ids": [str(t.id) for t in selected_tasks]},
+        )
+        return Result(
+            success=True,
+            message=TEMPLATES["bulk_delete_confirm"].format(
+                count=len(selected_tasks), task_list=task_list_text
+            ),
+        )
+
     def _complete(self, db: Session, member: FamilyMember, params: dict) -> Result:
         denied = check_perm(db, member, "tasks", "write")
         if denied:
@@ -410,6 +450,43 @@ class TaskSkill(BaseSkill):
             return state.last_entity_id
 
         return Result(success=False, message=TEMPLATES["task_not_found"])
+
+    def _resolve_tasks_from_indices_csv(
+        self, db: Session, member: FamilyMember, indices_csv: str
+    ) -> list[Task] | Result:
+        state = get_state(db, member.id)
+        context = state.context or {}
+        task_list_order = context.get("task_list_order")
+
+        if not task_list_order:
+            return Result(success=False, message=TEMPLATES["need_list_first"])
+
+        raw_parts = [part.strip() for part in indices_csv.split(",") if part.strip()]
+        if not raw_parts:
+            return Result(success=False, message=TEMPLATES["task_not_found"])
+
+        indices: list[int] = []
+        seen: set[int] = set()
+        for part in raw_parts:
+            try:
+                index = int(part)
+            except ValueError:
+                return Result(success=False, message=TEMPLATES["task_not_found"])
+            if index < 1 or index > len(task_list_order):
+                return Result(success=False, message=TEMPLATES["task_not_found"])
+            if index not in seen:
+                seen.add(index)
+                indices.append(index)
+
+        selected_tasks: list[Task] = []
+        for index in indices:
+            task_id = UUID(task_list_order[index - 1])
+            task = tasks.get_task(db, task_id)
+            if task is None or task.status != "open":
+                return Result(success=False, message=TEMPLATES["task_not_found"])
+            selected_tasks.append(task)
+
+        return selected_tasks
 
     def _resolve_assignee_member(
         self,
