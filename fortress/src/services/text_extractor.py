@@ -136,6 +136,56 @@ def _extract_image(file_path: str) -> str:
 _IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".heic", ".tiff", ".bmp"}
 
 
+def _detect_extension_by_mime(file_path: str) -> str:
+    """Detect file extension using MIME type when the file has no extension.
+
+    Returns the detected extension (e.g. ".jpg") or "" if unknown.
+    """
+    import mimetypes
+    try:
+        import magic  # python-magic if available
+        mime = magic.from_file(file_path, mime=True)
+    except (ImportError, Exception):
+        # Fallback: read magic bytes manually
+        mime = _detect_mime_from_bytes(file_path)
+
+    ext_map = {
+        "image/jpeg": ".jpg",
+        "image/png": ".png",
+        "image/bmp": ".bmp",
+        "image/tiff": ".tiff",
+        "image/heic": ".heic",
+        "image/heif": ".heic",
+        "application/pdf": ".pdf",
+    }
+    return ext_map.get(mime, "")
+
+
+def _detect_mime_from_bytes(file_path: str) -> str:
+    """Detect MIME type from file magic bytes."""
+    try:
+        with open(file_path, "rb") as f:
+            header = f.read(16)
+        if not header:
+            return ""
+        if header[:3] == b"\xff\xd8\xff":
+            return "image/jpeg"
+        if header[:8] == b"\x89PNG\r\n\x1a\n":
+            return "image/png"
+        if header[:4] == b"%PDF":
+            return "application/pdf"
+        if header[:2] == b"BM":
+            return "image/bmp"
+        if header[:4] in (b"II\x2a\x00", b"MM\x00\x2a"):
+            return "image/tiff"
+        # HEIC/HEIF: ftyp box
+        if len(header) >= 12 and header[4:8] == b"ftyp":
+            return "image/heic"
+    except Exception:
+        pass
+    return ""
+
+
 async def extract_text_v2(file_path: str) -> tuple[str, float, str]:
     """Extract text with preprocessing, quality scoring, and vision fallback.
 
@@ -160,6 +210,14 @@ async def extract_text_v2(file_path: str) -> tuple[str, float, str]:
 
     _, ext = os.path.splitext(file_path)
     ext = ext.lower()
+
+    # Detect file type by MIME when extension is missing or generic
+    if not ext or ext in ("", ".bin", ".dat"):
+        detected = _detect_extension_by_mime(file_path)
+        if detected:
+            logger.info("extract_text_v2: detected extension %s for %s via MIME", detected, os.path.basename(file_path))
+            ext = detected
+
     is_image = ext in _IMAGE_EXTENSIONS
 
     # ── PDF path ─────────────────────────────────────────────────────

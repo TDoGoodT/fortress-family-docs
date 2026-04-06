@@ -1,8 +1,10 @@
 from __future__ import annotations
 """Fortress document service — document ingestion and enrichment pipeline."""
 
+import hashlib
 import logging
 import os
+import re
 import shutil
 import uuid as uuid_mod
 from datetime import datetime, timezone
@@ -46,6 +48,40 @@ def _extract_year_tag(doc_date, filename: str) -> str:
         if token.isdigit() and len(token) == 4 and token.startswith(("19", "20")):
             return token
     return ""
+
+
+_UUID_PREFIX_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_")
+
+
+def _strip_uuid_prefix(filename: str) -> str:
+    """Strip leading UUID prefix from filenames like '2e7797c9-...-4f0d9a81554e_MyFile.pdf'."""
+    return _UUID_PREFIX_RE.sub("", filename)
+
+
+def _compute_file_hash(file_path: str) -> str:
+    """Compute SHA-256 hash of a file's contents for dedup."""
+    h = hashlib.sha256()
+    try:
+        with open(file_path, "rb") as f:
+            for chunk in iter(lambda: f.read(8192), b""):
+                h.update(chunk)
+    except Exception:
+        return ""
+    return h.hexdigest()
+
+
+def _find_duplicate(db: Session, file_hash: str, uploaded_by: UUID) -> Document | None:
+    """Check if a document with the same content hash already exists for this user."""
+    if not file_hash:
+        return None
+    return (
+        db.query(Document)
+        .filter(
+            Document.uploaded_by == uploaded_by,
+            Document.doc_metadata["file_hash"].astext == file_hash,
+        )
+        .first()
+    )
 
 
 def _generate_auto_tags(doc: Document, facts: list[dict], filename: str) -> list[str]:
@@ -96,8 +132,19 @@ async def process_document(
     logger.info("[PIPELINE] media_received file_path=%s source=%s", file_path, source)
 
     original_filename = os.path.basename(file_path)
+    # Strip UUID prefix from WhatsApp filenames (e.g. "2e7797c9-..._MyFile.pdf" → "MyFile.pdf")
+    original_filename = _strip_uuid_prefix(original_filename)
     _, ext = os.path.splitext(original_filename)
     ext_lower = ext.lower()
+
+    # ── Duplicate detection ──────────────────────────────────────────────
+    file_hash = _compute_file_hash(file_path)
+    if file_hash:
+        existing = _find_duplicate(db, file_hash, uploaded_by)
+        if existing:
+            dn = getattr(existing, "display_name", None) or existing.original_filename or "מסמך"
+            logger.info("[PIPELINE] duplicate detected: file_hash=%s existing_doc_id=%s", file_hash, existing.id)
+            return existing
 
     # ── Step 0: File copy + DB record ────────────────────────────────────
     now = datetime.now(timezone.utc)
@@ -129,6 +176,7 @@ async def process_document(
         review_state="pending",
         confidence=0.0,
         tags=[],
+        doc_metadata={"file_hash": file_hash} if file_hash else {},
     )
     db.add(doc)
     db.commit()

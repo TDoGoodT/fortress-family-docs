@@ -210,7 +210,9 @@ class DocumentSkill(BaseSkill):
 
             return Result(
                 success=True,
-                message=TEMPLATES["document_saved"].format(filename=doc.original_filename),
+                message=TEMPLATES["document_saved"].format(
+                    filename=doc.display_name or doc.original_filename
+                ),
                 entity_type="document",
                 entity_id=doc.id,
                 action="saved",
