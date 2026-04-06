@@ -38,6 +38,56 @@ class AgentResult:
     tool_name: str | None = None   # last tool used (for intent logging)
     iterations: int = 0            # number of LLM calls made
     fallback_used: bool = False    # whether regex fallback was triggered
+    # A1 telemetry — observational counters, not semantic claims about planning
+    multi_tool_run: bool = False       # heuristic: >1 distinct tool or >2 total calls
+    tool_calls_count: int = 0          # total tool invocations in this run
+    distinct_tools_count: int = 0      # unique tool names invoked in this run
+
+
+# ---------------------------------------------------------------------------
+# Planning instructions (A1: prompt-first planning)
+# ---------------------------------------------------------------------------
+
+PLANNING_INSTRUCTIONS = """
+## חשיבה לפני פעולה
+לפני שאתה קורא לכלי, חשוב על הבקשה:
+
+### בקשות פשוטות (כלי אחד)
+אם הבקשה ברורה ודורשת כלי אחד בלבד — קרא לכלי ישירות.
+דוגמאות: "צור משימה", "הראה משימות", "מצא מסמך"
+
+### בקשות מורכבות (כמה צעדים)
+אם הבקשה דורשת כמה פעולות או איסוף מידע לפני פעולה:
+1. תכנן את הצעדים בראש (אל תשתף את התוכנית עם המשתמש)
+2. בצע צעד אחד בכל פעם
+3. השתמש בתוצאות של כל צעד כדי להחליט על הצעד הבא
+4. בסוף — תן תשובה מסכמת אחת
+
+דוגמאות: "מצא חשבוניות ותצור משימה לכל אחת", "מה שילמתי על ביטוח השנה"
+
+### בקשות לא ברורות
+אם לא ברור מה המשתמש רוצה — שאל שאלה קצרה לפני שאתה פועל.
+אל תנחש. עדיף לשאול מאשר לעשות משהו לא נכון.
+
+### כללים חשובים
+- לעולם אל תקרא לכלי בלי סיבה ברורה
+- אם אתה צריך מידע כדי להשלים בקשה — קודם אסוף אותו עם הכלי המתאים
+- אל תחזור על אותו כלי עם אותם פרמטרים
+- אם כלי החזיר שגיאה — הסבר למשתמש במקום לנסות שוב
+"""
+
+
+def _is_multi_tool_run(tool_calls_count: int, distinct_tools_count: int) -> bool:
+    """Observational heuristic: did this run involve multi-step tool usage?
+
+    Returns True if EITHER:
+    - More than 1 distinct tool was called, OR
+    - More than 2 total tool calls were made (same tool called 3+ times)
+
+    This is a behavioral observation for telemetry trend analysis,
+    not a precise semantic claim about whether the LLM internally planned.
+    """
+    return distinct_tools_count > 1 or tool_calls_count > 2
 
 
 # ---------------------------------------------------------------------------
@@ -94,6 +144,11 @@ def build_system_prompt(db: Session, member: FamilyMember) -> str:
         "- אל תטען שביצעת פעולה מבלי לקרוא לכלי המתאים",
         "- שמור על תשובות קצרות — זה וואטסאפ, לא אימייל",
     ]
+
+    # A1: planning instructions
+    parts.append("")
+    parts.append(PLANNING_INSTRUCTIONS)
+
     return "\n".join(parts)
 
 
@@ -168,6 +223,9 @@ async def run(
     last_tool_name: str | None = None
     last_tool_result: str | None = None
     iterations = 0
+    # A1 telemetry counters
+    tool_calls_count = 0
+    tools_used: set[str] = set()
 
     try:
         for iteration in range(AGENT_MAX_TOOL_ITERATIONS):
@@ -190,15 +248,19 @@ async def run(
                     iteration + 1, len(response.text or ""), iter_elapsed,
                 )
                 total_elapsed = time.monotonic() - total_start
+                multi_tool = _is_multi_tool_run(tool_calls_count, len(tools_used))
                 logger.info(
-                    "agent_loop: complete member=%s iterations=%d total_time=%.1fs",
-                    member.name, iterations, total_elapsed,
+                    "agent_loop: complete member=%s iterations=%d tool_calls=%d distinct_tools=%d multi_tool_run=%s total_time=%.1fs",
+                    member.name, iterations, tool_calls_count, len(tools_used), multi_tool, total_elapsed,
                 )
                 return AgentResult(
                     response=response.text or "",
                     tool_name=last_tool_name,
                     iterations=iterations,
                     fallback_used=False,
+                    multi_tool_run=multi_tool,
+                    tool_calls_count=tool_calls_count,
+                    distinct_tools_count=len(tools_used),
                 )
 
             # Tool calls — execute each one
@@ -221,6 +283,8 @@ async def run(
                 tool_results_content = []
                 for tc in response.tool_calls:
                     last_tool_name = tc.name
+                    tool_calls_count += 1
+                    tools_used.add(tc.name)
                     logger.info(
                         "agent_loop: iteration=%d tool=%s args=%s time=%.1fs",
                         iteration + 1, tc.name, tc.arguments, iter_elapsed,
@@ -249,11 +313,15 @@ async def run(
             "agent_loop: max_iterations=%d reached member=%s total_time=%.1fs",
             AGENT_MAX_TOOL_ITERATIONS, member.name, total_elapsed,
         )
+        multi_tool = _is_multi_tool_run(tool_calls_count, len(tools_used))
         return AgentResult(
             response=last_tool_result or "הגעתי למגבלת הפעולות. נסה שוב.",
             tool_name=last_tool_name,
             iterations=iterations,
             fallback_used=False,
+            multi_tool_run=multi_tool,
+            tool_calls_count=tool_calls_count,
+            distinct_tools_count=len(tools_used),
         )
 
     except BedrockError as exc:
@@ -285,4 +353,7 @@ async def _regex_fallback(db: Session, member: FamilyMember, message_text: str) 
         tool_name=None,
         iterations=0,
         fallback_used=True,
+        multi_tool_run=False,
+        tool_calls_count=0,
+        distinct_tools_count=0,
     )
