@@ -69,6 +69,24 @@ def _should_prefer_structured_path(message_text: str) -> bool:
     return command.skill in {"task", "system", "fact"}
 
 
+def _is_deterministic_command(message_text: str) -> bool:
+    """Return True only for commands where deterministic execution is critical.
+
+    Document queries and search fallbacks should NOT override the agent —
+    the agent's document_query tool produces better results than regex matching.
+    """
+    command = parse_command(message_text, registry)
+    if command is None:
+        return False
+    # Only task/system/fact are truly deterministic and should override agent
+    if command.skill in {"task", "system", "fact"}:
+        return True
+    # Document save is deterministic, but queries/search should go through agent
+    if command.skill == "document" and command.action == "save":
+        return True
+    return False
+
+
 async def handle_incoming_message(
     db: Session,
     phone: str,
@@ -140,7 +158,7 @@ async def handle_incoming_message(
                 )
             else:
                 tool = agent_result.tool_name
-                if tool is None and _structured_command_available(message_text):
+                if tool is None and _is_deterministic_command(message_text):
                     # If the LLM answered in free text for a command we can handle
                     # deterministically, prefer the structured path so actions are
                     # actually executed instead of only described.

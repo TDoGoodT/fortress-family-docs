@@ -208,6 +208,9 @@ class DocumentSkill(BaseSkill):
                 doc.original_filename,
             )
 
+            # Track last saved document in conversation state for follow-up queries
+            update_state(db, member.id, entity_type="document", entity_id=doc.id, intent="document.save")
+
             return Result(
                 success=True,
                 message=TEMPLATES["document_saved"].format(
