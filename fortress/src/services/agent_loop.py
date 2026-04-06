@@ -120,7 +120,13 @@ def _load_memories_text(db: Session, member_id: UUID) -> str:
         return ""
 
 
-def build_system_prompt(db: Session, member: FamilyMember) -> str:
+def build_system_prompt(
+    db: Session,
+    member: FamilyMember,
+    *,
+    intent: str = "chat",
+    conv_state=None,
+) -> str:
     """Assemble the full system prompt for the agent."""
     soul = _load_soul_md()
     time_ctx = format_time_for_prompt()
@@ -141,13 +147,6 @@ def build_system_prompt(db: Session, member: FamilyMember) -> str:
         "## חובה: שימוש בכלים לשאלות על מסמכים",
         "כשהמשתמש שואל שאלה על תוכן מסמך (סכום, תאריך, ספק, מועד תשלום, פרטים כלשהם) — חובה לקרוא לכלי document_query.",
         "אסור לך לענות על שאלות על מסמכים מהזיכרון שלך. אתה חייב להשתמש בכלי.",
-        "דוגמאות לשאלות שדורשות document_query:",
-        '  - "מה הסכום לתשלום?" → document_query',
-        '  - "מה המועד האחרון?" → document_query',
-        '  - "מה כתוב במסמך?" → document_query',
-        '  - "מה אתה רואה בקובץ?" → document_query',
-        '  - "מה המספר של IT?" → document_query',
-        '  - "כמה שילמתי?" → document_query',
         "",
         "- כשהמשתמש מבקש לראות מתכונים — קרא לכלי document_recipe_list",
         "- כשהמשתמש מבקש עזרה — קרא לכלי system_help",
@@ -155,6 +154,21 @@ def build_system_prompt(db: Session, member: FamilyMember) -> str:
         "- אל תטען שביצעת פעולה מבלי לקרוא לכלי המתאים",
         "- שמור על תשובות קצרות — זה וואטסאפ, לא אימייל",
     ]
+
+    # Context injection from conversation state
+    try:
+        if conv_state and getattr(conv_state, "last_entity_type", None) == "document":
+            entity_id = getattr(conv_state, "last_entity_id", None)
+            if entity_id:
+                parts.append("")
+                parts.append(f"מסמך אחרון: {entity_id}")
+    except Exception as exc:
+        logger.warning("agent_loop: context injection failed error=%s", exc)
+
+    # Intent-specific instruction for documents
+    if intent == "documents":
+        parts.append("")
+        parts.append("חובה להשתמש ב-document_query לכל שאלה על תוכן מסמך.")
 
     # A1: planning instructions
     parts.append("")
@@ -167,10 +181,15 @@ def build_system_prompt(db: Session, member: FamilyMember) -> str:
 # Conversation history loading
 # ---------------------------------------------------------------------------
 
-def load_conversation_history(db: Session, member_id: UUID, depth: int = AGENT_HISTORY_DEPTH) -> list[dict]:
+# Negative intents to filter from history (free-text turns without tool use)
+_NEGATIVE_INTENTS = {"agent.None", "agent.chat", "agent.none"}
+
+
+def load_conversation_history(db: Session, member_id: UUID, depth: int = 4) -> list[dict]:
     """Load recent conversations as Bedrock-compatible message list.
 
     Returns alternating user/assistant messages, oldest first.
+    Filters out turns where the agent answered in free text without a tool call.
     """
     try:
         rows = (
@@ -179,6 +198,7 @@ def load_conversation_history(db: Session, member_id: UUID, depth: int = AGENT_H
                 Conversation.family_member_id == member_id,
                 Conversation.message_in.isnot(None),
                 Conversation.message_out.isnot(None),
+                ~Conversation.intent.in_(_NEGATIVE_INTENTS),
             )
             .order_by(Conversation.created_at.desc())
             .limit(depth)
@@ -214,13 +234,37 @@ async def run(
     """
     total_start = time.monotonic()
 
-    # Build prompt and history
-    system_prompt = build_system_prompt(db, member)
+    # 1. Load conversation state
+    from src.services.conversation_state import get_state
+    try:
+        conv_state = get_state(db, member.id)
+    except Exception as exc:
+        logger.warning("agent_loop: get_state failed member=%s error=%s", member.name, exc)
+        conv_state = None
+
+    # 2. Classify intent and get tools
+    from src.engine.tool_router import classify
+    try:
+        intent, tools = classify(
+            message_text,
+            conv_state.last_entity_type if conv_state else None,
+        )
+        logger.info("agent_loop: intent=%s tools_count=%d", intent, len(tools))
+    except Exception as exc:
+        logger.warning("agent_loop: classify failed, falling back to chat — error=%s", exc)
+        intent = "chat"
+        # Fall back to chat group tools
+        from src.engine.tool_router import _INTENT_TOOLS, _resolve_tool_schemas
+        tools = _resolve_tool_schemas(_INTENT_TOOLS["chat"][:8])
+
+    # 3. Build system prompt (intent-aware + context injection)
+    system_prompt = build_system_prompt(db, member, intent=intent, conv_state=conv_state)
+
+    # 4. Load filtered history (depth=4, skip negative examples)
     history = load_conversation_history(db, member.id)
 
     # Append current user message
     messages = history + [{"role": "user", "content": [{"text": message_text}]}]
-    tools = get_tool_schemas()
 
     try:
         bedrock = BedrockClient()

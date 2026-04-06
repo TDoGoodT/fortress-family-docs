@@ -175,6 +175,18 @@ async def handle_incoming_message(
                         "message_handler: agent_response member=%s intent=%s iterations=%d",
                         member.name, intent, agent_result.iterations,
                     )
+                    # Warn when agent returns free text for a documents intent
+                    if tool is None:
+                        try:
+                            from src.engine.tool_router import classify
+                            detected_intent, _ = classify(message_text)
+                            if detected_intent == "documents":
+                                logger.warning(
+                                    "message_handler: agent_returned_free_text_for_documents member=%s text=%s",
+                                    member.name, message_text[:100],
+                                )
+                        except Exception:
+                            pass
         else:
             # AGENT_ENABLED=false — use regex path directly
             logger.info("message_handler: agent_disabled using regex fallback member=%s", member.name)
