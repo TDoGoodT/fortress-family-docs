@@ -219,11 +219,81 @@ async def _extract_recipe_facts(raw_text: str, filename: str) -> list[dict[str, 
         return []
 
 
-async def extract_facts(raw_text: str, doc_type: str, filename: str) -> list[dict[str, Any]]:
+# ── Fact key descriptions for schema prompt ─────────────────────────────
+_FACT_KEY_DESCRIPTIONS: dict[str, str] = {
+    "source_date": "The primary date of the document (issue date, transaction date, statement date)",
+    "counterparty": "The other party — company name, vendor, service provider, or sender",
+    "amount": "The total monetary amount (e.g. '1,234.56' or '1234')",
+    "currency": "The currency code (ILS, USD, EUR) or symbol (₪, $, €)",
+    "document_reference": "Reference number, invoice number, or document ID",
+    "period_start": "Start date of a covered period (for statements, policies)",
+    "period_end": "End date of a covered period (for statements, policies, warranties)",
+    "policy_number": "Insurance policy number or identifier",
+    "contract_end_date": "Expiration or end date of a contract",
+}
+
+# ── Schema prompt examples per category ──────────────────────────────────
+_CATEGORY_EXAMPLES: dict[str, str] = {
+    "invoice": '[{"fact_key": "source_date", "fact_value": "2024-03-15", "confidence": 0.9, "source_excerpt": "Invoice Date: 15/03/2024"}, {"fact_key": "counterparty", "fact_value": "Bezeq", "confidence": 0.85, "source_excerpt": "From: Bezeq International"}, {"fact_key": "amount", "fact_value": "1234.56", "confidence": 0.9, "source_excerpt": "Total: ₪1,234.56"}]',
+    "receipt": '[{"fact_key": "source_date", "fact_value": "2024-01-10", "confidence": 0.9, "source_excerpt": "Date: 10/01/2024"}, {"fact_key": "counterparty", "fact_value": "Super-Pharm", "confidence": 0.85, "source_excerpt": "Super-Pharm Ltd"}, {"fact_key": "amount", "fact_value": "89.90", "confidence": 0.9, "source_excerpt": "Total: ₪89.90"}]',
+    "contract": '[{"fact_key": "source_date", "fact_value": "2024-06-01", "confidence": 0.9, "source_excerpt": "Dated: 01/06/2024"}, {"fact_key": "counterparty", "fact_value": "Partner Communications", "confidence": 0.85, "source_excerpt": "Between: Partner Communications"}]',
+    "bank_statement": '[{"fact_key": "source_date", "fact_value": "2024-02-28", "confidence": 0.9, "source_excerpt": "Statement Date: 28/02/2024"}, {"fact_key": "counterparty", "fact_value": "Bank Leumi", "confidence": 0.85, "source_excerpt": "Bank Leumi Le-Israel"}]',
+}
+
+
+def _build_schema_prompt(
+    raw_text: str,
+    doc_type: str,
+    target_keys: list[str],
+    filename: str,
+) -> str:
+    """Build a structured extraction prompt for the given doc_type.
+
+    Includes document type context, target fact key descriptions,
+    expected JSON output format, one example per category, and
+    up to 3000 chars of raw text.
+    """
+    key_descriptions = "\n".join(
+        f"  - {k}: {_FACT_KEY_DESCRIPTIONS.get(k, k)}"
+        for k in target_keys
+    )
+
+    example = _CATEGORY_EXAMPLES.get(doc_type, _CATEGORY_EXAMPLES.get("invoice", "[]"))
+
+    truncated_text = raw_text[:3000]
+
+    prompt = (
+        f"You are extracting structured facts from a {doc_type} document.\n"
+        f"Filename: {filename}\n\n"
+        f"Target fact keys to extract:\n{key_descriptions}\n\n"
+        f"Respond with a JSON array only. Each item must have exactly these fields:\n"
+        f'  {{"fact_key": "<key>", "fact_value": "<value>", '
+        f'"confidence": <0.0-1.0>, "source_excerpt": "<short quote from text>"}}\n\n'
+        f"Rules:\n"
+        f"- Only include facts you can actually find in the text\n"
+        f"- Only use these allowed keys: {', '.join(target_keys)}\n"
+        f"- confidence should reflect how certain you are (0.0 = guess, 1.0 = exact match)\n"
+        f"- source_excerpt should be a short quote from the document supporting the fact\n\n"
+        f"Example output for a {doc_type} document:\n{example}\n\n"
+        f"Document text:\n{truncated_text}"
+    )
+    return prompt
+
+
+async def extract_facts(
+    raw_text: str,
+    doc_type: str,
+    filename: str,
+    text_quality: float = 1.0,
+) -> list[dict[str, Any]]:
     """Extract structured facts from raw_text.
 
     Phase 1: regex-based extraction for dates and amounts.
-    Phase 2: LLM-assisted extraction for remaining target keys.
+    Phase 2: schema-driven LLM extraction (haiku tier) for remaining target keys.
+
+    If text_quality < 0.3, skip LLM extraction entirely and return regex facts only.
+    Recipe extraction unchanged (lite tier).
+
     Returns list of fact dicts with fact_type, fact_key, fact_value, confidence, source_excerpt.
     Returns empty list on total failure.
     """
@@ -249,12 +319,22 @@ async def extract_facts(raw_text: str, doc_type: str, filename: str) -> list[dic
     except Exception as exc:
         logger.warning("fact_extractor: phase1 failed doc=%s error=%s: %s", filename, type(exc).__name__, exc)
 
+    # Quality gate: skip LLM if text quality is too low
+    if text_quality < 0.3:
+        logger.info(
+            "fact_extractor: skipping LLM extraction doc=%s text_quality=%.2f reason=below_threshold",
+            filename, text_quality,
+        )
+        logger.info("fact_extractor: doc=%s doc_type=%s facts_count=%d", filename, doc_type, len(facts))
+        return facts
+
     # Phase 2: LLM for remaining target keys
     if doc_type == "recipe":
-        # Recipe-specific extraction replaces generic Phase 2
+        # Recipe-specific extraction replaces generic Phase 2 — stays on lite tier
         try:
             recipe_facts = await _extract_recipe_facts(raw_text, filename)
             facts.extend(recipe_facts)
+            logger.info("fact_extractor: model_tier=lite doc=%s doc_type=recipe", filename)
         except Exception as exc:
             logger.warning("fact_extractor: recipe phase2 failed doc=%s error=%s: %s", filename, type(exc).__name__, exc)
     else:
@@ -263,20 +343,9 @@ async def extract_facts(raw_text: str, doc_type: str, filename: str) -> list[dic
 
         if remaining_keys:
             try:
-                truncated_text = raw_text[:2000]
-                prompt = (
-                    f"Extract the following facts from this document.\n"
-                    f"Facts to extract: {', '.join(remaining_keys)}\n"
-                    f"Document type: {doc_type}\n"
-                    f"Filename: {filename}\n\n"
-                    f"Document text:\n{truncated_text}\n\n"
-                    f"Respond with a JSON array only. Each item: "
-                    f'{{\"fact_key\": \"<key>\", \"fact_value\": \"<value>\", '
-                    f'\"confidence\": <0.0-1.0>, \"source_excerpt\": \"<short quote>\"}}\n'
-                    f"Only include facts you can find in the text. Allowed keys: {', '.join(ALLOWED_FACT_KEYS)}"
-                )
+                prompt = _build_schema_prompt(raw_text, doc_type, remaining_keys, filename)
                 system = "You are a document fact extractor. Respond only with a valid JSON array."
-                raw = await llm_generate(prompt, system, "lite")
+                raw = await llm_generate(prompt, system, "haiku")
 
                 if raw:
                     # Extract JSON array from response
@@ -298,6 +367,7 @@ async def extract_facts(raw_text: str, doc_type: str, filename: str) -> list[dic
                                 "source_excerpt": _truncate_excerpt(str(item.get("source_excerpt", ""))),
                             })
                             extracted_keys.add(key)
+                logger.info("fact_extractor: model_tier=haiku doc=%s doc_type=%s", filename, doc_type)
             except Exception as exc:
                 logger.warning("fact_extractor: phase2 failed doc=%s error=%s: %s", filename, type(exc).__name__, exc)
 

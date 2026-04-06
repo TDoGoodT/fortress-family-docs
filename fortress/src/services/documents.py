@@ -7,7 +7,9 @@ import os
 import re
 import shutil
 import uuid as uuid_mod
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
+from decimal import Decimal, InvalidOperation
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -105,6 +107,126 @@ def _generate_auto_tags(doc: Document, facts: list[dict], filename: str) -> list
             tags.append(fact_type)
 
     return merge_tags([], tags)
+
+
+# ── Fact Promotion ───────────────────────────────────────────────────────
+
+# Maps fact_key → Document column name
+PROMOTION_MAP: dict[str, str] = {
+    "counterparty": "vendor",
+    "amount": "amount",
+    "currency": "currency",
+    "source_date": "doc_date",
+}
+
+
+def _parse_amount(value: str) -> Decimal | None:
+    """Parse an amount string to Decimal, stripping commas/whitespace.
+
+    Handles '1,234.56', '1234.56', '1234'. Returns None on failure.
+    """
+    try:
+        cleaned = value.replace(",", "").strip()
+        if not cleaned:
+            return None
+        return Decimal(cleaned)
+    except (InvalidOperation, ValueError, ArithmeticError):
+        return None
+
+
+def _parse_date(value: str) -> date | None:
+    """Parse a date string. Tries ISO YYYY-MM-DD first, then DD/MM/YYYY and DD.MM.YYYY.
+
+    Returns None on failure.
+    """
+    stripped = value.strip()
+    # ISO format: YYYY-MM-DD
+    try:
+        return date.fromisoformat(stripped)
+    except (ValueError, TypeError):
+        pass
+    # DD/MM/YYYY
+    for sep in ("/", "."):
+        parts = stripped.split(sep)
+        if len(parts) == 3:
+            try:
+                day, month, year = int(parts[0]), int(parts[1]), int(parts[2])
+                return date(year, month, day)
+            except (ValueError, TypeError):
+                continue
+    return None
+
+
+def promote_facts_to_document(
+    doc: Document,
+    facts: list[dict[str, Any]],
+    confidence_threshold: float = 0.6,
+) -> dict[str, str]:
+    """Promote high-confidence extracted facts to Document columns.
+
+    Mapping (PROMOTION_MAP):
+        counterparty → doc.vendor
+        amount       → doc.amount (parsed to Decimal)
+        currency     → doc.currency
+        source_date  → doc.doc_date (parsed to date)
+
+    Rules:
+    - Only promotes facts with confidence >= threshold
+    - Never overwrites existing non-null column values
+    - Skips amount if string can't parse to Decimal (logs warning)
+    - Skips source_date if string can't parse to date (logs warning)
+    - Does NOT call db.commit()
+    - Returns dict of {column_name: promoted_value_str} for logging
+    """
+    promoted: dict[str, str] = {}
+
+    for fact in facts:
+        fact_key = fact.get("fact_key", "")
+        if fact_key not in PROMOTION_MAP:
+            continue
+
+        confidence = float(fact.get("confidence", 0.0))
+        if confidence < confidence_threshold:
+            continue
+
+        col_name = PROMOTION_MAP[fact_key]
+        current_value = getattr(doc, col_name, None)
+        if current_value is not None:
+            continue
+
+        fact_value = str(fact.get("fact_value", "")).strip()
+        if not fact_value:
+            continue
+
+        # Type-specific parsing
+        if col_name == "amount":
+            parsed = _parse_amount(fact_value)
+            if parsed is None:
+                logger.warning(
+                    "fact_promotion: failed to parse amount value=%r doc_id=%s",
+                    fact_value, doc.id,
+                )
+                continue
+            doc.amount = parsed
+            promoted[col_name] = fact_value
+
+        elif col_name == "doc_date":
+            parsed = _parse_date(fact_value)
+            if parsed is None:
+                logger.warning(
+                    "fact_promotion: failed to parse date value=%r doc_id=%s",
+                    fact_value, doc.id,
+                )
+                continue
+            doc.doc_date = parsed
+            promoted[col_name] = fact_value
+
+        else:
+            # String columns: vendor, currency
+            setattr(doc, col_name, fact_value)
+            promoted[col_name] = fact_value
+
+    return promoted
 
 
 async def process_document(
@@ -242,7 +364,7 @@ async def process_document(
     fact_count = 0
     extracted_facts: list[dict] = []
     try:
-        extracted_facts = await extract_facts(raw_text, doc.doc_type, original_filename)
+        extracted_facts = await extract_facts(raw_text, doc.doc_type, original_filename, text_quality=text_quality)
         for fact_data in extracted_facts:
             fact = DocumentFact(
                 document_id=doc.id,
@@ -261,6 +383,22 @@ async def process_document(
         _log_step("fact_extraction", doc_id, original_filename, "failed",
                   error=f"{type(exc).__name__}: {exc}")
         steps_failed.append("fact_extraction")
+
+    # ── Step 3.5: Fact promotion ──────────────────────────────────────────
+    try:
+        promoted = promote_facts_to_document(doc, extracted_facts)
+        if promoted:
+            _log_step("fact_promotion", doc_id, original_filename, "success",
+                      promoted_fields=",".join(promoted.keys()))
+            steps_ok.append("fact_promotion")
+        else:
+            _log_step("fact_promotion", doc_id, original_filename, "skipped",
+                      reason="no_promotable_facts")
+            steps_ok.append("fact_promotion")
+    except Exception as exc:
+        _log_step("fact_promotion", doc_id, original_filename, "failed",
+                  error=f"{type(exc).__name__}: {exc}")
+        steps_failed.append("fact_promotion")
 
     # ── Step 4: Summary generation ────────────────────────────────────────
     try:
@@ -460,7 +598,7 @@ async def process_text(
     fact_count = 0
     extracted_facts: list[dict] = []
     try:
-        extracted_facts = await extract_facts(raw_text, doc.doc_type, doc.original_filename)
+        extracted_facts = await extract_facts(raw_text, doc.doc_type, doc.original_filename, text_quality=1.0)
         for fact_data in extracted_facts:
             fact = DocumentFact(
                 document_id=doc.id,
@@ -479,6 +617,22 @@ async def process_text(
         _log_step("fact_extraction", doc_id, doc.original_filename, "failed",
                   error=f"{type(exc).__name__}: {exc}")
         steps_failed.append("fact_extraction")
+
+    # ── Step 2.5: Fact promotion ──────────────────────────────────────────
+    try:
+        promoted = promote_facts_to_document(doc, extracted_facts)
+        if promoted:
+            _log_step("fact_promotion", doc_id, doc.original_filename, "success",
+                      promoted_fields=",".join(promoted.keys()))
+            steps_ok.append("fact_promotion")
+        else:
+            _log_step("fact_promotion", doc_id, doc.original_filename, "skipped",
+                      reason="no_promotable_facts")
+            steps_ok.append("fact_promotion")
+    except Exception as exc:
+        _log_step("fact_promotion", doc_id, doc.original_filename, "failed",
+                  error=f"{type(exc).__name__}: {exc}")
+        steps_failed.append("fact_promotion")
 
     # ── Step 3: Summary generation ────────────────────────────────────────
     try:
