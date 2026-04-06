@@ -66,7 +66,7 @@ def _should_prefer_structured_path(message_text: str) -> bool:
     command = parse_command(message_text, registry)
     if command is None:
         return False
-    return command.skill in {"task", "system", "fact"}
+    return command.skill in {"task", "system", "fact", "deploy"}
 
 
 def _is_deterministic_command(message_text: str) -> bool:
@@ -78,8 +78,8 @@ def _is_deterministic_command(message_text: str) -> bool:
     command = parse_command(message_text, registry)
     if command is None:
         return False
-    # Only task/system/fact are truly deterministic and should override agent
-    if command.skill in {"task", "system", "fact"}:
+    # Only task/system/fact/deploy are truly deterministic and should override agent
+    if command.skill in {"task", "system", "fact", "deploy"}:
         return True
     # Document save is deterministic, but queries/search should go through agent
     if command.skill == "document" and command.action == "save":

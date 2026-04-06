@@ -298,9 +298,18 @@ async def run(
 
             # Text response — we're done
             if response.stop_reason == "end_turn" or (response.text and not response.tool_calls):
+                final_text = response.text or ""
+                # If LLM returned empty text after a successful tool call,
+                # use the last tool result as the response instead of empty.
+                if not final_text.strip() and last_tool_result:
+                    logger.info(
+                        "agent_loop: iteration=%d empty_text_after_tool, using last_tool_result len=%d",
+                        iteration + 1, len(last_tool_result),
+                    )
+                    final_text = last_tool_result
                 logger.info(
                     "agent_loop: iteration=%d text_response len=%d time=%.1fs",
-                    iteration + 1, len(response.text or ""), iter_elapsed,
+                    iteration + 1, len(final_text), iter_elapsed,
                 )
                 total_elapsed = time.monotonic() - total_start
                 multi_tool = _is_multi_tool_run(tool_calls_count, len(tools_used))
@@ -309,7 +318,7 @@ async def run(
                     member.name, iterations, tool_calls_count, len(tools_used), multi_tool, total_elapsed,
                 )
                 return AgentResult(
-                    response=response.text or "",
+                    response=final_text,
                     tool_name=last_tool_name,
                     iterations=iterations,
                     fallback_used=False,
