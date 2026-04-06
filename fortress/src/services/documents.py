@@ -10,9 +10,10 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from src.config import STORAGE_PATH
+from src.config import STORAGE_PATH, DOCUMENT_VISION_FALLBACK_ENABLED
 from src.models.schema import Document, DocumentFact
-from src.services.text_extractor import extract_text
+from src.services.text_extractor import extract_text, extract_text_v2
+from src.services.image_preprocessor import get_quality_band
 from src.services.document_classifier import (
     classify_document,
     REVIEW_CONFIDENCE_THRESHOLD,
@@ -141,18 +142,30 @@ async def process_document(
 
     # ── Step 1: Text extraction ───────────────────────────────────────────
     raw_text = ""
+    text_quality = 0.0
+    extraction_method = "none"
     try:
         if ext_lower not in _SPREADSHEET_EXTENSIONS:
-            raw_text = extract_text(storage_path) or ""
+            raw_text, text_quality, extraction_method = await extract_text_v2(storage_path)
             if raw_text:
                 doc.raw_text = raw_text
                 _log_step("text_extraction", doc_id, original_filename, "success",
-                          chars=len(raw_text))
+                          chars=len(raw_text), method=extraction_method,
+                          quality=f"{text_quality:.2f}")
                 steps_ok.append("text_extraction")
             else:
                 _log_step("text_extraction", doc_id, original_filename, "skipped",
                           reason="empty_result")
                 steps_ok.append("text_extraction")
+
+            # Merge quality metadata into doc_metadata
+            doc.doc_metadata = {
+                **(doc.doc_metadata or {}),
+                "text_quality_score": text_quality,
+                "extraction_method": extraction_method,
+                "quality_band": get_quality_band(text_quality),
+                "vision_fallback_enabled": DOCUMENT_VISION_FALLBACK_ENABLED,
+            }
         else:
             _log_step("text_extraction", doc_id, original_filename, "skipped",
                       reason="spreadsheet")

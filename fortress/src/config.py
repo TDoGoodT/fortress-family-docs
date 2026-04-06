@@ -57,3 +57,8 @@ AGENT_ENABLED: bool = os.getenv("AGENT_ENABLED", "true").lower() == "true"
 AGENT_MAX_TOOL_ITERATIONS: int = int(os.getenv("AGENT_MAX_TOOL_ITERATIONS", "7"))
 AGENT_MODEL_TIER: str = os.getenv("AGENT_MODEL_TIER", "haiku")
 AGENT_HISTORY_DEPTH: int = int(os.getenv("AGENT_HISTORY_DEPTH", "10"))
+
+# Document vision fallback — use Bedrock vision for low-quality OCR results
+DOCUMENT_VISION_FALLBACK_ENABLED: bool = os.getenv(
+    "DOCUMENT_VISION_FALLBACK_ENABLED", "true"
+).lower() == "true"

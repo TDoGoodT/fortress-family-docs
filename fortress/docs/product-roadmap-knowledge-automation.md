@@ -101,6 +101,22 @@ The agent loop (LLM + tool calling) is the brain. The knowledge layer is the mem
 - Natural Hebrew questions about family finances get accurate, data-backed answers
 - The system proactively flags important changes or upcoming events
 
+### Sprint 5: Markdown-on-Disk Knowledge Layer (Future)
+
+**Goal:** Add a human-readable, git-tracked markdown representation alongside the PostgreSQL store.
+
+**Inspiration:** [Cabinet](https://github.com/hilash/cabinet) — files-on-disk as source of truth with git history.
+
+**Approach:** Hybrid — keep PostgreSQL as primary (fast queries, transactions), write `.md` files as secondary representation with YAML frontmatter (type, facts, tags) + raw content. Git-track the knowledge directory for version history.
+
+**Benefits:**
+- Human-readable storage — one file per document instead of split across DB tables
+- Git history — version tracking, diffs, audit trail for free
+- LLM-friendly — agent reads .md files directly instead of reconstructing from DB
+- Portability — data is just a folder of markdown files
+
+**Deferred because:** PostgreSQL works well for current needs. This optimization makes sense once the knowledge base grows and we need better auditability or portability.
+
 ## Technical Foundation
 
 All sprints build on the same core:
