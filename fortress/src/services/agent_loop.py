@@ -170,6 +170,18 @@ def build_system_prompt(
         parts.append("")
         parts.append("חובה להשתמש ב-document_query לכל שאלה על תוכן מסמך.")
 
+    # Intent-specific instruction for dev
+    if intent == "dev":
+        parts.append("")
+        parts.append(
+            "## חובה: שימוש בכלי dev\n"
+            "כשהמשתמש אומר 'אנדקס', 'index', 'תאנדקס', או 'תנתח את הקוד' — חובה לקרוא לכלי dev_index.\n"
+            "כשהמשתמש שואל שאלה על מבנה הקוד, skills, services, models — חובה לקרוא לכלי dev_query.\n"
+            "כשהמשתמש מבקש לתכנן פיצ׳ר — חובה לקרוא לכלי dev_plan.\n"
+            "אסור לענות על שאלות על מבנה הקוד מהזיכרון שלך. חובה להשתמש בכלים.\n"
+            "העבר את תוצאת הכלי למשתמש כמו שהיא — אל תסכם או תקצר."
+        )
+
     # A1: planning instructions
     parts.append("")
     parts.append(PLANNING_INSTRUCTIONS)

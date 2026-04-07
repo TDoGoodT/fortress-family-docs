@@ -54,6 +54,8 @@ def execute_tool(
     # raw_text helps skills that use it for fallback parsing
     if "question" in params:
         params["raw_text"] = params["question"]
+    elif "feature_request" in params:
+        params["raw_text"] = params["feature_request"]
     elif original_message:
         params["raw_text"] = original_message
 
