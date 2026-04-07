@@ -49,6 +49,35 @@ def _resolve_dev_outputs_dir() -> Path:
     return out
 
 
+def _extract_layer_for_query(question: str, index: dict) -> list[dict]:
+    """When keyword search returns nothing, check if the query asks about
+    an entire layer (all skills, all tools, etc.) and return that layer."""
+    q = question.lower()
+    layers = index.get("layers", {})
+
+    # Map query keywords to index layers
+    layer_keywords = {
+        "skills": ("skills", ["name", "description", "commands", "source_file"]),
+        "skill": ("skills", ["name", "description", "commands", "source_file"]),
+        "tools": ("tools", ["tool_name", "skill", "action", "description"]),
+        "tool": ("tools", ["tool_name", "skill", "action", "description"]),
+        "services": ("services", ["file_path", "classes", "public_methods"]),
+        "service": ("services", ["file_path", "classes", "public_methods"]),
+        "models": ("models", ["class_name", "table_name", "columns", "relationships"]),
+        "model": ("models", ["class_name", "table_name", "columns", "relationships"]),
+        "migrations": ("migrations", ["filename", "description"]),
+        "migration": ("migrations", ["filename", "description"]),
+    }
+
+    for keyword, (layer_name, _fields) in layer_keywords.items():
+        if keyword in q:
+            entries = layers.get(layer_name, [])
+            if entries:
+                return [{"layer": layer_name, **e} for e in entries]
+
+    return []
+
+
 class DevSkill(BaseSkill):
     """Admin-only skill for codebase intelligence and feature planning."""
 
@@ -165,14 +194,15 @@ class DevSkill(BaseSkill):
         # Retrieve relevant context
         context_entries = retrieve_relevant_context(question)
         if not context_entries:
-            # Try to load full index for a basic answer
+            # If keyword search found nothing, check if the query is asking
+            # about a whole layer (all skills, all tools, etc.) and pass that
             index = load_index()
             if index is None:
                 return Result(
                     success=False,
                     message="אין אינדקס זמין. הרץ קודם: dev index",
                 )
-            context_entries = []
+            context_entries = _extract_layer_for_query(question, index)
 
         # Build context string for LLM
         context_text = json.dumps(context_entries, indent=2, ensure_ascii=False)
