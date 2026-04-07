@@ -40,6 +40,7 @@ _INTENT_PATTERNS: dict[str, list[str]] = {
         r"תכנן פיצ׳ר|plan feature|תכנן תכונה|gap analysis",
         r"מה ה.?skills|איזה skills|what skills|מה ה.?services|איזה services",
         r"מה יש לך ב.?skills|הראה לי את המבנה|ארכיטקטורה",
+        r"איזה tools|what tools|איזה models|איזה migrations|קוד מקור",
     ],
 }
 
