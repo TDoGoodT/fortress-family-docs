@@ -10,8 +10,9 @@ Replaces the regex command parser with an LLM agent that:
 from __future__ import annotations
 
 import logging
+import re
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -42,6 +43,7 @@ class AgentResult:
     multi_tool_run: bool = False       # heuristic: >1 distinct tool or >2 total calls
     tool_calls_count: int = 0          # total tool invocations in this run
     distinct_tools_count: int = 0      # unique tool names invoked in this run
+    dev_intent_detected: bool = False  # whether dev intent was detected for admin
 
 
 # ---------------------------------------------------------------------------
@@ -88,6 +90,51 @@ def _is_multi_tool_run(tool_calls_count: int, distinct_tools_count: int) -> bool
     not a precise semantic claim about whether the LLM internally planned.
     """
     return distinct_tools_count > 1 or tool_calls_count > 2
+
+
+# ---------------------------------------------------------------------------
+# Dev intent detection (admin-only, conversational)
+# ---------------------------------------------------------------------------
+
+_DEV_INTENT_PATTERNS: list[tuple[re.Pattern, str]] = [
+    # Hebrew feature requests
+    (re.compile(r"אני רוצה ש", re.IGNORECASE), "dev_plan"),
+    (re.compile(r"צריך להוסיף", re.IGNORECASE), "dev_plan"),
+    (re.compile(r"חסר לי", re.IGNORECASE), "dev_plan"),
+    (re.compile(r"אפשר לבנות", re.IGNORECASE), "dev_plan"),
+    (re.compile(r"למה אין", re.IGNORECASE), "dev_query"),
+    (re.compile(r"חבל שאין", re.IGNORECASE), "dev_plan"),
+    (re.compile(r"אפשר לשפר", re.IGNORECASE), "dev_plan"),
+    (re.compile(r"צריך לשנות", re.IGNORECASE), "dev_plan"),
+    (re.compile(r"יכולת חדשה", re.IGNORECASE), "dev_plan"),
+    (re.compile(r"פיצ.ר חדש", re.IGNORECASE), "dev_plan"),
+    # English feature requests
+    (re.compile(r"I want fortress to", re.IGNORECASE), "dev_plan"),
+    (re.compile(r"we need", re.IGNORECASE), "dev_plan"),
+    (re.compile(r"can you build", re.IGNORECASE), "dev_plan"),
+    (re.compile(r"it would be nice if", re.IGNORECASE), "dev_plan"),
+]
+
+
+def detect_dev_intent(message: str, is_admin: bool, tool_router_intent: str) -> tuple[str | None, str | None]:
+    """Detect dev intent in natural conversation for admin users.
+
+    Returns (suggested_tool, suggestion_message) or (None, None).
+    """
+    if not is_admin:
+        return None, None
+    if tool_router_intent == "dev":
+        return None, None
+
+    for pattern, tool_name in _DEV_INTENT_PATTERNS:
+        if pattern.search(message):
+            suggestion = (
+                "🔧 זה נשמע כמו פיצ'ר חדש. "
+                "רוצה שאפעיל את כלי התכנון ואבנה תכנית מימוש מבוססת קוד?"
+            )
+            return tool_name, suggestion
+
+    return None, None
 
 
 # ---------------------------------------------------------------------------
@@ -277,6 +324,16 @@ async def run(
 
     # 3. Build system prompt (intent-aware + context injection)
     system_prompt = build_system_prompt(db, member, intent=intent, conv_state=conv_state)
+
+    # Dev intent detection for admin users
+    suggested_tool, suggestion_msg = detect_dev_intent(message_text, member.is_admin, intent)
+    if suggested_tool is not None:
+        return AgentResult(
+            response=suggestion_msg,
+            tool_name=None,
+            iterations=0,
+            dev_intent_detected=True,
+        )
 
     # 4. Load filtered history (depth=4, skip negative examples)
     history = load_conversation_history(db, member.id)

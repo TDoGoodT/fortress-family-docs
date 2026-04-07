@@ -7,7 +7,8 @@ Provides:
 - select_model(): returns a resolved model_id for a task type + optional session override
 - detect_upgrade_trigger(): check if user message warrants a model upgrade
 - get_session_tier() / set_session_tier() / clear_session_tier(): per-member model override
-- increment_normal_count() / reset_normal_count() / should_auto_downgrade(): auto-downgrade logic
+- record_task_signal() / check_downgrade_signals() / clear_task_tracking(): signal-based downgrade
+- record_intent_group() / record_message_timestamp() / check_inactivity_timeout(): context tracking
 """
 from __future__ import annotations
 
@@ -20,7 +21,6 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from src.config import (
-    AUTO_DOWNGRADE_THRESHOLD,
     BEDROCK_HAIKU_MODEL,
     BEDROCK_LITE_MODEL,
     BEDROCK_MAX_MODEL,
@@ -336,38 +336,74 @@ def clear_session_tier(db: Session, member_id: UUID) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Auto-downgrade — consecutive normal message counting
+# Signal-based task tracking (replaces counter-based auto-downgrade)
 # ---------------------------------------------------------------------------
 
-def increment_normal_count(db: Session, member_id: UUID) -> int:
-    """Increment consecutive_normal_count in ConversationState.context.
-
-    Returns the new count value.
-    """
-    from src.services.conversation_state import get_state
-    state = get_state(db, member_id)
-    ctx = dict(state.context or {})
-    count = ctx.get("consecutive_normal_count", 0) + 1
-    ctx["consecutive_normal_count"] = count
-    state.context = ctx
-    db.flush()
-    return count
-
-
-def reset_normal_count(db: Session, member_id: UUID) -> None:
-    """Reset consecutive_normal_count to 0."""
-    from src.services.conversation_state import get_state
-    state = get_state(db, member_id)
-    ctx = dict(state.context or {})
-    ctx["consecutive_normal_count"] = 0
-    state.context = ctx
-    db.flush()
-
-
-def should_auto_downgrade(db: Session, member_id: UUID) -> bool:
-    """Return True if consecutive_normal_count >= AUTO_DOWNGRADE_THRESHOLD."""
+def record_task_signal(db: Session, member_id: UUID, signal: str) -> None:
+    """Record a task completion signal in ConversationState.context['last_task_signal']."""
     from src.services.conversation_state import get_state
     state = get_state(db, member_id)
     ctx = state.context or {}
-    count = ctx.get("consecutive_normal_count", 0)
-    return count >= AUTO_DOWNGRADE_THRESHOLD
+    ctx["last_task_signal"] = signal
+    state.context = ctx
+    db.flush()
+
+
+def record_intent_group(db: Session, member_id: UUID, intent_group: str) -> None:
+    """Store current intent group in context['last_intent_group']."""
+    from src.services.conversation_state import get_state
+    state = get_state(db, member_id)
+    ctx = state.context or {}
+    ctx["last_intent_group"] = intent_group
+    state.context = ctx
+    db.flush()
+
+
+def record_message_timestamp(db: Session, member_id: UUID) -> None:
+    """Store current UTC timestamp in context['last_message_ts']."""
+    from src.services.conversation_state import get_state
+    from datetime import datetime, timezone
+    state = get_state(db, member_id)
+    ctx = state.context or {}
+    ctx["last_message_ts"] = datetime.now(timezone.utc).isoformat()
+    state.context = ctx
+    db.flush()
+
+
+def check_inactivity_timeout(db: Session, member_id: UUID) -> bool:
+    """Return True if time since last_message_ts exceeds INACTIVITY_TIMEOUT_MINUTES."""
+    from src.services.conversation_state import get_state
+    from src.config import INACTIVITY_TIMEOUT_MINUTES
+    from datetime import datetime, timezone
+    state = get_state(db, member_id)
+    ctx = state.context or {}
+    last_ts = ctx.get("last_message_ts")
+    if not last_ts:
+        return False
+    try:
+        last_dt = datetime.fromisoformat(last_ts)
+    except (ValueError, TypeError):
+        logger.warning("model_selector: invalid last_message_ts=%s", last_ts)
+        return False
+    elapsed_minutes = (datetime.now(timezone.utc) - last_dt).total_seconds() / 60
+    return elapsed_minutes > INACTIVITY_TIMEOUT_MINUTES
+
+
+def check_downgrade_signals(db: Session, member_id: UUID) -> bool:
+    """Return True if any downgrade signal is active."""
+    from src.services.conversation_state import get_state
+    state = get_state(db, member_id)
+    ctx = state.context or {}
+    signal = ctx.get("last_task_signal")
+    return signal in {"post_tool_chat", "user_done", "topic_shift"}
+
+
+def clear_task_tracking(db: Session, member_id: UUID) -> None:
+    """Reset task tracking state from context."""
+    from src.services.conversation_state import get_state
+    state = get_state(db, member_id)
+    ctx = state.context or {}
+    ctx.pop("last_task_signal", None)
+    ctx.pop("last_intent_group", None)
+    state.context = ctx
+    db.flush()

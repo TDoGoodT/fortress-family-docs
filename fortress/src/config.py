@@ -43,7 +43,8 @@ BEDROCK_MAX_MODEL: str = os.getenv("BEDROCK_MAX_MODEL", "anthropic.claude-opus-4
 # Dynamic model routing
 BEDROCK_MODEL_REGISTRY: str = os.getenv("BEDROCK_MODEL_REGISTRY", "")  # JSON override for model registry
 TASK_TIER_MAP: str = os.getenv("TASK_TIER_MAP", "")                    # JSON override for task-to-tier mapping
-AUTO_DOWNGRADE_THRESHOLD: int = int(os.getenv("AUTO_DOWNGRADE_THRESHOLD", "3"))
+AUTO_DOWNGRADE_THRESHOLD: int = int(os.getenv("AUTO_DOWNGRADE_THRESHOLD", "15"))
+INACTIVITY_TIMEOUT_MINUTES: int = int(os.getenv("INACTIVITY_TIMEOUT_MINUTES", "10"))
 
 # Scheduler
 SCHEDULER_HOUR: int = int(os.getenv("SCHEDULER_HOUR", "7"))
