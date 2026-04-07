@@ -20,7 +20,7 @@ ToolSchema = dict[str, Any]
 # ---------------------------------------------------------------------------
 
 _INTENT_PRIORITY = [
-    "documents", "tasks", "recipes", "memory", "recurring", "bugs", "system",
+    "documents", "tasks", "recipes", "memory", "recurring", "bugs", "dev", "system",
 ]
 
 _INTENT_PATTERNS: dict[str, list[str]] = {
@@ -35,6 +35,10 @@ _INTENT_PATTERNS: dict[str, list[str]] = {
     "recurring": [r"חוזר|כל שבוע|כל חודש|תזכורת קבועה|recurring"],
     "bugs": [r"תקלה|באג|שגיאה|לא עובד|bug"],
     "system": [r"עזרה|פקודות|מה אתה יכול|help|בטל|cancel"],
+    "dev": [
+        r"תנתח את הקוד|אנדקס|index|מבנה הקוד|codebase",
+        r"תכנן פיצ׳ר|plan feature|תכנן תכונה|gap analysis",
+    ],
 }
 
 # ---------------------------------------------------------------------------
@@ -69,6 +73,9 @@ _INTENT_TOOLS: dict[str, list[str]] = {
     "system": [
         "system_help", "system_cancel", "task_list",
         "document_list", "memory_list",
+    ],
+    "dev": [
+        "dev_index", "dev_query", "dev_plan", "system_help",
     ],
     "chat": [
         "document_query", "task_list", "system_help",

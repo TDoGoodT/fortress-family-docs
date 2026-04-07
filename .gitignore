@@ -20,6 +20,9 @@ scripts/seed_*.sh
 storage/*
 !storage/.gitkeep
 
+# Generated data
+fortress/data/codebase_index.json
+
 # IDE
 .vscode/
 .idea/

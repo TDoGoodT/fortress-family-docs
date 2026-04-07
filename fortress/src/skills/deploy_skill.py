@@ -131,6 +131,11 @@ class DeploySkill(BaseSkill):
                 )
 
             template_key = _STARTED_TEMPLATES.get(action, "deploy_started")
+
+            # Post-deploy hook: re-index codebase after successful deploy
+            if action in ("deploy_app", "deploy_all"):
+                self._post_deploy_reindex()
+
             return Result(
                 success=True,
                 message=TEMPLATES[template_key],
@@ -164,6 +169,34 @@ class DeploySkill(BaseSkill):
                 success=False,
                 message=TEMPLATES["deploy_failed"].format(details=str(e)),
             )
+
+    def _post_deploy_reindex(self) -> None:
+        """Best-effort re-index of the codebase after a successful deploy.
+
+        Loads the old index (if any), rebuilds, and logs a summary of changes.
+        Failures are logged but never affect the deploy result.
+        """
+        try:
+            from src.services.codebase_indexer import build_index, load_index
+
+            old_index = load_index()
+            new_index = build_index(force=True)
+
+            # Compute diff summary
+            if old_index:
+                old_paths = {m["file_path"] for m in old_index.get("layers", {}).get("modules", [])}
+                new_paths = {m["file_path"] for m in new_index.get("layers", {}).get("modules", [])}
+                added = new_paths - old_paths
+                removed = old_paths - new_paths
+                if added or removed:
+                    logger.info(
+                        "Post-deploy re-index: +%d files, -%d files",
+                        len(added), len(removed),
+                    )
+            else:
+                logger.info("Post-deploy re-index: first index built")
+        except Exception:
+            logger.exception("Post-deploy re-index failed (non-fatal)")
 
     @staticmethod
     def _safe_json(resp: httpx.Response) -> dict:

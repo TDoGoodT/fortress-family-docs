@@ -49,6 +49,10 @@ _TOOL_MAP: dict[str, tuple[str, str]] = {
     "bedrock_cost":  ("system", "bedrock_cost"),
     # Knowledge ingestion
     "save_text": ("document", "save_text"),
+    # Dev (admin-only)
+    "dev_index": ("dev", "index"),
+    "dev_query": ("dev", "query"),
+    "dev_plan":  ("dev", "plan"),
 }
 
 
@@ -418,6 +422,44 @@ _TOOL_SCHEMAS: list[ToolSchema] = [
                         "title": {"type": "string", "description": "כותרת למסמך (אופציונלי)"},
                     },
                     "required": ["text"],
+                }
+            },
+        }
+    },
+    # ── Dev (admin-only) ───────────────────────────────────────────────
+    {
+        "toolSpec": {
+            "name": "dev_index",
+            "description": "בניית אינדקס של קוד המקור של פורטרס. מנהל בלבד.",
+            "inputSchema": {"json": {"type": "object", "properties": {}}},
+        }
+    },
+    {
+        "toolSpec": {
+            "name": "dev_query",
+            "description": "שאילתה על מבנה הקוד — skills, services, models, tools. מנהל בלבד.",
+            "inputSchema": {
+                "json": {
+                    "type": "object",
+                    "properties": {
+                        "question": {"type": "string", "description": "שאלה על מבנה הקוד"},
+                    },
+                    "required": ["question"],
+                }
+            },
+        }
+    },
+    {
+        "toolSpec": {
+            "name": "dev_plan",
+            "description": "תכנון פיצ׳ר חדש על בסיס ניתוח הקוד הקיים. מנהל בלבד.",
+            "inputSchema": {
+                "json": {
+                    "type": "object",
+                    "properties": {
+                        "feature_request": {"type": "string", "description": "תיאור הפיצ׳ר הרצוי"},
+                    },
+                    "required": ["feature_request"],
                 }
             },
         }
