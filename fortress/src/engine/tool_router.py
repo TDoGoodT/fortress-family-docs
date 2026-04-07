@@ -36,8 +36,10 @@ _INTENT_PATTERNS: dict[str, list[str]] = {
     "bugs": [r"תקלה|באג|שגיאה|לא עובד|bug"],
     "system": [r"עזרה|פקודות|מה אתה יכול|help|בטל|cancel"],
     "dev": [
-        r"תנתח את הקוד|אנדקס|index|מבנה הקוד|codebase",
+        r"תנתח את הקוד|אנדקס|מבנה הקוד|codebase|dev index|dev query|dev plan",
         r"תכנן פיצ׳ר|plan feature|תכנן תכונה|gap analysis",
+        r"מה ה.?skills|איזה skills|what skills|מה ה.?services|איזה services",
+        r"מה יש לך ב.?skills|הראה לי את המבנה|ארכיטקטורה",
     ],
 }
 

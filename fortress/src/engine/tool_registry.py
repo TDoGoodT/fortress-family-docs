@@ -430,14 +430,14 @@ _TOOL_SCHEMAS: list[ToolSchema] = [
     {
         "toolSpec": {
             "name": "dev_index",
-            "description": "בניית אינדקס של קוד המקור של פורטרס. מנהל בלבד.",
+            "description": "בניית אינדקס של קוד המקור של פורטרס. מנהל בלבד. העבר את התוצאה המלאה למשתמש כמו שהיא.",
             "inputSchema": {"json": {"type": "object", "properties": {}}},
         }
     },
     {
         "toolSpec": {
             "name": "dev_query",
-            "description": "שאילתה על מבנה הקוד — skills, services, models, tools. מנהל בלבד.",
+            "description": "שאילתה על מבנה הקוד — skills, services, models, tools. מנהל בלבד. העבר את התוצאה המלאה למשתמש.",
             "inputSchema": {
                 "json": {
                     "type": "object",
