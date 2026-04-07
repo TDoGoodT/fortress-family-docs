@@ -47,11 +47,11 @@ async def test_respond_strips_pii_before_llm(mock_memories, skill, db, member):
 
     captured_prompts: list[str] = []
 
-    async def _capture_dispatch(prompt, **kwargs):
+    async def _capture_dispatch(prompt, system_prompt, **kwargs):
         captured_prompts.append(prompt)
         return "תודה, קיבלתי"
 
-    with patch.object(skill, "_dispatch_llm", side_effect=_capture_dispatch):
+    with patch("src.skills.chat_skill.llm_generate", side_effect=_capture_dispatch):
         await skill.respond(db, member, original_msg)
 
     assert len(captured_prompts) == 1
@@ -74,10 +74,10 @@ async def test_respond_restores_pii_in_llm_response(mock_memories, skill, db, me
     original_msg = "הטלפון שלי 0521234567"
 
     # The LLM echoes back the placeholder
-    async def _echo_placeholder(prompt, **kwargs):
+    async def _echo_placeholder(prompt, system_prompt, **kwargs):
         return "מספר הטלפון שלך הוא [טלפון_1]"
 
-    with patch.object(skill, "_dispatch_llm", side_effect=_echo_placeholder):
+    with patch("src.skills.chat_skill.llm_generate", side_effect=_echo_placeholder):
         result = await skill.respond(db, member, original_msg)
 
     # The final response should have the original phone number restored
@@ -129,11 +129,11 @@ async def test_respond_fallback_when_strip_pii_fails(
     text and does not crash."""
     captured_prompts: list[str] = []
 
-    async def _capture(prompt, **kwargs):
+    async def _capture(prompt, system_prompt, **kwargs):
         captured_prompts.append(prompt)
         return "הכל בסדר"
 
-    with patch.object(skill, "_dispatch_llm", side_effect=_capture):
+    with patch("src.skills.chat_skill.llm_generate", side_effect=_capture):
         result = await skill.respond(db, member, "מה קורה?")
 
     # Should still return a valid response

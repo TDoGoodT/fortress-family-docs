@@ -355,7 +355,7 @@ async def test_mvp_unmatched_returns_cant_understand(mock_auth, mock_parse, mock
     member = _parent()
     mock_auth.return_value = member
 
-    with patch("src.skills.chat_skill.BedrockClient") as mock_bedrock_cls:
+    with patch("src.services.bedrock_client.BedrockClient") as mock_bedrock_cls:
         mock_bedrock = AsyncMock()
         mock_bedrock.generate.return_value = "תשובה מהמודל"
         mock_bedrock_cls.return_value = mock_bedrock
@@ -377,7 +377,7 @@ async def test_mvp_unmatched_includes_member_name(mock_auth, mock_parse, mock_co
     member = _make_family_member(name="דנה", phone=PARENT_PHONE, role="parent")
     mock_auth.return_value = member
 
-    with patch("src.skills.chat_skill.BedrockClient") as mock_bedrock_cls:
+    with patch("src.services.bedrock_client.BedrockClient") as mock_bedrock_cls:
         mock_bedrock = AsyncMock()
         mock_bedrock.generate.return_value = "היי דנה, מה שלומך?"
         mock_bedrock_cls.return_value = mock_bedrock

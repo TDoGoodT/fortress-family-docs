@@ -11,7 +11,6 @@ from src.services.auth import get_family_member_by_phone
 from src.engine.command_parser import parse_command
 from src.engine.executor import execute
 from src.engine.response_formatter import format_response
-from src.services.intent_detector import should_fallback_to_chat
 from src.services.pii_guard import strip_pii
 from src.skills.registry import registry
 from src.config import AGENT_ENABLED
@@ -23,6 +22,19 @@ _COMPLETION_PHRASES = _re.compile(
     r"^(תודה|סיימתי|done|thanks|bye|יאללה ביי|להתראות|תודה רבה)$",
     _re.IGNORECASE,
 )
+
+# Patterns for routing unmatched messages to ChatSkill (non-system queries)
+_NON_SYSTEM_PATTERNS = [
+    _re.compile(r"(בדיחה|translate|תרגם|מה זה|who is|what is)", _re.IGNORECASE),
+]
+
+
+def _should_fallback_to_chat(message: str) -> bool:
+    """Return True for clearly non-system queries that should go to ChatSkill."""
+    text = (message or "").strip()
+    if not text:
+        return False
+    return any(p.search(text) for p in _NON_SYSTEM_PATTERNS)
 
 
 def _is_completion_phrase(message: str) -> bool:
@@ -52,7 +64,7 @@ async def _run_regex_path(db: Session, member, message_text: str, pii_stripped: 
         intent = f"{command.skill}.{command.action}"
         return response, intent
 
-    if should_fallback_to_chat(message_text):
+    if _should_fallback_to_chat(message_text):
         chat_skill = registry.get("chat")
         if chat_skill is not None:
             response = await chat_skill.respond(db, member, message_text)

@@ -147,7 +147,7 @@ class TestBugConditionExploration:
         member = _parent()
         mock_auth.return_value = member
 
-        with patch("src.skills.chat_skill.BedrockClient") as mock_bedrock_cls:
+        with patch("src.services.bedrock_client.BedrockClient") as mock_bedrock_cls:
             mock_bedrock = AsyncMock()
             mock_bedrock.generate.return_value = "תשובה מהמודל"
             mock_bedrock_cls.return_value = mock_bedrock

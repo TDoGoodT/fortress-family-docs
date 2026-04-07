@@ -239,7 +239,7 @@ async def test_chat_fallback_for_clear_non_system_query(mock_auth, mock_parse, m
     member = _make_member()
     mock_auth.return_value = member
 
-    with patch("src.skills.chat_skill.BedrockClient") as mock_bedrock_cls:
+    with patch("src.services.bedrock_client.BedrockClient") as mock_bedrock_cls:
         mock_bedrock = AsyncMock()
         mock_bedrock.generate.return_value = "תשובה מהמודל"
         mock_bedrock_cls.return_value = mock_bedrock

@@ -1,9 +1,9 @@
 """Fortress standalone LLM dispatch helper.
 
 Provides a simple Bedrock-primary / Ollama-fallback generate function
-for use by document processing services (classifier, fact extractor, summarizer).
+for use by document processing services (classifier, fact extractor, summarizer)
+and ChatSkill.
 
-Does NOT modify or depend on ChatSkill. ChatSkill has its own _dispatch_llm.
 Returns empty string on total failure — callers must handle empty string
 as a signal to skip LLM-dependent output.
 """
@@ -14,21 +14,32 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-async def llm_generate(prompt: str, system_prompt: str, model_tier: str = "lite") -> str:
+async def llm_generate(
+    prompt: str,
+    system_prompt: str,
+    model_tier: str = "lite",
+    task_type: str | None = None,
+) -> str:
     """Generate text via Bedrock (primary) with Ollama fallback.
 
     Args:
         prompt: The user prompt.
         system_prompt: The system/instruction prompt.
         model_tier: Bedrock model tier — "micro", "lite", "haiku", or "sonnet".
+            Used when task_type is not provided.
+        task_type: Task type for select_model() routing (e.g. "chat", "agent").
+            When provided, takes priority over model_tier.
 
     Returns:
         Generated text string, or empty string on total failure.
         Callers are responsible for handling empty string (skip LLM output).
     """
-    # Resolve tier name to model_id
-    from src.services.model_selector import get_model_id, resolve_tier
-    model_id = get_model_id(resolve_tier(model_tier))
+    # Resolve model_id — task_type takes priority over model_tier
+    from src.services.model_selector import get_model_id, resolve_tier, select_model
+    if task_type is not None:
+        model_id = select_model(task_type)
+    else:
+        model_id = get_model_id(resolve_tier(model_tier))
 
     # Primary: Bedrock
     try:

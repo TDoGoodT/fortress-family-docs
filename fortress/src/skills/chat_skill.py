@@ -4,14 +4,11 @@ from __future__ import annotations
 
 import logging
 import re
-import time
-from typing import Any
 
 from sqlalchemy.orm import Session
 
 from src.models.schema import FamilyMember
 from src.prompts.personality import TEMPLATES, get_greeting
-from src.prompts.system_prompts import UNIFIED_CLASSIFY_AND_RESPOND
 
 CHAT_SYSTEM_PROMPT = (
     "אתה פורטרס, עוזר משפחתי חכם וחם. אתה מדבר עברית בלבד.\n"
@@ -20,8 +17,7 @@ CHAT_SYSTEM_PROMPT = (
     "אל תמציא מידע שאין לך. אם אתה לא יודע — תגיד בכנות.\n"
     "החזר טקסט רגיל בלבד — ללא JSON, ללא markdown."
 )
-from src.services.bedrock_client import HEBREW_FALLBACK, BedrockClient
-from src.services.llm_client import OllamaClient
+from src.services.llm_dispatch import llm_generate
 from src.services.memory_service import load_memories
 from src.services.pii_guard import restore_pii, strip_pii
 from src.skills.base_skill import BaseSkill, Command, Result
@@ -57,10 +53,6 @@ class ChatSkill(BaseSkill):
 
     def get_help(self) -> str:
         return "שלום / היי / hello — ברכה\nשיחה חופשית — כתוב מה שבא לך"
-
-    # ------------------------------------------------------------------
-    # Greet — deterministic, no LLM
-    # ------------------------------------------------------------------
 
     def _greet(self, member: FamilyMember) -> Result:
         current_hour = get_time_context()["hour"]
@@ -102,13 +94,9 @@ class ChatSkill(BaseSkill):
                 f"חשוב: ענה בעברית בצורה חמה וקצרה. זה וואטסאפ."
             )
 
-            raw = await self._dispatch_llm(
-                prompt=prompt,
-                system_prompt=CHAT_SYSTEM_PROMPT,
-                intent="needs_llm",
-            )
+            raw = await llm_generate(prompt, CHAT_SYSTEM_PROMPT, task_type="chat")
 
-            if not raw or raw == HEBREW_FALLBACK:
+            if not raw:
                 return TEMPLATES["error_fallback"]
 
             if pii_records:
@@ -120,59 +108,3 @@ class ChatSkill(BaseSkill):
             logger.exception("ChatSkill.respond failed for member %s", member.name)
             return TEMPLATES["error_fallback"]
 
-    # ------------------------------------------------------------------
-    # LLM dispatch — Bedrock primary, Ollama fallback
-    # ------------------------------------------------------------------
-
-    async def _dispatch_llm(
-        self,
-        prompt: str,
-        system_prompt: str,
-        intent: str,
-        context: dict[str, Any] | None = None,
-        session_tier: str | None = None,
-    ) -> str:
-        """Try Bedrock first, fall back to Ollama if unavailable."""
-        start = time.monotonic()
-        from src.services.model_selector import select_model
-        model = select_model(intent, session_tier=session_tier)
-
-        # Primary: Bedrock
-        try:
-            bedrock = BedrockClient()
-            result = await bedrock.generate(prompt, system_prompt, model=model)
-            if self._is_valid_response(result):
-                elapsed = time.monotonic() - start
-                logger.info("Dispatch: intent=%s provider=bedrock model=%s time=%.1fs",
-                            intent, model, elapsed)
-                return result
-            logger.warning("Dispatch: intent=%s bedrock returned fallback, trying ollama", intent)
-        except Exception as exc:
-            logger.error("Dispatch: intent=%s bedrock error=%s: %s",
-                         intent, type(exc).__name__, exc)
-
-        # Fallback: Ollama (local, offline)
-        try:
-            ollama = OllamaClient()
-            result = await ollama.generate(prompt, system_prompt)
-            if self._is_valid_response(result):
-                elapsed = time.monotonic() - start
-                logger.info("Dispatch: intent=%s provider=ollama time=%.1fs", intent, elapsed)
-                return result
-        except Exception as exc:
-            logger.error("Dispatch: intent=%s ollama error=%s: %s",
-                         intent, type(exc).__name__, exc)
-
-        elapsed = time.monotonic() - start
-        logger.error("Dispatch: intent=%s all providers failed time=%.1fs", intent, elapsed)
-        return HEBREW_FALLBACK
-
-    @staticmethod
-    def _is_valid_response(result: str) -> bool:
-        if not result or not result.strip():
-            return False
-        if result == HEBREW_FALLBACK:
-            return False
-        if len(result.strip()) < 2:
-            return False
-        return True

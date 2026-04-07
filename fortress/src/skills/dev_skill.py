@@ -324,21 +324,17 @@ class DevSkill(BaseSkill):
             }
         ]
 
-        # Run async converse() in sync context — use a thread to avoid
-        # nested event loop issues (agent_loop is already async)
-        import concurrent.futures
-
+        # Run async converse() in sync context via async_bridge
+        from src.utils.async_bridge import run_async
         from src.services.model_selector import select_model
         model_id = select_model("chat_question")  # strong tier for queries
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-            future = pool.submit(asyncio.run, client.converse(
-                messages=messages,
-                system_prompt=system_prompt,
-                model=model_id,
-                max_tokens=2048,
-            ))
-            response = future.result(timeout=60)
+        response = run_async(client.converse(
+            messages=messages,
+            system_prompt=system_prompt,
+            model=model_id,
+            max_tokens=2048,
+        ), timeout=60)
 
         return response.text or "לא הצלחתי לייצר תשובה."
 
@@ -361,12 +357,9 @@ class DevSkill(BaseSkill):
                 save_plan_markdown,
             )
 
-            # Run async generate_plan() in sync context — use a thread
-            # to avoid nested event loop issues
-            import concurrent.futures
-            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                future = pool.submit(asyncio.run, generate_plan(feature_request))
-                plan = future.result(timeout=120)
+            # Run async generate_plan() in sync context via async_bridge
+            from src.utils.async_bridge import run_async
+            plan = run_async(generate_plan(feature_request), timeout=120)
 
             # Save plan as Markdown
             saved_path = save_plan_markdown(plan, feature_request)

@@ -13,6 +13,7 @@ from src.models.schema import Document, FamilyMember
 from src.prompts.personality import TEMPLATES, format_document_list, format_search_results
 from src.services import documents
 from src.services.conversation_state import set_pending_confirmation, update_state
+from src.utils.async_bridge import run_async
 from src.services.document_query_service import (
     QAResult,
     answer_document_question,
@@ -529,22 +530,8 @@ class DocumentSkill(BaseSkill):
         # Update conversation state with resolved document
         update_state(db, member.id, entity_type="document", entity_id=doc.id, intent="document.query")
 
-        # Answer the question
-        loop = None
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            loop = None
-
-        if loop and loop.is_running():
-            import concurrent.futures
-            with concurrent.futures.ThreadPoolExecutor() as pool:
-                qa_result: QAResult = pool.submit(
-                    asyncio.run,
-                    answer_document_question(db, member, question, doc),
-                ).result()
-        else:
-            qa_result = asyncio.run(answer_document_question(db, member, question, doc))
+        # Answer the question — no timeout (document QA can be slow)
+        qa_result: QAResult = run_async(answer_document_question(db, member, question, doc))
 
         return Result(
             success=True,
@@ -610,21 +597,8 @@ class DocumentSkill(BaseSkill):
 
         update_state(db, member.id, entity_type="document", entity_id=doc.id, intent="document.query")
 
-        loop = None
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            loop = None
-
-        if loop and loop.is_running():
-            import concurrent.futures
-            with concurrent.futures.ThreadPoolExecutor() as pool:
-                qa_result: QAResult = pool.submit(
-                    asyncio.run,
-                    answer_document_question(db, member, question, doc),
-                ).result()
-        else:
-            qa_result = asyncio.run(answer_document_question(db, member, question, doc))
+        # Answer the question — no timeout (document QA can be slow)
+        qa_result: QAResult = run_async(answer_document_question(db, member, question, doc))
 
         return Result(
             success=True,
@@ -839,21 +813,8 @@ class DocumentSkill(BaseSkill):
             doc = results[0]
             update_state(db, member.id, entity_type="document", entity_id=doc.id, intent="document.query")
 
-            loop = None
-            try:
-                loop = asyncio.get_running_loop()
-            except RuntimeError:
-                loop = None
-
-            if loop and loop.is_running():
-                import concurrent.futures
-                with concurrent.futures.ThreadPoolExecutor() as pool:
-                    qa_result: QAResult = pool.submit(
-                        asyncio.run,
-                        answer_document_question(db, member, raw_text, doc),
-                    ).result()
-            else:
-                qa_result = asyncio.run(answer_document_question(db, member, raw_text, doc))
+            # No timeout — document QA can be slow
+            qa_result: QAResult = run_async(answer_document_question(db, member, raw_text, doc))
 
             return Result(
                 success=True,

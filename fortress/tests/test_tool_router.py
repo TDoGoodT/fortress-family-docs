@@ -179,3 +179,21 @@ class TestPriorityOrder:
         """'מסמך' keyword → documents, even with task-like context."""
         group, _ = classify("מסמך של משימה", None)
         assert group == "documents"
+
+
+# ---------------------------------------------------------------------------
+# Registry consistency guard
+# ---------------------------------------------------------------------------
+
+class TestRegistryConsistency:
+    """Every tool in _INTENT_TOOLS must exist in _TOOL_MAP."""
+
+    def test_all_intent_tools_exist_in_tool_map(self):
+        from src.engine.tool_router import _INTENT_TOOLS
+        from src.engine.tool_registry import get_tool_map
+        tool_map = get_tool_map()
+        for group, tools in _INTENT_TOOLS.items():
+            for tool_name in tools:
+                assert tool_name in tool_map, (
+                    f"{tool_name!r} in _INTENT_TOOLS[{group!r}] but missing from _TOOL_MAP"
+                )

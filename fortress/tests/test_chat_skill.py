@@ -113,10 +113,10 @@ def test_greet_night(mock_time, skill, db, member):
 # ------------------------------------------------------------------
 
 @pytest.mark.asyncio
-@patch.object(ChatSkill, "_dispatch_llm", new_callable=AsyncMock, return_value="שלום! מה שלומך?")
+@patch("src.skills.chat_skill.llm_generate", new_callable=AsyncMock, return_value="שלום! מה שלומך?")
 @patch("src.skills.chat_skill.load_memories")
 async def test_respond_calls_llm(mock_load_memories, mock_dispatch, skill, db, member):
-    """respond() builds prompt with memories and calls dispatch."""
+    """respond() builds prompt with memories and calls llm_generate."""
     mock_mem = MagicMock()
     mock_mem.content = "אוהב קפה"
     mock_load_memories.return_value = [mock_mem]
@@ -126,15 +126,17 @@ async def test_respond_calls_llm(mock_load_memories, mock_dispatch, skill, db, m
     assert result == "שלום! מה שלומך?"
     mock_load_memories.assert_called_once_with(db, member.id)
     mock_dispatch.assert_called_once()
-    call_kwargs = mock_dispatch.call_args
-    assert "מה קורה?" in call_kwargs.kwargs["prompt"] or "מה קורה?" in call_kwargs[1].get("prompt", call_kwargs[0][0] if call_kwargs[0] else "")
+    call_args = mock_dispatch.call_args
+    # First positional arg is the prompt
+    prompt_arg = call_args[0][0] if call_args[0] else call_args.kwargs.get("prompt", "")
+    assert "מה קורה?" in prompt_arg
 
 
 @pytest.mark.asyncio
-@patch.object(ChatSkill, "_dispatch_llm", new_callable=AsyncMock, return_value=HEBREW_FALLBACK)
+@patch("src.skills.chat_skill.llm_generate", new_callable=AsyncMock, return_value="")
 @patch("src.skills.chat_skill.load_memories")
 async def test_respond_fallback_on_llm_failure(mock_load_memories, mock_dispatch, skill, db, member):
-    """respond() returns error_fallback when LLM returns HEBREW_FALLBACK."""
+    """respond() returns error_fallback when llm_generate returns empty string."""
     mock_load_memories.return_value = []
 
     result = await skill.respond(db, member, "ספר לי בדיחה")
