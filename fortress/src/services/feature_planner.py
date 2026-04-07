@@ -200,10 +200,14 @@ async def generate_plan(feature_request: str) -> Plan:
         }
     ]
 
+    # Call Bedrock with powerful model for planning
+    from src.services.model_selector import select_model
+    model_id = select_model("agent", session_tier="powerful")  # Sonnet for planning
+
     response = await client.converse(
         messages=messages,
         system_prompt=_PLANNING_SYSTEM_PROMPT,
-        model="us.anthropic.claude-haiku-4-5-20251001-v1:0",
+        model=model_id,
         max_tokens=4096,
     )
 

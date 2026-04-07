@@ -234,11 +234,15 @@ class DevSkill(BaseSkill):
         # Run async converse() in sync context — use a thread to avoid
         # nested event loop issues (agent_loop is already async)
         import concurrent.futures
+
+        from src.services.model_selector import select_model
+        model_id = select_model("chat_question")  # strong tier for queries
+
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
             future = pool.submit(asyncio.run, client.converse(
                 messages=messages,
                 system_prompt=system_prompt,
-                model="us.anthropic.claude-haiku-4-5-20251001-v1:0",
+                model=model_id,
                 max_tokens=2048,
             ))
             response = future.result(timeout=60)
