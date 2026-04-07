@@ -82,7 +82,7 @@ _BUILTIN_DEFAULTS: dict[str, dict] = {
         "display_name": "Claude Haiku",
     },
     "powerful": {
-        "model_id": "us.anthropic.claude-sonnet-4-5-20251001-v1:0",
+        "model_id": "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
         "capabilities": ("tool_calling", "hebrew", "vision"),
         "cost_tier": 4,
         "display_name": "Claude Sonnet",

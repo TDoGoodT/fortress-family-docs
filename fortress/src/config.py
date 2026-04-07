@@ -37,7 +37,7 @@ BEDROCK_API_BASE_URL: str = os.getenv("BEDROCK_API_BASE_URL", "https://bedrock.u
 BEDROCK_MICRO_MODEL: str = os.getenv("BEDROCK_MICRO_MODEL", "amazon.nova-micro-v1:0")   # intent/classify
 BEDROCK_LITE_MODEL: str = os.getenv("BEDROCK_LITE_MODEL", "amazon.nova-lite-v1:0")      # chat/Hebrew
 BEDROCK_HAIKU_MODEL: str = os.getenv("BEDROCK_HAIKU_MODEL", "us.anthropic.claude-haiku-4-5-20251001-v1:0")   # complex Hebrew
-BEDROCK_SONNET_MODEL: str = os.getenv("BEDROCK_SONNET_MODEL", "us.anthropic.claude-sonnet-4-5-20251001-v1:0") # reasoning/code
+BEDROCK_SONNET_MODEL: str = os.getenv("BEDROCK_SONNET_MODEL", "us.anthropic.claude-sonnet-4-5-20250929-v1:0") # reasoning/code
 BEDROCK_MAX_MODEL: str = os.getenv("BEDROCK_MAX_MODEL", "anthropic.claude-opus-4-6-v1")  # max tier
 
 # Dynamic model routing
