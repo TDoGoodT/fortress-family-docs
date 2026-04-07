@@ -26,11 +26,15 @@ async def llm_generate(prompt: str, system_prompt: str, model_tier: str = "lite"
         Generated text string, or empty string on total failure.
         Callers are responsible for handling empty string (skip LLM output).
     """
+    # Resolve tier name to model_id
+    from src.services.model_selector import get_model_id, resolve_tier
+    model_id = get_model_id(resolve_tier(model_tier))
+
     # Primary: Bedrock
     try:
         from src.services.bedrock_client import BedrockClient
         bedrock = BedrockClient()
-        result = await bedrock.generate(prompt, system_prompt, model=model_tier)
+        result = await bedrock.generate(prompt, system_prompt, model=model_id)
         if result and result.strip():
             from src.services.bedrock_client import HEBREW_FALLBACK
             if result != HEBREW_FALLBACK:

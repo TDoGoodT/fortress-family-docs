@@ -139,6 +139,69 @@ async def handle_incoming_message(
             return _sanitize_response(response)
 
         # Text messages → Agent Loop (or regex fallback if disabled)
+
+        # --- Model upgrade trigger / confirmation handling ---
+        from src.services.model_selector import (
+            detect_upgrade_trigger,
+            is_upgrade_confirmation,
+            is_upgrade_decline,
+            get_session_tier,
+            set_session_tier,
+            clear_session_tier,
+            increment_normal_count,
+            reset_normal_count,
+            should_auto_downgrade,
+            MODEL_REGISTRY,
+        )
+        from src.services.conversation_state import resolve_pending, set_pending_confirmation
+
+        # Check if user is responding to a pending model upgrade offer
+        pending = resolve_pending(db, member.id)
+        if pending and pending.get("type") == "model_upgrade":
+            if is_upgrade_confirmation(message_text):
+                tier = pending["data"]["tier"]
+                original_msg = pending["data"]["original_message"]
+                set_session_tier(db, member.id, tier)
+                logger.info("message_handler: model_upgrade_accepted member=%s tier=%s", member.name, tier)
+                # Re-run the original message with the upgraded model
+                message_text = original_msg
+                # Fall through to agent path below
+            elif is_upgrade_decline(message_text):
+                clear_session_tier(db, member.id)
+                response = "👍 נשאר עם המודל הרגיל. מה תרצה לעשות?"
+                _save_conversation(db, member.id, message_text, response, "model_upgrade.declined")
+                return response
+            # If neither confirm nor decline, treat as a new message (fall through)
+
+        # Check if this message should trigger an upgrade suggestion
+        if not pending:
+            trigger_name, suggested_tier, upgrade_msg = detect_upgrade_trigger(message_text)
+            current_tier = get_session_tier(db, member.id)
+            if trigger_name and suggested_tier:
+                current_cost = MODEL_REGISTRY[current_tier].cost_tier if current_tier and current_tier in MODEL_REGISTRY else 0
+                suggested_cost = MODEL_REGISTRY[suggested_tier].cost_tier if suggested_tier in MODEL_REGISTRY else 0
+                if current_cost < suggested_cost:
+                    set_pending_confirmation(
+                        db, member.id,
+                        action_type="model_upgrade",
+                        action_data={"tier": suggested_tier, "trigger": trigger_name, "original_message": message_text},
+                    )
+                    _save_conversation(db, member.id, message_text, upgrade_msg, f"model_upgrade.suggest.{trigger_name}")
+                    return upgrade_msg
+
+        # --- Auto-downgrade: track consecutive normal messages ---
+        session_tier = get_session_tier(db, member.id)
+        if session_tier:
+            trigger_name_check, _, _ = detect_upgrade_trigger(message_text)
+            if trigger_name_check:
+                reset_normal_count(db, member.id)
+            else:
+                increment_normal_count(db, member.id)
+                if should_auto_downgrade(db, member.id):
+                    clear_session_tier(db, member.id)
+                    reset_normal_count(db, member.id)
+                    logger.info("message_handler: auto_downgrade member=%s", member.name)
+
         if _should_prefer_structured_path(message_text):
             response, intent = await _run_regex_path(db, member, message_text, pii_stripped)
             logger.info(

@@ -38,6 +38,12 @@ BEDROCK_MICRO_MODEL: str = os.getenv("BEDROCK_MICRO_MODEL", "amazon.nova-micro-v
 BEDROCK_LITE_MODEL: str = os.getenv("BEDROCK_LITE_MODEL", "amazon.nova-lite-v1:0")      # chat/Hebrew
 BEDROCK_HAIKU_MODEL: str = os.getenv("BEDROCK_HAIKU_MODEL", "us.anthropic.claude-haiku-4-5-20251001-v1:0")   # complex Hebrew
 BEDROCK_SONNET_MODEL: str = os.getenv("BEDROCK_SONNET_MODEL", "us.anthropic.claude-sonnet-4-5-20251001-v1:0") # reasoning/code
+BEDROCK_MAX_MODEL: str = os.getenv("BEDROCK_MAX_MODEL", "anthropic.claude-opus-4-6-v1")  # max tier
+
+# Dynamic model routing
+BEDROCK_MODEL_REGISTRY: str = os.getenv("BEDROCK_MODEL_REGISTRY", "")  # JSON override for model registry
+TASK_TIER_MAP: str = os.getenv("TASK_TIER_MAP", "")                    # JSON override for task-to-tier mapping
+AUTO_DOWNGRADE_THRESHOLD: int = int(os.getenv("AUTO_DOWNGRADE_THRESHOLD", "3"))
 
 # Scheduler
 SCHEDULER_HOUR: int = int(os.getenv("SCHEDULER_HOUR", "7"))

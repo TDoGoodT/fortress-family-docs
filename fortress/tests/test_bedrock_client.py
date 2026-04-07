@@ -42,4 +42,4 @@ async def test_is_available_returns_first_working_model(monkeypatch: pytest.Monk
 
     monkeypatch.setattr(client, "_post_converse", fake_post_converse)
 
-    assert await client.is_available() == (True, "haiku")
+    assert await client.is_available() == (True, "economy")

@@ -46,6 +46,7 @@ _TOOL_MAP: dict[str, tuple[str, str]] = {
     # System
     "system_help":   ("system", "help"),
     "system_cancel": ("system", "cancel"),
+    "bedrock_cost":  ("system", "bedrock_cost"),
     # Knowledge ingestion
     "save_text": ("document", "save_text"),
 }
@@ -390,6 +391,13 @@ _TOOL_SCHEMAS: list[ToolSchema] = [
         "toolSpec": {
             "name": "system_cancel",
             "description": "ביטול פעולה ממתינה. השתמש כשהמשתמש אומר לא, בטל, עזוב.",
+            "inputSchema": {"json": {"type": "object", "properties": {}}},
+        }
+    },
+    {
+        "toolSpec": {
+            "name": "bedrock_cost",
+            "description": "שאילתת עלויות Bedrock — מחזיר את העלות החודשית הנוכחית של שירותי Bedrock",
             "inputSchema": {"json": {"type": "object", "properties": {}}},
         }
     },

@@ -242,6 +242,12 @@ async def run(
         logger.warning("agent_loop: get_state failed member=%s error=%s", member.name, exc)
         conv_state = None
 
+    # 1b. Resolve model tier — session override > default
+    from src.services.model_selector import get_session_tier, select_model
+    session_tier = get_session_tier(db, member.id)
+    model_id = select_model("agent", session_tier=session_tier)
+    logger.info("agent_loop: model_id=%s session_override=%s", model_id, session_tier)
+
     # 2. Classify intent and get tools
     from src.engine.tool_router import classify
     try:
@@ -291,7 +297,7 @@ async def run(
                 messages=messages,
                 system_prompt=system_prompt,
                 tools=tools,
-                model=AGENT_MODEL_TIER,
+                model=model_id,
                 max_tokens=1024,
             )
             iter_elapsed = time.monotonic() - iter_start

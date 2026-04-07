@@ -19,6 +19,15 @@ from tests.conftest import _make_family_member
 PARENT_PHONE = "972501234567"
 
 
+@pytest.fixture(autouse=True)
+def _neutralize_model_upgrade():
+    """Prevent the model upgrade flow from triggering in tests with mock DB sessions."""
+    with patch("src.services.conversation_state.resolve_pending", return_value=None), \
+         patch("src.services.model_selector.detect_upgrade_trigger", return_value=(None, None, None)), \
+         patch("src.services.model_selector.get_session_tier", return_value=None):
+        yield
+
+
 def _parent():
     return _make_family_member(name="Segev", phone=PARENT_PHONE, role="parent")
 
@@ -337,6 +346,7 @@ class TestSanitizeResponse:
 # ── 13. Deterministic fallback for unmatched messages ────────────
 
 @pytest.mark.asyncio
+@patch("src.services.message_handler.AGENT_ENABLED", False)
 @patch("src.services.message_handler._save_conversation")
 @patch("src.services.message_handler.parse_command", return_value=None)
 @patch("src.services.message_handler.get_family_member_by_phone")
@@ -358,6 +368,7 @@ async def test_mvp_unmatched_returns_cant_understand(mock_auth, mock_parse, mock
 
 
 @pytest.mark.asyncio
+@patch("src.services.message_handler.AGENT_ENABLED", False)
 @patch("src.services.message_handler._save_conversation")
 @patch("src.services.message_handler.parse_command", return_value=None)
 @patch("src.services.message_handler.get_family_member_by_phone")

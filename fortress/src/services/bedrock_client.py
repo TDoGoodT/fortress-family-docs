@@ -21,23 +21,11 @@ from src.config import (
     AWS_SESSION_TOKEN,
     BEDROCK_API_KEY,
     BEDROCK_API_BASE_URL,
-    BEDROCK_HAIKU_MODEL,
-    BEDROCK_LITE_MODEL,
-    BEDROCK_MICRO_MODEL,
-    BEDROCK_SONNET_MODEL,
 )
 
 logger = logging.getLogger(__name__)
 
 HEBREW_FALLBACK: str = "מצטער, לא הצלחתי לעבד את הבקשה. נסה שוב."
-
-# Model selector -> actual model ID (cheapest first)
-MODEL_MAP: dict[str, str] = {
-    "micro": BEDROCK_MICRO_MODEL,
-    "lite": BEDROCK_LITE_MODEL,
-    "haiku": BEDROCK_HAIKU_MODEL,
-    "sonnet": BEDROCK_SONNET_MODEL,
-}
 
 
 def _safe_exception_text(exc: Exception) -> str:
@@ -217,14 +205,14 @@ class BedrockClient:
         self,
         prompt: str,
         system_prompt: str = "",
-        model: str = "lite",
+        model: str = "amazon.nova-lite-v1:0",
     ) -> str:
         """Generate a response using the Bedrock Converse API.
 
-        model: "micro" | "lite" | "haiku" | "sonnet"
+        model: a resolved Bedrock model_id string (e.g. "amazon.nova-lite-v1:0").
         Returns HEBREW_FALLBACK on any error.
         """
-        model_id = MODEL_MAP.get(model, BEDROCK_LITE_MODEL)
+        model_id = model
         payload: dict = {
             "messages": [{"role": "user", "content": [{"text": prompt}]}],
             "inferenceConfig": {"maxTokens": 1024},
@@ -268,15 +256,16 @@ class BedrockClient:
         messages: list[dict],
         system_prompt: str = "",
         tools: list[dict] | None = None,
-        model: str = "haiku",
+        model: str = "us.anthropic.claude-haiku-4-5-20251001-v1:0",
         max_tokens: int = 1024,
     ) -> ConverseResponse:
         """Call Bedrock Converse API with optional tool definitions.
 
+        model: a resolved Bedrock model_id string (e.g. "us.anthropic.claude-haiku-4-5-20251001-v1:0").
         Returns ConverseResponse with either text or tool_calls populated.
         Raises BedrockError on HTTP/network failures or malformed responses.
         """
-        model_id = MODEL_MAP.get(model, BEDROCK_HAIKU_MODEL)
+        model_id = model
         payload: dict = {
             "messages": messages,
             "inferenceConfig": {"maxTokens": max_tokens},
@@ -357,21 +346,21 @@ class BedrockClient:
 
         Returns (True, model_alias) on success, (False, None) on failure.
         """
+        # Lazy import to avoid circular imports
+        from src.services.model_selector import MODEL_REGISTRY
+
         payload = {
             "messages": [{"role": "user", "content": [{"text": "hi"}]}],
             "inferenceConfig": {"maxTokens": 5},
         }
-        models_to_try = ("haiku", "lite", "micro", "sonnet")
 
-        for alias in models_to_try:
-            model_id = MODEL_MAP.get(alias)
-            if not model_id:
-                continue
+        for tier_name, entry in MODEL_REGISTRY.items():
+            model_id = entry.model_id
             try:
                 resp = await self._post_converse(model_id, payload, timeout=10.0)
                 if resp.status_code == 200:
                     logger.info("Bedrock available: model=%s auth=%s", model_id, self._auth.mode)
-                    return True, alias
+                    return True, tier_name
                 logger.warning("Bedrock check failed: model=%s status=%s", model_id, resp.status_code)
             except Exception as exc:
                 logger.error(

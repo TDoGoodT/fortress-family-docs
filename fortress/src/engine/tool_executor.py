@@ -35,6 +35,15 @@ def execute_tool(
         logger.warning("tool_executor: unknown tool=%s", tool_name)
         return f"כלי לא מוכר: {tool_name}"
 
+    # Special-case: bedrock_cost bypasses skill dispatch
+    if tool_name == "bedrock_cost":
+        from src.services.cost_tool import query_bedrock_cost
+        try:
+            return query_bedrock_cost()
+        except Exception as exc:
+            logger.error("tool_executor: bedrock_cost failed error=%s", exc)
+            return "שגיאה בשליפת נתוני עלויות"
+
     skill_name, action_name = tool_map[tool_name]
 
     # Build params from tool args, inject audit metadata

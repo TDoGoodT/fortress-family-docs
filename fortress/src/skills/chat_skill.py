@@ -29,17 +29,6 @@ from src.utils.time_context import format_time_for_prompt, get_time_context
 
 logger = logging.getLogger(__name__)
 
-# ---------------------------------------------------------------------------
-# Model routing by intent
-# ---------------------------------------------------------------------------
-
-_INTENT_MODEL_MAP: dict[str, str] = {
-    "greeting": "lite",
-    "needs_llm": "lite",
-    "ask_question": "haiku",   # complex questions need better Hebrew
-    "unknown": "lite",
-}
-
 
 class ChatSkill(BaseSkill):
     """Skill for greetings (deterministic) and free-form conversation (LLM)."""
@@ -141,10 +130,12 @@ class ChatSkill(BaseSkill):
         system_prompt: str,
         intent: str,
         context: dict[str, Any] | None = None,
+        session_tier: str | None = None,
     ) -> str:
         """Try Bedrock first, fall back to Ollama if unavailable."""
         start = time.monotonic()
-        model = _INTENT_MODEL_MAP.get(intent, "lite")
+        from src.services.model_selector import select_model
+        model = select_model(intent, session_tier=session_tier)
 
         # Primary: Bedrock
         try:
