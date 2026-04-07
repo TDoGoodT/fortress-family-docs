@@ -41,6 +41,7 @@ _INTENT_PATTERNS: dict[str, list[str]] = {
         r"מה ה.?skills|איזה skills|what skills|מה ה.?services|איזה services",
         r"מה יש לך ב.?skills|הראה לי את המבנה|ארכיטקטורה",
         r"איזה tools|what tools|איזה models|איזה migrations|קוד מקור",
+        r"צור פרומפט|generate prompt|תייצר prompt|פרומפט לcodex",
     ],
 }
 
@@ -78,7 +79,7 @@ _INTENT_TOOLS: dict[str, list[str]] = {
         "document_list", "memory_list",
     ],
     "dev": [
-        "dev_index", "dev_query", "dev_plan", "system_help",
+        "dev_index", "dev_query", "dev_plan", "dev_generate_prompt", "system_help",
     ],
     "chat": [
         "document_query", "task_list", "system_help",

@@ -50,9 +50,10 @@ _TOOL_MAP: dict[str, tuple[str, str]] = {
     # Knowledge ingestion
     "save_text": ("document", "save_text"),
     # Dev (admin-only)
-    "dev_index": ("dev", "index"),
-    "dev_query": ("dev", "query"),
-    "dev_plan":  ("dev", "plan"),
+    "dev_index":           ("dev", "index"),
+    "dev_query":           ("dev", "query"),
+    "dev_plan":            ("dev", "plan"),
+    "dev_generate_prompt": ("dev", "generate_prompt"),
 }
 
 
@@ -460,6 +461,25 @@ _TOOL_SCHEMAS: list[ToolSchema] = [
                         "feature_request": {"type": "string", "description": "תיאור הפיצ׳ר הרצוי"},
                     },
                     "required": ["feature_request"],
+                }
+            },
+        }
+    },
+    # ── Dev generate_prompt ────────────────────────────────────────────
+    {
+        "toolSpec": {
+            "name": "dev_generate_prompt",
+            "description": "יצירת פרומפט לסוכן קוד מתוך תכנית פיצ׳ר שמורה. מנהל בלבד. העבר את התוצאה למשתמש.",
+            "inputSchema": {
+                "json": {
+                    "type": "object",
+                    "properties": {
+                        "plan_filename": {
+                            "type": "string",
+                            "description": "שם קובץ התכנית ב-fortress/data/plans/",
+                        },
+                    },
+                    "required": ["plan_filename"],
                 }
             },
         }

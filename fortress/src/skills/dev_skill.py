@@ -49,6 +49,67 @@ def _resolve_dev_outputs_dir() -> Path:
     return out
 
 
+def _reconstruct_plan_from_markdown(markdown_text: str) -> "Any":
+    """Reconstruct a Plan object from a saved plan Markdown file.
+
+    Parses the Markdown sections back into AttributedClaim lists.
+    Falls back to a minimal Plan if parsing fails.
+    """
+    from src.services.feature_planner import AttributedClaim, Plan
+
+    # Extract request_summary from the title line
+    request_summary = ""
+    for line in markdown_text.splitlines():
+        if line.startswith("# Feature Plan:"):
+            request_summary = line[len("# Feature Plan:"):].strip()
+            break
+        if line.startswith("# "):
+            request_summary = line[2:].strip()
+            break
+
+    def _parse_section(text: str, header: str) -> list[AttributedClaim]:
+        """Extract claims from a Markdown section."""
+        claims: list[AttributedClaim] = []
+        in_section = False
+        for line in text.splitlines():
+            if line.startswith(f"## {header}"):
+                in_section = True
+                continue
+            if in_section and line.startswith("## "):
+                break
+            if in_section and line.startswith("- "):
+                # Parse: "- claim text (`source_path`) _[attribution]_"
+                content = line[2:]
+                # Extract attribution
+                attribution = "llm_assumption"
+                attr_match = re.search(r"_\[(\w+)\]_", content)
+                if attr_match:
+                    attribution = attr_match.group(1)
+                    content = content[:attr_match.start()].strip()
+                # Extract source_path
+                source_path = None
+                sp_match = re.search(r"\(`([^`]+)`\)", content)
+                if sp_match:
+                    source_path = sp_match.group(1)
+                    content = content[:sp_match.start()].strip()
+                claims.append(AttributedClaim(
+                    text=content,
+                    attribution=attribution,
+                    source_path=source_path,
+                ))
+        return claims
+
+    return Plan(
+        request_summary=request_summary or "Feature plan",
+        relevant_components=_parse_section(markdown_text, "Relevant Components"),
+        missing_components=_parse_section(markdown_text, "Missing Components"),
+        files_to_modify=_parse_section(markdown_text, "Files to Modify"),
+        breaking_change_risks=_parse_section(markdown_text, "Breaking Change Risks"),
+        development_tasks=_parse_section(markdown_text, "Development Tasks"),
+        created_at=datetime.now(timezone.utc).isoformat(),
+    )
+
+
 def _extract_layer_for_query(question: str, index: dict) -> list[dict]:
     """When keyword search returns nothing, check if the query asks about
     an entire layer (all skills, all tools, etc.) and return that layer."""
@@ -95,6 +156,7 @@ class DevSkill(BaseSkill):
             (re.compile(r"^(אנדקס|index|תאנדקס)$", re.IGNORECASE), "index"),
             (re.compile(r"^dev\s+query\s+(?P<question>.+)$", re.IGNORECASE), "query"),
             (re.compile(r"^dev\s+plan\s+(?P<feature_request>.+)$", re.IGNORECASE), "plan"),
+            (re.compile(r"^(צור פרומפט|generate prompt|תייצר prompt)\s*(?P<plan_filename>.+)?$", re.IGNORECASE), "generate_prompt"),
         ]
 
     def execute(self, db: Session, member: FamilyMember, command: Command) -> Result:
@@ -109,10 +171,11 @@ class DevSkill(BaseSkill):
             "index": self._handle_index,
             "query": self._handle_query,
             "plan": self._handle_plan,
+            "generate_prompt": self._handle_generate_prompt,
         }
         handler = dispatch.get(command.action)
         if handler is None:
-            return Result(success=False, message="פעולה לא מוכרת. נסה: index, query, plan")
+            return Result(success=False, message="פעולה לא מוכרת. נסה: index, query, plan, generate_prompt")
         return handler(db, member, command)
 
     def verify(self, db: Session, result: Result) -> bool:
@@ -325,6 +388,78 @@ class DevSkill(BaseSkill):
         )
 
         return Result(success=True, message=message, action="plan")
+
+    # ------------------------------------------------------------------
+    # Action: generate_prompt
+    # ------------------------------------------------------------------
+
+    def _handle_generate_prompt(
+        self, db: Session, member: FamilyMember, command: Command
+    ) -> Result:
+        """Generate a Task_Prompt from a saved Plan."""
+        from src.services import coding_agent_bridge
+        from src.services.feature_planner import _parse_plan_response
+
+        # Determine plan filename
+        plan_filename = command.params.get("plan_filename", "").strip()
+        if not plan_filename and command.raw_text:
+            # Try to extract from raw text after the trigger phrase
+            raw = command.raw_text.strip()
+            for trigger in ("צור פרומפט", "generate prompt", "תייצר prompt"):
+                if raw.lower().startswith(trigger.lower()):
+                    plan_filename = raw[len(trigger):].strip()
+                    break
+
+        # If still no filename, find the most recent .md in plans dir
+        if not plan_filename:
+            from src.services.feature_planner import _resolve_plans_dir
+            plans_dir = _resolve_plans_dir()
+            md_files = sorted(plans_dir.glob("*.md"), key=lambda p: p.stat().st_mtime, reverse=True)
+            if not md_files:
+                return Result(success=False, message="לא נמצאו קבצי תכנית. הרץ קודם: dev plan <תיאור>")
+            plan_filename = md_files[0].name
+
+        # Locate the plan file
+        from src.services.feature_planner import _resolve_plans_dir
+        plans_dir = _resolve_plans_dir()
+        plan_path = plans_dir / plan_filename
+        if not plan_path.exists():
+            return Result(success=False, message=f"קובץ תכנית לא נמצא: {plan_filename}")
+
+        # Read and parse the plan Markdown back into a Plan object
+        try:
+            plan_text = plan_path.read_text(encoding="utf-8")
+        except OSError as exc:
+            return Result(success=False, message=f"שגיאה בקריאת קובץ תכנית: {exc}")
+
+        # Reconstruct Plan from the saved Markdown using _parse_plan_response
+        # The saved Markdown is not JSON, so we use a best-effort reconstruction
+        plan = _reconstruct_plan_from_markdown(plan_text)
+
+        # Delegate to bridge
+        try:
+            result = coding_agent_bridge.generate_prompt(plan, plan_filename)
+        except Exception as exc:
+            logger.exception("generate_prompt failed")
+            return Result(success=False, message=f"יצירת פרומפט נכשלה: {exc}")
+
+        # Audit log
+        audit.log_action(
+            db,
+            actor_id=member.id,
+            action="generate_prompt",
+            resource_type="dev",
+            details={
+                "plan_filename": plan_filename,
+                "prompt_filename": result.prompt_path.name if result.prompt_path else None,
+            },
+        )
+
+        return Result(
+            success=result.success,
+            message=result.message,
+            action="generate_prompt",
+        )
 
     # ------------------------------------------------------------------
     # Helpers

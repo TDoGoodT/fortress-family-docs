@@ -68,3 +68,9 @@ AGENT_HISTORY_DEPTH: int = int(os.getenv("AGENT_HISTORY_DEPTH", "10"))
 DOCUMENT_VISION_FALLBACK_ENABLED: bool = os.getenv(
     "DOCUMENT_VISION_FALLBACK_ENABLED", "true"
 ).lower() == "true"
+
+# Coding Agent Integration (Phase C)
+CODEX_CLI_PATH: str = os.getenv("CODEX_CLI_PATH", "codex")
+CODEX_TIMEOUT_SECONDS: int = int(os.getenv("CODEX_TIMEOUT_SECONDS", "300"))
+CODEX_ENABLED: bool = os.getenv("CODEX_ENABLED", "false").lower() == "true"
+CODEX_PROMPT_MAX_CHARS: int = int(os.getenv("CODEX_PROMPT_MAX_CHARS", "100000"))

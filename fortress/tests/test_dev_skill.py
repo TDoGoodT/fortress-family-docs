@@ -215,7 +215,7 @@ class TestSkillMetadata:
         assert len(skill.description) > 0
 
     def test_commands_count(self, skill):
-        assert len(skill.commands) == 3
+        assert len(skill.commands) == 4
 
     def test_help_mentions_actions(self, skill):
         help_text = skill.get_help()
