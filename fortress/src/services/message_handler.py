@@ -196,10 +196,20 @@ async def handle_incoming_message(
                 if not current_tier or (current_tier in MODEL_REGISTRY and MODEL_REGISTRY[current_tier].cost_tier < MODEL_REGISTRY.get(suggested_tier, MODEL_REGISTRY.get("powerful")).cost_tier):
                     set_session_tier(db, member.id, suggested_tier)
                 logger.info("message_handler: dev_tool_suggestion_confirmed member=%s tool=%s", member.name, tool_name)
-                # Re-run original message through agent (it will now route to dev tools)
-                message_text = original_msg
-                _save_conversation(db, member.id, "כן", f"מפעיל {tool_name}...", "dev_tool_suggestion.confirmed")
-                # Fall through to agent path
+
+                # Directly invoke the dev tool via tool_executor instead of re-running
+                # through the agent loop (which would re-trigger dev intent detection)
+                from src.engine.tool_executor import execute_tool
+                if tool_name == "dev_plan":
+                    tool_result = execute_tool(db, member, "dev_plan", {"feature_request": original_msg}, original_msg)
+                elif tool_name == "dev_query":
+                    tool_result = execute_tool(db, member, "dev_query", {"question": original_msg}, original_msg)
+                else:
+                    tool_result = execute_tool(db, member, "dev_index", {}, original_msg)
+
+                response = tool_result or "הפעולה הושלמה"
+                _save_conversation(db, member.id, "כן", response, f"dev_tool_suggestion.confirmed.{tool_name}")
+                return _sanitize_response(response)
             elif is_upgrade_decline(message_text):
                 response = "👍 בסדר, נמשיך כרגיל."
                 _save_conversation(db, member.id, message_text, response, "dev_tool_suggestion.declined")
