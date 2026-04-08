@@ -156,28 +156,29 @@ async def extract_structured_with_vision(image_path: str) -> dict:
         _, ext = os.path.splitext(image_path)
         media_type = _MEDIA_TYPES.get(ext.lower(), "image/jpeg")
 
-        system_prompt = (
-            "You extract structured data from salary slips. "
-            "Return JSON only. Do not hallucinate. Use null for unknown values."
-        )
+        system_prompt = "You extract structured data from salary slips."
         user_prompt = (
-            "Extract fields from this salary slip and return EXACTLY this JSON object shape:\n"
+            "Return ONLY valid JSON.\n"
+            "Do not include any explanation.\n"
+            "Do not include text before or after the JSON.\n"
+            "If you are unsure about a field, return null.\n"
+            "All numbers must be numeric, not strings.\n\n"
+            "JSON format:\n"
             "{\n"
-            '  "employee_name": str | null,\n'
-            '  "employer_name": str | null,\n'
-            '  "pay_month": str | null,\n'
-            '  "gross_salary": float | null,\n'
-            '  "net_salary": float | null,\n'
-            '  "net_to_pay": float | null,\n'
-            '  "total_deductions": float | null,\n'
-            '  "income_tax": float | null,\n'
-            '  "national_insurance": float | null,\n'
-            '  "health_tax": float | null,\n'
-            '  "pension_employee": float | null,\n'
-            '  "pension_employer": float | null,\n'
-            '  "confidence": float\n'
-            "}\n"
-            "Rules: no extra keys, numbers as JSON numbers, unknown as null, confidence in [0,1]."
+            '  "employee_name": string | null,\n'
+            '  "employer_name": string | null,\n'
+            '  "pay_month": string | null,\n'
+            '  "gross_salary": number | null,\n'
+            '  "net_salary": number | null,\n'
+            '  "net_to_pay": number | null,\n'
+            '  "total_deductions": number | null,\n'
+            '  "income_tax": number | null,\n'
+            '  "national_insurance": number | null,\n'
+            '  "health_tax": number | null,\n'
+            '  "pension_employee": number | null,\n'
+            '  "pension_employer": number | null,\n'
+            '  "confidence": number\n'
+            "}"
         )
         messages = [{
             "role": "user",
@@ -198,13 +199,21 @@ async def extract_structured_with_vision(image_path: str) -> dict:
             model="haiku",
             max_tokens=1200,
         )
+        logger.info("VISION STRUCTURED RAW RESPONSE: %s", response.text)
         raw = (response.text or "").strip()
         if not raw:
             return {}
-        match = re.search(r"\{.*\}", raw, re.DOTALL)
-        if not match:
-            return {}
-        parsed = json.loads(match.group())
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError:
+            # tolerate wrappers/noise and extract first JSON object block
+            match = re.search(r"\{[\s\S]*\}", raw)
+            if not match:
+                return {}
+            try:
+                parsed = json.loads(match.group(0).strip())
+            except json.JSONDecodeError:
+                return {}
         if not isinstance(parsed, dict):
             return {}
 
