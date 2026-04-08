@@ -256,6 +256,28 @@ def test_query_no_documents_returns_empty_message():
     assert "אין" in result.message
 
 
+def test_doc_search_fallback_explicit_last_document_uses_resolver():
+    doc = _make_doc(doc_type="salary_slip")
+    with patch("src.skills.document_skill.check_perm", return_value=None), \
+         patch("src.skills.document_skill.resolve_document_reference", return_value=doc), \
+         patch("src.skills.document_skill.search_documents") as mock_search, \
+         patch("src.skills.document_skill.update_state"), \
+         patch("src.skills.document_skill.answer_document_question", new_callable=AsyncMock) as mock_qa:
+        from src.services.document_query_service import QAResult
+        mock_qa.return_value = QAResult(
+            answer_text="12345.67",
+            source="document_fact",
+            confidence=0.9,
+            field_used="net_salary",
+        )
+        cmd = Command(skill="document", action="doc_search_fallback", params={"raw_text": "מה השכר נטו במסמך האחרון?"})
+        result = skill.execute(MagicMock(), _make_member(), cmd)
+
+    assert result.success
+    assert result.message == "12345.67"
+    mock_search.assert_not_called()
+
+
 # ---------------------------------------------------------------------------
 # P7: Access Control Enforcement
 # ---------------------------------------------------------------------------
