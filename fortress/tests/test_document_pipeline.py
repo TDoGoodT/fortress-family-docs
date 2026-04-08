@@ -384,3 +384,74 @@ def test_e2e_qa_flow():
 
     assert result.success
     assert "invoice" in result.message
+
+
+@pytest.mark.asyncio
+async def test_salary_slip_pipeline_sets_metadata_and_facts(tmp_pdf):
+    with patch("src.services.documents.extract_text_v2", new_callable=AsyncMock, return_value=("תלוש שכר", 0.9, "ocr")), \
+         patch("src.services.documents.classify_document", new_callable=AsyncMock, return_value=("salary_slip", 0.9)), \
+         patch("src.services.documents._find_duplicate", return_value=None), \
+         patch("src.services.documents._extract_salary_slip_facts", new_callable=AsyncMock, return_value=(
+             [
+                 {"fact_type": "salary_slip", "fact_key": "employer_name", "fact_value": "ACME", "confidence": 0.91, "source_excerpt": ""},
+                 {"fact_type": "salary_slip", "fact_key": "gross_salary", "fact_value": "10000.0", "confidence": 0.91, "source_excerpt": ""},
+                 {"fact_type": "salary_slip", "fact_key": "net_salary", "fact_value": "7800.0", "confidence": 0.91, "source_excerpt": ""},
+             ],
+             {
+                 "structured_payload": {"gross_salary": 10000.0, "net_salary": 7800.0, "confidence": 0.91},
+                 "field_confidence": {"gross_salary": 0.91, "net_salary": 0.91},
+                 "extraction_model": "haiku",
+                 "extraction_version": "v1",
+             },
+         )), \
+         patch("src.services.documents.summarize_document", new_callable=AsyncMock, return_value=""), \
+         patch("src.services.documents.os.makedirs"), \
+         patch("src.services.documents.shutil.copy2"):
+        db = MagicMock()
+        captured_doc = {}
+
+        def add_side_effect(obj):
+            if isinstance(obj, Document):
+                obj.id = uuid.uuid4()
+                captured_doc["doc"] = obj
+        db.add.side_effect = add_side_effect
+        db.refresh.side_effect = lambda obj: None
+
+        from src.services.documents import process_document
+        await process_document(db, tmp_pdf, uuid.uuid4(), "whatsapp")
+        doc = captured_doc["doc"]
+        assert doc.vendor == "ACME"
+        assert doc.review_state == "auto_verified"
+        assert doc.doc_metadata["extraction_model"] == "haiku"
+
+
+@pytest.mark.asyncio
+async def test_salary_slip_review_state_needs_review_for_missing_critical_fields(tmp_pdf):
+    with patch("src.services.documents.extract_text_v2", new_callable=AsyncMock, return_value=("תלוש שכר", 0.9, "ocr")), \
+         patch("src.services.documents.classify_document", new_callable=AsyncMock, return_value=("salary_slip", 0.9)), \
+         patch("src.services.documents._find_duplicate", return_value=None), \
+         patch("src.services.documents._extract_salary_slip_facts", new_callable=AsyncMock, return_value=(
+             [],
+             {
+                 "structured_payload": {"gross_salary": 10000.0, "net_salary": None, "confidence": 0.9},
+                 "field_confidence": {},
+                 "extraction_model": "haiku",
+                 "extraction_version": "v1",
+             },
+         )), \
+         patch("src.services.documents.summarize_document", new_callable=AsyncMock, return_value=""), \
+         patch("src.services.documents.os.makedirs"), \
+         patch("src.services.documents.shutil.copy2"):
+        db = MagicMock()
+        captured_doc = {}
+
+        def add_side_effect(obj):
+            if isinstance(obj, Document):
+                obj.id = uuid.uuid4()
+                captured_doc["doc"] = obj
+        db.add.side_effect = add_side_effect
+        db.refresh.side_effect = lambda obj: None
+
+        from src.services.documents import process_document
+        await process_document(db, tmp_pdf, uuid.uuid4(), "whatsapp")
+        assert captured_doc["doc"].review_state == "needs_review"

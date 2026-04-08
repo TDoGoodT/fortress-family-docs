@@ -8,6 +8,7 @@ from typing import Any
 
 from src.services.document_classifier import ALLOWED_FACT_KEYS, MAX_SOURCE_EXCERPT_LENGTH
 from src.services.llm_dispatch import llm_generate
+from src.services.vision_extractor import extract_structured_with_vision
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +44,7 @@ _CATEGORY_FACT_KEYS: dict[str, list[str]] = {
     "official_letter": ["source_date", "counterparty", "document_reference"],
     "other": ["source_date", "counterparty", "amount", "currency"],
     "recipe": ["recipe_name", "ingredients", "instructions", "servings", "prep_time"],
+    "salary_slip": ["source_date", "counterparty", "amount", "currency"],
 }
 
 
@@ -373,3 +375,42 @@ async def extract_facts(
 
     logger.info("fact_extractor: doc=%s doc_type=%s facts_count=%d", filename, doc_type, len(facts))
     return facts
+
+
+async def _extract_salary_slip_facts(
+    raw_text: str,
+    filename: str,
+    image_path: str,
+    text_quality: float = 1.0,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Extract salary slip facts with structured vision first, text fallback second.
+
+    Returns (facts, metadata_delta).
+    """
+    structured = await extract_structured_with_vision(image_path)
+    if not structured:
+        fallback = await extract_facts(raw_text, "other", filename, text_quality=text_quality)
+        return fallback, {}
+
+    confidence = float(structured.get("confidence") or 0.0)
+    facts: list[dict[str, Any]] = []
+    field_confidence: dict[str, float] = {}
+    for key, value in structured.items():
+        if key == "confidence" or value is None:
+            continue
+        facts.append({
+            "fact_type": "salary_slip",
+            "fact_key": key,
+            "fact_value": str(value),
+            "confidence": confidence,
+            "source_excerpt": "",
+        })
+        field_confidence[key] = confidence
+
+    metadata_delta = {
+        "structured_payload": structured,
+        "field_confidence": field_confidence,
+        "extraction_model": "haiku",
+        "extraction_version": "v1",
+    }
+    return facts, metadata_delta
