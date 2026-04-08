@@ -32,42 +32,6 @@ _FIELD_QUESTION_MAP: dict[str, str] = {
     "סיכום": "ai_summary", "summary": "ai_summary", "תקציר": "ai_summary",
 }
 
-# Salary-slip specific Hebrew/English keywords -> DocumentFact.fact_key
-# Order matters: more specific phrases must appear first.
-_SALARY_FACT_QUESTION_MAP: list[tuple[str, str]] = [
-    ("שכר נטו", "net_salary"),
-    ("הנטו", "net_salary"),
-    ("נטו", "net_salary"),
-    ("שכר ברוטו", "gross_salary"),
-    ("הברוטו", "gross_salary"),
-    ("ברוטו", "gross_salary"),
-    ("מי המעסיק", "employer_name"),
-    ("מי החברה", "employer_name"),
-    ("מעסיק", "employer_name"),
-    ("חברה", "employer_name"),
-    ("לאיזה חודש", "pay_month"),
-    ("איזה חודש", "pay_month"),
-    ("חודש", "pay_month"),
-    ("ניכויים", "total_deductions"),
-    ("כמה ניכו", "total_deductions"),
-    ("לתשלום", "net_to_pay"),
-    ("כמה לתשלום", "net_to_pay"),
-    ("מס הכנסה", "income_tax"),
-    ("ביטוח לאומי", "national_insurance"),
-    ("מס בריאות", "health_tax"),
-]
-
-_EXPLICIT_LAST_DOCUMENT_REFERENCES = [
-    "המסמך האחרון",
-    "מסמך האחרון",
-    "מסמך אחרון",
-    "המסמך הזה",
-    "מסמך הזה",
-    "this document",
-    "last document",
-    "latest document",
-]
-
 
 @dataclass
 class QAResult:
@@ -151,14 +115,6 @@ def _format_field_value(field: str, value) -> str:
     return str(value)
 
 
-def _match_salary_fact_key(question_lower: str) -> str | None:
-    """Return salary DocumentFact key for known salary-slip questions."""
-    for keyword, fact_key in _SALARY_FACT_QUESTION_MAP:
-        if keyword in question_lower:
-            return fact_key
-    return None
-
-
 async def answer_document_question(
     db: Session,
     member: FamilyMember,
@@ -172,34 +128,6 @@ async def answer_document_question(
     LLM is used only for grounded phrasing/extraction from raw_text, never free-form.
     """
     question_lower = question.lower()
-    salary_fact_key = _match_salary_fact_key(question_lower)
-
-    # Salary-slip deterministic path:
-    # Answer known salary questions directly from document_facts.
-    if salary_fact_key:
-        try:
-            facts = db.query(DocumentFact).filter(DocumentFact.document_id == doc.id).all()
-            for fact in facts:
-                if fact.fact_key == salary_fact_key:
-                    return QAResult(
-                        answer_text=fact.fact_value,
-                        source="document_fact",
-                        confidence=float(fact.confidence or 0.5),
-                        field_used=salary_fact_key,
-                    )
-            return QAResult(
-                answer_text="המידע הזה לא זמין במסמך",
-                source="not_found",
-                confidence=0.0,
-                field_used=salary_fact_key,
-            )
-        except Exception as exc:
-            logger.warning(
-                "query_service: salary fact lookup failed doc=%s fact=%s error=%s",
-                doc.id,
-                salary_fact_key,
-                exc,
-            )
 
     # 1. Check if question maps to a known DB field
     matched_field = None
@@ -712,13 +640,9 @@ def resolve_document_reference(
     if len(recent) == 1:
         return recent[0]
 
-    question_lower = question.lower()
-    if any(ref in question_lower for ref in _EXPLICIT_LAST_DOCUMENT_REFERENCES):
-        return recent[0]
-
     # Check if question implies "most recent"
     recency_keywords = ["אחרון", "last", "latest", "recent", "האחרון"]
-    if any(kw in question_lower for kw in recency_keywords):
+    if any(kw in question.lower() for kw in recency_keywords):
         return recent[0]
 
     # Return candidates for disambiguation

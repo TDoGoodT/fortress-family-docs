@@ -42,14 +42,6 @@ def _make_member() -> MagicMock:
     return m
 
 
-def _make_fact(key: str, value: str, confidence: str = "0.9") -> MagicMock:
-    fact = MagicMock(spec=DocumentFact)
-    fact.fact_key = key
-    fact.fact_value = value
-    fact.confidence = Decimal(confidence)
-    return fact
-
-
 # ---------------------------------------------------------------------------
 # DB field-based answers
 # ---------------------------------------------------------------------------
@@ -98,7 +90,10 @@ async def test_answer_from_document_fact():
     doc = _make_doc(doc_type="insurance", amount=None, vendor=None, doc_date=None, ai_summary=None)
     member = _make_member()
 
-    fact = _make_fact("policy_number", "POL-12345")
+    fact = MagicMock(spec=DocumentFact)
+    fact.fact_key = "policy_number"
+    fact.fact_value = "POL-12345"
+    fact.confidence = Decimal("0.9")
     db.query.return_value.filter.return_value.all.return_value = [fact]
 
     # Question contains "policy_number" to match fact_key
@@ -106,45 +101,6 @@ async def test_answer_from_document_fact():
     assert result.source == "document_fact"
     assert result.answer_text == "POL-12345"
     assert result.field_used == "policy_number"
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize(
-    ("question", "fact_key", "fact_value"),
-    [
-        ("מה השכר נטו במסמך האחרון?", "net_salary", "12345.67"),
-        ("מה השכר ברוטו במסמך האחרון?", "gross_salary", "16789.00"),
-        ("מי המעסיק במסמך האחרון?", "employer_name", "חברת בדיקה בע\"מ"),
-        ("לאיזה חודש התלוש שייך?", "pay_month", "2026-03"),
-        ("מה הניכויים במסמך האחרון?", "total_deductions", "4443.33"),
-    ],
-)
-async def test_salary_slip_questions_resolved_from_document_facts(question: str, fact_key: str, fact_value: str):
-    db = MagicMock()
-    doc = _make_doc(doc_type="salary_slip", amount=Decimal("999.99"))
-    member = _make_member()
-
-    db.query.return_value.filter.return_value.all.return_value = [_make_fact(fact_key, fact_value)]
-
-    result = await answer_document_question(db, member, question, doc)
-
-    assert result.source == "document_fact"
-    assert result.field_used == fact_key
-    assert result.answer_text == fact_value
-
-
-@pytest.mark.asyncio
-async def test_salary_slip_question_does_not_fallback_to_document_amount():
-    db = MagicMock()
-    doc = _make_doc(doc_type="salary_slip", amount=Decimal("500.00"))
-    member = _make_member()
-    db.query.return_value.filter.return_value.all.return_value = []
-
-    result = await answer_document_question(db, member, "מה השכר נטו במסמך האחרון?", doc)
-
-    assert result.source == "not_found"
-    assert result.field_used == "net_salary"
-    assert result.answer_text == "המידע הזה לא זמין במסמך"
 
 
 # ---------------------------------------------------------------------------
@@ -334,29 +290,6 @@ def test_resolve_returns_most_recent_when_single():
         result = resolve_document_reference(db, member, "מה הסכום?")
 
     assert result == doc
-
-
-def test_resolve_explicit_this_document_returns_recent_when_multiple():
-    db = MagicMock()
-    member = _make_member()
-
-    state = MagicMock(spec=ConversationState)
-    state.last_entity_type = None
-    state.last_entity_id = None
-
-    docs = [_make_doc(uploaded_by=member.id) for _ in range(3)]
-
-    with patch("src.services.document_query_service.get_state", return_value=state):
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.order_by.return_value = mock_query
-        mock_query.limit.return_value = mock_query
-        mock_query.all.return_value = docs
-        db.query.return_value = mock_query
-
-        result = resolve_document_reference(db, member, "מה השכר נטו במסמך הזה?")
-
-    assert result == docs[0]
 
 
 def test_resolve_returns_list_when_multiple_candidates():
