@@ -779,6 +779,27 @@ class DocumentSkill(BaseSkill):
             return denied
 
         raw_text = params.get("raw_text", "")
+        question_text = raw_text.lower()
+        explicit_last_doc_refs = ["המסמך האחרון", "מסמך אחרון", "מסמך האחרון", "המסמך הזה", "מסמך הזה"]
+
+        # If the user explicitly references the last/current document, resolve directly
+        # from conversation state/recent context instead of keyword search.
+        if any(ref in question_text for ref in explicit_last_doc_refs):
+            resolved = resolve_document_reference(db, member, raw_text)
+            if isinstance(resolved, Document):
+                update_state(db, member.id, entity_type="document", entity_id=resolved.id, intent="document.query")
+                qa_result: QAResult = run_async(answer_document_question(db, member, raw_text, resolved))
+                return Result(
+                    success=True,
+                    message=qa_result.answer_text,
+                    entity_type="document",
+                    entity_id=resolved.id,
+                    action="queried",
+                )
+            if resolved is None:
+                return Result(success=True, message="לא נמצאו מסמכים רלוונטיים 📂")
+            if isinstance(resolved, list):
+                return Result(success=True, message=self._build_disambiguation_message(resolved))
 
         # Extract document-related keywords from the message
         keywords = [kw for kw in self._DOC_KEYWORDS if kw in raw_text]
