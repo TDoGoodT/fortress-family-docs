@@ -35,6 +35,23 @@ from src.skills.permissions import check_perm
 logger = logging.getLogger(__name__)
 
 
+def _build_document_saved_message(doc: Document) -> str:
+    filename = doc.display_name or doc.original_filename
+    if doc.doc_type != "salary_slip":
+        return TEMPLATES["document_saved"].format(filename=filename)
+
+    metadata = getattr(doc, "doc_metadata", {}) or {}
+    structured = metadata.get("structured_payload", {}) if isinstance(metadata, dict) else {}
+    pay_month = structured.get("pay_month") if isinstance(structured, dict) else None
+
+    parts = [f"שמרתי תלוש שכר ✅ {filename}"]
+    if pay_month:
+        parts.append(f"חודש: {pay_month}")
+    if getattr(doc, "review_state", None) == "needs_review":
+        parts.append("מסומן לבדיקה")
+    return "\n".join(parts)
+
+
 class DocumentSkill(BaseSkill):
     """Skill for document management — save, list, search, query, recent."""
 
@@ -214,9 +231,7 @@ class DocumentSkill(BaseSkill):
 
             return Result(
                 success=True,
-                message=TEMPLATES["document_saved"].format(
-                    filename=doc.display_name or doc.original_filename
-                ),
+                message=_build_document_saved_message(doc),
                 entity_type="document",
                 entity_id=doc.id,
                 action="saved",

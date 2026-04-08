@@ -15,7 +15,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from src.config import STORAGE_PATH, DOCUMENT_VISION_FALLBACK_ENABLED
-from src.models.schema import Document, DocumentFact
+from src.models.schema import Document, DocumentFact, SalarySlip
 from src.services.text_extractor import extract_text, extract_text_v2
 from src.services.image_preprocessor import get_quality_band
 from src.services.document_classifier import (
@@ -135,6 +135,15 @@ def _parse_amount(value: str) -> Decimal | None:
         return None
 
 
+def _parse_int(value: Any) -> int | None:
+    try:
+        if value is None or value == "":
+            return None
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def _parse_date(value: str) -> date | None:
     """Parse a date string. Tries ISO YYYY-MM-DD first, then DD/MM/YYYY and DD.MM.YYYY.
 
@@ -156,6 +165,104 @@ def _parse_date(value: str) -> date | None:
             except (ValueError, TypeError):
                 continue
     return None
+
+
+def _parse_salary_slip_period(value: Any) -> tuple[int | None, int | None]:
+    """Parse a salary-slip pay period from values like 2026-03 or 03/2026."""
+    if value is None:
+        return None, None
+    text = str(value).strip()
+    if not text:
+        return None, None
+
+    match = re.match(r"^(?P<year>\d{4})[-/.](?P<month>\d{1,2})$", text)
+    if not match:
+        match = re.match(r"^(?P<month>\d{1,2})[-/.](?P<year>\d{4})$", text)
+    if not match:
+        return None, None
+
+    year = _parse_int(match.group("year"))
+    month = _parse_int(match.group("month"))
+    if month is not None and not 1 <= month <= 12:
+        month = None
+    return year, month
+
+
+def _build_salary_slip_review_reason(structured: dict[str, Any]) -> str | None:
+    confidence = float(structured.get("confidence") or 0.0)
+    reasons: list[str] = []
+    if confidence < 0.6:
+        reasons.append("low_confidence")
+    if not structured.get("gross_salary"):
+        reasons.append("missing_gross_salary")
+    if not structured.get("net_salary"):
+        reasons.append("missing_net_salary")
+    return ",".join(reasons) if reasons else None
+
+
+def _upsert_salary_slip(
+    db: Session,
+    doc: Document,
+    uploaded_by: UUID,
+    source: str,
+    metadata: dict[str, Any],
+    extracted_facts: list[dict[str, Any]],
+) -> SalarySlip:
+    structured = metadata.get("structured_payload", {}) if isinstance(metadata, dict) else {}
+    if not isinstance(structured, dict):
+        structured = {}
+    fact_map = {
+        fact.get("fact_key"): fact.get("fact_value")
+        for fact in extracted_facts
+        if fact.get("fact_key") and fact.get("fact_value") not in (None, "")
+    }
+
+    pay_period_value = structured.get("pay_month") or fact_map.get("pay_month")
+    pay_year, pay_month = _parse_salary_slip_period(pay_period_value)
+    extraction_confidence = _parse_amount(str(structured.get("confidence", "0.0"))) or Decimal("0.0")
+    review_reason = _build_salary_slip_review_reason(structured)
+
+    salary_slip = (
+        db.query(SalarySlip)
+        .filter(SalarySlip.document_id == doc.id)
+        .first()
+    )
+    if salary_slip is None:
+        salary_slip = SalarySlip(document_id=doc.id)
+        db.add(salary_slip)
+
+    salary_slip.family_member_id = uploaded_by
+    salary_slip.employee_name = structured.get("employee_name") or fact_map.get("employee_name")
+    salary_slip.employer_name = structured.get("employer_name") or fact_map.get("employer_name") or doc.vendor
+    salary_slip.pay_year = pay_year
+    salary_slip.pay_month = pay_month
+    salary_slip.currency = structured.get("currency") or fact_map.get("currency") or doc.currency or "ILS"
+    salary_slip.gross_salary = _parse_amount(str(structured.get("gross_salary") or fact_map.get("gross_salary") or ""))
+    salary_slip.net_salary = _parse_amount(str(structured.get("net_salary") or fact_map.get("net_salary") or ""))
+    salary_slip.net_to_pay = _parse_amount(str(structured.get("net_to_pay") or fact_map.get("net_to_pay") or ""))
+    salary_slip.total_deductions = _parse_amount(str(structured.get("total_deductions") or fact_map.get("total_deductions") or ""))
+    salary_slip.income_tax = _parse_amount(str(structured.get("income_tax") or fact_map.get("income_tax") or ""))
+    salary_slip.national_insurance = _parse_amount(str(structured.get("national_insurance") or fact_map.get("national_insurance") or ""))
+    salary_slip.health_tax = _parse_amount(str(structured.get("health_tax") or fact_map.get("health_tax") or ""))
+    salary_slip.pension_employee = _parse_amount(str(structured.get("pension_employee") or fact_map.get("pension_employee") or ""))
+    salary_slip.pension_employer = _parse_amount(str(structured.get("pension_employer") or fact_map.get("pension_employer") or ""))
+    salary_slip.extraction_confidence = extraction_confidence
+    salary_slip.review_state = doc.review_state
+    salary_slip.review_reason = review_reason
+    salary_slip.source_channel = source
+    salary_slip.raw_payload = structured
+
+    doc.doc_metadata = {
+        **(doc.doc_metadata or {}),
+        "source_channel": source,
+        "canonical_record_type": "salary_slip",
+        "canonical_record_ready": bool(structured),
+        "canonical_salary_period": {
+            "pay_year": pay_year,
+            "pay_month": pay_month,
+        },
+    }
+    return salary_slip
 
 
 def promote_facts_to_document(
@@ -388,8 +495,8 @@ async def process_document(
     # ── Step 3: Fact extraction ───────────────────────────────────────────
     fact_count = 0
     extracted_facts: list[dict] = []
+    metadata_delta: dict[str, Any] = {}
     try:
-        metadata_delta: dict[str, Any] = {}
         if doc.doc_type == "salary_slip":
             extracted_facts, metadata_delta = await _extract_salary_slip_facts(
                 raw_text=raw_text,
@@ -546,6 +653,32 @@ async def process_document(
                   error=f"{type(exc).__name__}: {exc}")
         doc.review_state = "needs_review"
         steps_failed.append("review_state")
+
+    # ── Step 5.1: canonical salary-slip row ─────────────────────────────
+    try:
+        if doc.doc_type == "salary_slip":
+            salary_slip = _upsert_salary_slip(
+                db=db,
+                doc=doc,
+                uploaded_by=uploaded_by,
+                source=source,
+                metadata=doc.doc_metadata or metadata_delta,
+                extracted_facts=extracted_facts,
+            )
+            _log_step(
+                "salary_slip_persist",
+                doc_id,
+                original_filename,
+                "success",
+                pay_year=salary_slip.pay_year or "",
+                pay_month=salary_slip.pay_month or "",
+                employer=salary_slip.employer_name or "",
+            )
+            steps_ok.append("salary_slip_persist")
+    except Exception as exc:
+        _log_step("salary_slip_persist", doc_id, original_filename, "failed",
+                  error=f"{type(exc).__name__}: {exc}")
+        steps_failed.append("salary_slip_persist")
 
     # ── Step 5.5: deterministic auto-tagging ────────────────────────────
     try:

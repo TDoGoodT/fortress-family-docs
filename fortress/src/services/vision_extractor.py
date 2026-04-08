@@ -74,6 +74,7 @@ async def extract_text_with_vision(
 
     try:
         from src.services.bedrock_client import BedrockClient
+        from src.services.model_selector import get_model_id, resolve_tier
 
         image_bytes = _resize_image_if_needed(image_path)
         b64_image = base64.b64encode(image_bytes).decode("utf-8")
@@ -111,7 +112,7 @@ async def extract_text_with_vision(
         response = await client.converse(
             messages=messages,
             system_prompt=system_prompt,
-            model="haiku",
+            model=get_model_id(resolve_tier("haiku")),
             max_tokens=4096,
         )
 
@@ -150,6 +151,7 @@ async def extract_structured_with_vision(image_path: str) -> dict:
     }
     try:
         from src.services.bedrock_client import BedrockClient
+        from src.services.model_selector import get_model_id, resolve_tier
 
         image_bytes = _resize_image_if_needed(image_path)
         b64_image = base64.b64encode(image_bytes).decode("utf-8")
@@ -195,7 +197,7 @@ async def extract_structured_with_vision(image_path: str) -> dict:
         response = await client.converse(
             messages=messages,
             system_prompt=system_prompt,
-            model="haiku",
+            model=get_model_id(resolve_tier("haiku")),
             max_tokens=1200,
         )
         raw = (response.text or "").strip()

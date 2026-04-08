@@ -62,6 +62,7 @@ class FamilyMember(Base):
     memories: Mapped[list["Memory"]] = relationship(back_populates="family_member")
     bug_reports: Mapped[list["BugReport"]] = relationship(back_populates="reporter")
     conversation_state: Mapped[Optional["ConversationState"]] = relationship(back_populates="family_member", uselist=False)
+    salary_slips: Mapped[list["SalarySlip"]] = relationship(back_populates="family_member")
 
 
 class Permission(Base):
@@ -118,6 +119,11 @@ class Document(Base):
     transactions: Mapped[list["Transaction"]] = relationship(back_populates="document")
     tasks: Mapped[list["Task"]] = relationship(back_populates="source_document")
     facts: Mapped[list["DocumentFact"]] = relationship(back_populates="document", cascade="all, delete-orphan")
+    salary_slip: Mapped[Optional["SalarySlip"]] = relationship(
+        back_populates="document",
+        cascade="all, delete-orphan",
+        uselist=False,
+    )
 
     # Logical-to-physical property aliases (service/API layer names → physical columns)
     @property
@@ -158,6 +164,52 @@ class DocumentFact(Base):
 
     # Relationships
     document: Mapped["Document"] = relationship(back_populates="facts")
+
+
+class SalarySlip(Base):
+    """Canonical typed salary-slip row derived from a raw document."""
+    __tablename__ = "salary_slips"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    document_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("documents.id"), nullable=False, unique=True
+    )
+    family_member_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("family_members.id"), nullable=True
+    )
+    employee_name: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    employer_name: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    pay_year: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    pay_month: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    currency: Mapped[Optional[str]] = mapped_column(Text, server_default=text("'ILS'"))
+    gross_salary: Mapped[Optional[Decimal]] = mapped_column(Numeric, nullable=True)
+    net_salary: Mapped[Optional[Decimal]] = mapped_column(Numeric, nullable=True)
+    net_to_pay: Mapped[Optional[Decimal]] = mapped_column(Numeric, nullable=True)
+    total_deductions: Mapped[Optional[Decimal]] = mapped_column(Numeric, nullable=True)
+    income_tax: Mapped[Optional[Decimal]] = mapped_column(Numeric, nullable=True)
+    national_insurance: Mapped[Optional[Decimal]] = mapped_column(Numeric, nullable=True)
+    health_tax: Mapped[Optional[Decimal]] = mapped_column(Numeric, nullable=True)
+    pension_employee: Mapped[Optional[Decimal]] = mapped_column(Numeric, nullable=True)
+    pension_employer: Mapped[Optional[Decimal]] = mapped_column(Numeric, nullable=True)
+    extraction_confidence: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric, server_default=text("0.0")
+    )
+    review_state: Mapped[Optional[str]] = mapped_column(Text, server_default=text("'pending'"))
+    review_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    source_channel: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    raw_payload: Mapped[Optional[dict]] = mapped_column(JSONB, server_default=text("'{}'"))
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=text("now()")
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=text("now()")
+    )
+
+    # Relationships
+    document: Mapped["Document"] = relationship(back_populates="salary_slip")
+    family_member: Mapped[Optional["FamilyMember"]] = relationship(back_populates="salary_slips")
 
 
 class Transaction(Base):

@@ -1,6 +1,8 @@
 """Unit tests for document_fact_extractor — regex, LLM, P4 property."""
 from __future__ import annotations
 
+import json
+
 import pytest
 from unittest.mock import AsyncMock, patch
 
@@ -10,6 +12,7 @@ from src.services.document_fact_extractor import (
     _extract_dates_regex,
     _extract_amounts_regex,
     _extract_salary_slip_facts,
+    _extract_salary_slip_from_text,
 )
 
 
@@ -174,16 +177,67 @@ async def test_salary_slip_structured_facts_created():
         mock_structured.return_value = structured
         facts, metadata = await _extract_salary_slip_facts("raw", "salary.pdf", "/tmp/salary.jpg")
     assert any(f["fact_key"] == "net_salary" and f["fact_value"] == "9000.0" for f in facts)
-    assert metadata["extraction_model"] == "haiku"
+    assert metadata["extraction_model"] == "haiku_vision"
     assert metadata["structured_payload"]["employee_name"] == "יוסי"
 
 
 @pytest.mark.asyncio
 async def test_salary_slip_fallback_when_vision_fails():
     with patch("src.services.document_fact_extractor.extract_structured_with_vision", new_callable=AsyncMock) as mock_structured, \
+         patch("src.services.document_fact_extractor._extract_salary_slip_from_text", new_callable=AsyncMock) as mock_text_structured, \
          patch("src.services.document_fact_extractor.extract_facts", new_callable=AsyncMock) as mock_fallback:
         mock_structured.return_value = {}
+        mock_text_structured.return_value = ({}, "")
         mock_fallback.return_value = [{"fact_type": "other", "fact_key": "amount", "fact_value": "500", "confidence": 0.8}]
         facts, metadata = await _extract_salary_slip_facts("תאריך 01/01/2026 סכום ₪500", "salary.pdf", "/tmp/salary.jpg")
     assert facts[0]["fact_key"] == "amount"
     assert metadata == {}
+
+
+@pytest.mark.asyncio
+async def test_salary_slip_text_structured_fallback_used_for_pdf():
+    structured = {
+        "employee_name": "יוסי כהן",
+        "employer_name": "ACME",
+        "pay_month": "2025-12",
+        "gross_salary": 65000.0,
+        "net_salary": 52048.33,
+        "net_to_pay": 52048.33,
+        "total_deductions": 12951.67,
+        "income_tax": 10000.0,
+        "national_insurance": 1200.0,
+        "health_tax": 400.0,
+        "pension_employee": 3200.0,
+        "pension_employer": 3500.0,
+        "confidence": 0.88,
+    }
+    with patch("src.services.document_fact_extractor._extract_salary_slip_from_text", new_callable=AsyncMock) as mock_text_structured:
+        mock_text_structured.return_value = (structured, "haiku_text")
+        facts, metadata = await _extract_salary_slip_facts("raw pdf text", "salary.pdf", "/tmp/salary.pdf")
+    assert mock_text_structured.await_count == 1
+    assert any(f["fact_key"] == "net_salary" and f["fact_value"] == "52048.33" for f in facts)
+    assert metadata["structured_payload"]["employer_name"] == "ACME"
+    assert metadata["extraction_model"] == "haiku_text"
+
+
+@pytest.mark.asyncio
+async def test_salary_slip_text_extraction_escalates_to_sonnet_when_weak():
+    weak = {
+        "pay_month": "2025-08",
+        "gross_salary": 33000.0,
+        "net_salary": None,
+        "confidence": 0.3,
+    }
+    stronger = {
+        "pay_month": "2025-08",
+        "gross_salary": 33000.0,
+        "net_salary": 30956.0,
+        "net_to_pay": 30956.0,
+        "total_deductions": 2044.0,
+        "confidence": 0.72,
+    }
+    with patch("src.services.document_fact_extractor.llm_generate", new_callable=AsyncMock) as mock_llm:
+        mock_llm.side_effect = [json.dumps(weak), json.dumps(stronger)]
+        structured, model_used = await _extract_salary_slip_from_text("raw pdf text", "salary.pdf")
+    assert model_used == "sonnet_text"
+    assert structured["net_salary"] == 30956.0

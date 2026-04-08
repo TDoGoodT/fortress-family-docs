@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch, call
 
 import pytest
 
-from src.models.schema import Document, DocumentFact
+from src.models.schema import Document, DocumentFact, SalarySlip
 
 
 def _make_db_mock(doc_id=None):
@@ -47,11 +47,12 @@ def tmp_xlsx(tmp_path):
 @pytest.mark.asyncio
 async def test_full_pipeline_happy_path(tmp_pdf):
     """Full pipeline: file stored, text extracted, classified, facts created, summary, auto_verified."""
-    with patch("src.services.documents.extract_text", return_value="חשבונית מס 12345 סכום ₪500") as mock_extract, \
+    with patch("src.services.documents.extract_text_v2", new_callable=AsyncMock, return_value=("חשבונית מס 12345 סכום ₪500", 0.9, "ocr")) as mock_extract, \
          patch("src.services.documents.classify_document", new_callable=AsyncMock, return_value=("invoice", 0.85)) as mock_classify, \
          patch("src.services.documents.extract_facts", new_callable=AsyncMock, return_value=[
              {"fact_type": "invoice", "fact_key": "amount", "fact_value": "500", "confidence": 0.9, "source_excerpt": "₪500"}
          ]) as mock_facts, \
+         patch("src.services.documents._find_duplicate", return_value=None), \
          patch("src.services.documents.summarize_document", new_callable=AsyncMock, return_value="חשבונית מס לחודש מרץ.") as mock_summary, \
          patch("src.services.documents.os.makedirs"), \
          patch("src.services.documents.shutil.copy2"):
@@ -92,9 +93,10 @@ async def test_full_pipeline_happy_path(tmp_pdf):
 @pytest.mark.asyncio
 async def test_p2_classification_failure_pipeline_continues(tmp_pdf):
     """P2: If classification fails, fact extraction and summary still run."""
-    with patch("src.services.documents.extract_text", return_value="some text"), \
+    with patch("src.services.documents.extract_text_v2", new_callable=AsyncMock, return_value=("some text", 0.9, "ocr")), \
          patch("src.services.documents.classify_document", new_callable=AsyncMock, side_effect=Exception("LLM timeout")), \
          patch("src.services.documents.extract_facts", new_callable=AsyncMock, return_value=[]) as mock_facts, \
+         patch("src.services.documents._find_duplicate", return_value=None), \
          patch("src.services.documents.summarize_document", new_callable=AsyncMock, return_value="") as mock_summary, \
          patch("src.services.documents.os.makedirs"), \
          patch("src.services.documents.shutil.copy2"):
@@ -123,9 +125,10 @@ async def test_p2_classification_failure_pipeline_continues(tmp_pdf):
 @pytest.mark.asyncio
 async def test_p2_fact_extraction_failure_pipeline_continues(tmp_pdf):
     """P2: If fact extraction fails, summary still runs."""
-    with patch("src.services.documents.extract_text", return_value="some text"), \
+    with patch("src.services.documents.extract_text_v2", new_callable=AsyncMock, return_value=("some text", 0.9, "ocr")), \
          patch("src.services.documents.classify_document", new_callable=AsyncMock, return_value=("invoice", 0.8)), \
          patch("src.services.documents.extract_facts", new_callable=AsyncMock, side_effect=Exception("extractor error")), \
+         patch("src.services.documents._find_duplicate", return_value=None), \
          patch("src.services.documents.summarize_document", new_callable=AsyncMock, return_value="סיכום.") as mock_summary, \
          patch("src.services.documents.os.makedirs"), \
          patch("src.services.documents.shutil.copy2"):
@@ -156,9 +159,10 @@ async def test_p2_fact_extraction_failure_pipeline_continues(tmp_pdf):
 @pytest.mark.asyncio
 async def test_xlsx_skips_text_extraction(tmp_xlsx):
     """XLS/XLSX: text extraction is skipped, classification uses filename only."""
-    with patch("src.services.documents.extract_text") as mock_extract, \
+    with patch("src.services.documents.extract_text_v2", new_callable=AsyncMock) as mock_extract, \
          patch("src.services.documents.classify_document", new_callable=AsyncMock, return_value=("other", 0.3)) as mock_classify, \
          patch("src.services.documents.extract_facts", new_callable=AsyncMock, return_value=[]), \
+         patch("src.services.documents._find_duplicate", return_value=None), \
          patch("src.services.documents.summarize_document", new_callable=AsyncMock, return_value=""), \
          patch("src.services.documents.os.makedirs"), \
          patch("src.services.documents.shutil.copy2"):
@@ -193,11 +197,12 @@ async def test_xlsx_skips_text_extraction(tmp_xlsx):
 @pytest.mark.asyncio
 async def test_p5_auto_verified_when_all_signals_pass(tmp_pdf):
     """P5: review_state = auto_verified when all three signals pass."""
-    with patch("src.services.documents.extract_text", return_value="invoice text"), \
+    with patch("src.services.documents.extract_text_v2", new_callable=AsyncMock, return_value=("invoice text", 0.9, "ocr")), \
          patch("src.services.documents.classify_document", new_callable=AsyncMock, return_value=("invoice", 0.85)), \
          patch("src.services.documents.extract_facts", new_callable=AsyncMock, return_value=[
              {"fact_type": "invoice", "fact_key": "amount", "fact_value": "100", "confidence": 0.9, "source_excerpt": "100"}
          ]), \
+         patch("src.services.documents._find_duplicate", return_value=None), \
          patch("src.services.documents.summarize_document", new_callable=AsyncMock, return_value="סיכום."), \
          patch("src.services.documents.os.makedirs"), \
          patch("src.services.documents.shutil.copy2"):
@@ -223,9 +228,10 @@ async def test_p5_auto_verified_when_all_signals_pass(tmp_pdf):
 @pytest.mark.asyncio
 async def test_p5_needs_review_when_text_empty(tmp_pdf):
     """P5: review_state = needs_review when text extraction returns empty for extractable type."""
-    with patch("src.services.documents.extract_text", return_value=""), \
+    with patch("src.services.documents.extract_text_v2", new_callable=AsyncMock, return_value=("", 0.0, "ocr")), \
          patch("src.services.documents.classify_document", new_callable=AsyncMock, return_value=("invoice", 0.85)), \
          patch("src.services.documents.extract_facts", new_callable=AsyncMock, return_value=[]), \
+         patch("src.services.documents._find_duplicate", return_value=None), \
          patch("src.services.documents.summarize_document", new_callable=AsyncMock, return_value=""), \
          patch("src.services.documents.os.makedirs"), \
          patch("src.services.documents.shutil.copy2"):
@@ -251,11 +257,12 @@ async def test_p5_needs_review_when_text_empty(tmp_pdf):
 @pytest.mark.asyncio
 async def test_p5_needs_review_when_low_confidence(tmp_pdf):
     """P5: review_state = needs_review when classification confidence is below threshold."""
-    with patch("src.services.documents.extract_text", return_value="some text"), \
+    with patch("src.services.documents.extract_text_v2", new_callable=AsyncMock, return_value=("some text", 0.9, "ocr")), \
          patch("src.services.documents.classify_document", new_callable=AsyncMock, return_value=("other", 0.2)), \
          patch("src.services.documents.extract_facts", new_callable=AsyncMock, return_value=[
              {"fact_type": "other", "fact_key": "amount", "fact_value": "100", "confidence": 0.9, "source_excerpt": "100"}
          ]), \
+         patch("src.services.documents._find_duplicate", return_value=None), \
          patch("src.services.documents.summarize_document", new_callable=AsyncMock, return_value="סיכום."), \
          patch("src.services.documents.os.makedirs"), \
          patch("src.services.documents.shutil.copy2"):
@@ -281,9 +288,10 @@ async def test_p5_needs_review_when_low_confidence(tmp_pdf):
 @pytest.mark.asyncio
 async def test_p5_review_state_never_pending_after_pipeline(tmp_pdf):
     """P5: review_state is never 'pending' after pipeline completes."""
-    with patch("src.services.documents.extract_text", return_value="text"), \
+    with patch("src.services.documents.extract_text_v2", new_callable=AsyncMock, return_value=("text", 0.9, "ocr")), \
          patch("src.services.documents.classify_document", new_callable=AsyncMock, return_value=("invoice", 0.8)), \
          patch("src.services.documents.extract_facts", new_callable=AsyncMock, return_value=[]), \
+         patch("src.services.documents._find_duplicate", return_value=None), \
          patch("src.services.documents.summarize_document", new_callable=AsyncMock, return_value=""), \
          patch("src.services.documents.os.makedirs"), \
          patch("src.services.documents.shutil.copy2"):
@@ -409,13 +417,17 @@ async def test_salary_slip_pipeline_sets_metadata_and_facts(tmp_pdf):
          patch("src.services.documents.shutil.copy2"):
         db = MagicMock()
         captured_doc = {}
+        captured_salary_slip = {}
 
         def add_side_effect(obj):
             if isinstance(obj, Document):
                 obj.id = uuid.uuid4()
                 captured_doc["doc"] = obj
+            elif isinstance(obj, SalarySlip):
+                captured_salary_slip["row"] = obj
         db.add.side_effect = add_side_effect
         db.refresh.side_effect = lambda obj: None
+        db.query.return_value.filter.return_value.first.return_value = None
 
         from src.services.documents import process_document
         await process_document(db, tmp_pdf, uuid.uuid4(), "whatsapp")
@@ -423,6 +435,10 @@ async def test_salary_slip_pipeline_sets_metadata_and_facts(tmp_pdf):
         assert doc.vendor == "ACME"
         assert doc.review_state == "auto_verified"
         assert doc.doc_metadata["extraction_model"] == "haiku"
+        assert doc.doc_metadata["canonical_record_type"] == "salary_slip"
+        salary_slip = captured_salary_slip["row"]
+        assert salary_slip.employer_name == "ACME"
+        assert float(salary_slip.net_salary) == 7800.0
 
 
 @pytest.mark.asyncio
@@ -444,14 +460,19 @@ async def test_salary_slip_review_state_needs_review_for_missing_critical_fields
          patch("src.services.documents.shutil.copy2"):
         db = MagicMock()
         captured_doc = {}
+        captured_salary_slip = {}
 
         def add_side_effect(obj):
             if isinstance(obj, Document):
                 obj.id = uuid.uuid4()
                 captured_doc["doc"] = obj
+            elif isinstance(obj, SalarySlip):
+                captured_salary_slip["row"] = obj
         db.add.side_effect = add_side_effect
         db.refresh.side_effect = lambda obj: None
+        db.query.return_value.filter.return_value.first.return_value = None
 
         from src.services.documents import process_document
         await process_document(db, tmp_pdf, uuid.uuid4(), "whatsapp")
         assert captured_doc["doc"].review_state == "needs_review"
+        assert captured_salary_slip["row"].review_reason == "missing_net_salary"

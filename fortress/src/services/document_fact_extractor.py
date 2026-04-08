@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+from pathlib import Path
 from typing import Any
 
 from src.services.document_classifier import ALLOWED_FACT_KEYS, MAX_SOURCE_EXCERPT_LENGTH
@@ -11,6 +12,24 @@ from src.services.llm_dispatch import llm_generate
 from src.services.vision_extractor import extract_structured_with_vision
 
 logger = logging.getLogger(__name__)
+
+_SALARY_SLIP_STRUCTURED_KEYS = {
+    "employee_name": None,
+    "employer_name": None,
+    "pay_month": None,
+    "gross_salary": None,
+    "net_salary": None,
+    "net_to_pay": None,
+    "total_deductions": None,
+    "income_tax": None,
+    "national_insurance": None,
+    "health_tax": None,
+    "pension_employee": None,
+    "pension_employer": None,
+    "confidence": 0.0,
+}
+
+_SALARY_SLIP_CRITICAL_KEYS = {"pay_month", "gross_salary", "net_salary"}
 
 # Regex patterns for Phase 1 deterministic extraction
 _DATE_PATTERNS = [
@@ -387,7 +406,15 @@ async def _extract_salary_slip_facts(
 
     Returns (facts, metadata_delta).
     """
-    structured = await extract_structured_with_vision(image_path)
+    structured = {}
+    extraction_model = ""
+    suffix = Path(image_path).suffix.lower()
+    if suffix in {".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".heic"}:
+        structured = await extract_structured_with_vision(image_path)
+        if structured:
+            extraction_model = "haiku_vision"
+    if not structured and raw_text.strip():
+        structured, extraction_model = await _extract_salary_slip_from_text(raw_text, filename)
     if not structured:
         fallback = await extract_facts(raw_text, "other", filename, text_quality=text_quality)
         return fallback, {}
@@ -410,7 +437,131 @@ async def _extract_salary_slip_facts(
     metadata_delta = {
         "structured_payload": structured,
         "field_confidence": field_confidence,
-        "extraction_model": "haiku",
+        "extraction_model": extraction_model or "unknown",
         "extraction_version": "v1",
     }
     return facts, metadata_delta
+
+
+def _coerce_salary_slip_structured_payload(parsed: dict[str, Any]) -> dict[str, Any]:
+    result = dict(_SALARY_SLIP_STRUCTURED_KEYS)
+    for key in _SALARY_SLIP_STRUCTURED_KEYS:
+        if key not in parsed:
+            continue
+        value = parsed.get(key)
+        if key in {"employee_name", "employer_name", "pay_month"}:
+            result[key] = str(value).strip() if value is not None else None
+        elif key == "confidence":
+            try:
+                result[key] = max(0.0, min(1.0, float(value)))
+            except (TypeError, ValueError):
+                result[key] = 0.0
+        else:
+            try:
+                result[key] = float(value) if value is not None else None
+            except (TypeError, ValueError):
+                result[key] = None
+    return result
+
+
+def _salary_slip_structured_is_strong_enough(structured: dict[str, Any]) -> bool:
+    if not structured:
+        return False
+    confidence = float(structured.get("confidence") or 0.0)
+    present_critical = sum(1 for key in _SALARY_SLIP_CRITICAL_KEYS if structured.get(key) is not None)
+    return confidence >= 0.6 and present_critical >= 3
+
+
+async def _extract_salary_slip_from_text(raw_text: str, filename: str) -> tuple[dict[str, Any], str]:
+    """Extract salary-slip structured fields from OCR/text when vision is unavailable or unsuitable."""
+    base_prompt = (
+        "Extract structured salary-slip data from the following text.\n"
+        "Return JSON only with exactly these keys:\n"
+        "{\n"
+        '  "employee_name": str | null,\n'
+        '  "employer_name": str | null,\n'
+        '  "pay_month": str | null,\n'
+        '  "gross_salary": float | null,\n'
+        '  "net_salary": float | null,\n'
+        '  "net_to_pay": float | null,\n'
+        '  "total_deductions": float | null,\n'
+        '  "income_tax": float | null,\n'
+        '  "national_insurance": float | null,\n'
+        '  "health_tax": float | null,\n'
+        '  "pension_employee": float | null,\n'
+        '  "pension_employer": float | null,\n'
+        '  "confidence": float\n'
+        "}\n"
+        "Rules:\n"
+        "- output valid JSON only\n"
+        "- numbers must be JSON numbers\n"
+        "- unknown values must be null\n"
+        "- pay_month should prefer YYYY-MM when clear\n"
+        "- confidence should reflect how reliable the extraction is from the text\n\n"
+        f"Document filename: {filename}\n"
+        f"Document text:\n{raw_text[:7000]}\n\n"
+        "Pay special attention to:\n"
+        "- net salary / net to pay\n"
+        "- gross salary / gross pay\n"
+        "- monthly pay period\n"
+        "- employer name and employee name when present\n"
+        "- pension and mandatory deductions"
+    )
+    system = (
+        "You extract structured payroll data from salary slips. "
+        "Return only strict JSON with the requested schema."
+    )
+
+    async def _run_extract(model_tier: str, extra_instruction: str = "") -> dict[str, Any]:
+        raw = await llm_generate(
+            base_prompt + (f"\n\nAdditional instruction:\n{extra_instruction}" if extra_instruction else ""),
+            system,
+            model_tier,
+        )
+        if not raw:
+            return {}
+        match = re.search(r"\{.*\}", raw, re.DOTALL)
+        if not match:
+            logger.warning("salary_slip_text_extract: no JSON object found doc=%s tier=%s", filename, model_tier)
+            return {}
+        try:
+            parsed = json.loads(match.group())
+        except json.JSONDecodeError:
+            logger.warning("salary_slip_text_extract: invalid JSON doc=%s tier=%s", filename, model_tier)
+            return {}
+        if not isinstance(parsed, dict):
+            return {}
+        return _coerce_salary_slip_structured_payload(parsed)
+
+    structured = await _run_extract("haiku")
+    logger.info(
+        "salary_slip_text_extract: doc=%s tier=%s confidence=%.2f has_gross=%s has_net=%s",
+        filename,
+        "haiku",
+        float(structured.get("confidence") or 0.0) if structured else 0.0,
+        bool(structured.get("gross_salary")) if structured else False,
+        bool(structured.get("net_salary")) if structured else False,
+    )
+    if _salary_slip_structured_is_strong_enough(structured):
+        return structured, "haiku_text"
+
+    stronger_instruction = (
+        "The first pass was weak or incomplete. Re-read carefully and prefer exact payroll values. "
+        "If multiple candidate salary numbers exist, prefer the main pay totals and net-to-pay figures. "
+        "Do not guess names. Leave uncertain fields null."
+    )
+    stronger = await _run_extract("sonnet", stronger_instruction)
+    logger.info(
+        "salary_slip_text_extract: doc=%s tier=%s confidence=%.2f has_gross=%s has_net=%s",
+        filename,
+        "sonnet",
+        float(stronger.get("confidence") or 0.0) if stronger else 0.0,
+        bool(stronger.get("gross_salary")) if stronger else False,
+        bool(stronger.get("net_salary")) if stronger else False,
+    )
+    if _salary_slip_structured_is_strong_enough(stronger):
+        return stronger, "sonnet_text"
+
+    if stronger and (float(stronger.get("confidence") or 0.0) >= float(structured.get("confidence") or 0.0)):
+        return stronger, "sonnet_text"
+    return structured, "haiku_text"
