@@ -5,7 +5,12 @@ import pytest
 from unittest.mock import AsyncMock, patch
 
 from src.services.document_classifier import ALLOWED_FACT_KEYS, MAX_SOURCE_EXCERPT_LENGTH
-from src.services.document_fact_extractor import extract_facts, _extract_dates_regex, _extract_amounts_regex
+from src.services.document_fact_extractor import (
+    extract_facts,
+    _extract_dates_regex,
+    _extract_amounts_regex,
+    _extract_salary_slip_facts,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -146,3 +151,39 @@ async def test_p4_fact_keys_in_allowed_set():
         assert fact["fact_key"] in ALLOWED_FACT_KEYS, f"Unexpected key: {fact['fact_key']}"
         assert 0.0 <= fact["confidence"] <= 1.0
         assert fact["fact_type"] == "invoice"
+
+
+@pytest.mark.asyncio
+async def test_salary_slip_structured_facts_created():
+    structured = {
+        "employee_name": "יוסי",
+        "employer_name": "ABC",
+        "pay_month": "2026-03",
+        "gross_salary": 12000.0,
+        "net_salary": 9000.0,
+        "net_to_pay": 9000.0,
+        "total_deductions": 3000.0,
+        "income_tax": 1100.0,
+        "national_insurance": 600.0,
+        "health_tax": 300.0,
+        "pension_employee": 600.0,
+        "pension_employer": 400.0,
+        "confidence": 0.9,
+    }
+    with patch("src.services.document_fact_extractor.extract_structured_with_vision", new_callable=AsyncMock) as mock_structured:
+        mock_structured.return_value = structured
+        facts, metadata = await _extract_salary_slip_facts("raw", "salary.pdf", "/tmp/salary.jpg")
+    assert any(f["fact_key"] == "net_salary" and f["fact_value"] == "9000.0" for f in facts)
+    assert metadata["extraction_model"] == "haiku"
+    assert metadata["structured_payload"]["employee_name"] == "יוסי"
+
+
+@pytest.mark.asyncio
+async def test_salary_slip_fallback_when_vision_fails():
+    with patch("src.services.document_fact_extractor.extract_structured_with_vision", new_callable=AsyncMock) as mock_structured, \
+         patch("src.services.document_fact_extractor.extract_facts", new_callable=AsyncMock) as mock_fallback:
+        mock_structured.return_value = {}
+        mock_fallback.return_value = [{"fact_type": "other", "fact_key": "amount", "fact_value": "500", "confidence": 0.8}]
+        facts, metadata = await _extract_salary_slip_facts("תאריך 01/01/2026 סכום ₪500", "salary.pdf", "/tmp/salary.jpg")
+    assert facts[0]["fact_key"] == "amount"
+    assert metadata == {}

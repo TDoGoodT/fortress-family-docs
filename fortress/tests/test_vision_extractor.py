@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from src.services.vision_extractor import extract_text_with_vision
+from src.services.vision_extractor import extract_text_with_vision, extract_structured_with_vision
 
 
 def _make_test_image() -> str:
@@ -94,5 +94,37 @@ async def test_large_image_resized() -> None:
             result = await extract_text_with_vision(path)
 
         assert result == "resized text"
+    finally:
+        os.unlink(path)
+
+
+@pytest.mark.asyncio
+async def test_extract_structured_with_vision_valid_dict() -> None:
+    path = _make_test_image()
+    try:
+        response = (
+            '{"employee_name":"דנה כהן","employer_name":"חברת דוגמה","pay_month":"2026-03",'
+            '"gross_salary":10000.0,"net_salary":7800.0,"net_to_pay":7800.0,'
+            '"total_deductions":2200.0,"income_tax":900.0,"national_insurance":500.0,'
+            '"health_tax":300.0,"pension_employee":300.0,"pension_employer":200.0,"confidence":0.92}'
+        )
+        mock_class, _ = _mock_bedrock_client(response)
+        with patch("src.services.bedrock_client.BedrockClient", mock_class):
+            result = await extract_structured_with_vision(path)
+        assert result["employee_name"] == "דנה כהן"
+        assert result["gross_salary"] == 10000.0
+        assert result["confidence"] == 0.92
+    finally:
+        os.unlink(path)
+
+
+@pytest.mark.asyncio
+async def test_extract_structured_with_vision_failure_returns_empty() -> None:
+    path = _make_test_image()
+    try:
+        mock_class, _ = _mock_bedrock_client(side_effect=RuntimeError("API down"))
+        with patch("src.services.bedrock_client.BedrockClient", mock_class):
+            result = await extract_structured_with_vision(path)
+        assert result == {}
     finally:
         os.unlink(path)

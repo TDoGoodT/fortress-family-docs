@@ -6,8 +6,10 @@ Returns empty string on any failure — never raises.
 from __future__ import annotations
 
 import base64
+import json
 import logging
 import os
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -123,3 +125,107 @@ async def extract_text_with_vision(
     except Exception:
         logger.exception("vision_extractor: failed for %s", image_path)
         return ""
+
+
+async def extract_structured_with_vision(image_path: str) -> dict:
+    """Extract salary-slip structured fields from an image via Bedrock haiku.
+
+    Returns parsed JSON dict with strict expected keys.
+    Returns {} on any failure.
+    """
+    expected_keys = {
+        "employee_name": None,
+        "employer_name": None,
+        "pay_month": None,
+        "gross_salary": None,
+        "net_salary": None,
+        "net_to_pay": None,
+        "total_deductions": None,
+        "income_tax": None,
+        "national_insurance": None,
+        "health_tax": None,
+        "pension_employee": None,
+        "pension_employer": None,
+        "confidence": 0.0,
+    }
+    try:
+        from src.services.bedrock_client import BedrockClient
+
+        image_bytes = _resize_image_if_needed(image_path)
+        b64_image = base64.b64encode(image_bytes).decode("utf-8")
+        _, ext = os.path.splitext(image_path)
+        media_type = _MEDIA_TYPES.get(ext.lower(), "image/jpeg")
+
+        system_prompt = (
+            "You extract structured data from salary slips. "
+            "Return JSON only. Do not hallucinate. Use null for unknown values."
+        )
+        user_prompt = (
+            "Extract fields from this salary slip and return EXACTLY this JSON object shape:\n"
+            "{\n"
+            '  "employee_name": str | null,\n'
+            '  "employer_name": str | null,\n'
+            '  "pay_month": str | null,\n'
+            '  "gross_salary": float | null,\n'
+            '  "net_salary": float | null,\n'
+            '  "net_to_pay": float | null,\n'
+            '  "total_deductions": float | null,\n'
+            '  "income_tax": float | null,\n'
+            '  "national_insurance": float | null,\n'
+            '  "health_tax": float | null,\n'
+            '  "pension_employee": float | null,\n'
+            '  "pension_employer": float | null,\n'
+            '  "confidence": float\n'
+            "}\n"
+            "Rules: no extra keys, numbers as JSON numbers, unknown as null, confidence in [0,1]."
+        )
+        messages = [{
+            "role": "user",
+            "content": [
+                {
+                    "image": {
+                        "format": media_type.split("/")[-1],
+                        "source": {"bytes": b64_image},
+                    }
+                },
+                {"text": user_prompt},
+            ],
+        }]
+        client = BedrockClient()
+        response = await client.converse(
+            messages=messages,
+            system_prompt=system_prompt,
+            model="haiku",
+            max_tokens=1200,
+        )
+        raw = (response.text or "").strip()
+        if not raw:
+            return {}
+        match = re.search(r"\{.*\}", raw, re.DOTALL)
+        if not match:
+            return {}
+        parsed = json.loads(match.group())
+        if not isinstance(parsed, dict):
+            return {}
+
+        result = dict(expected_keys)
+        for key in expected_keys:
+            if key not in parsed:
+                continue
+            val = parsed.get(key)
+            if key in {"employee_name", "employer_name", "pay_month"}:
+                result[key] = str(val).strip() if val is not None else None
+            elif key == "confidence":
+                try:
+                    result[key] = max(0.0, min(1.0, float(val)))
+                except (TypeError, ValueError):
+                    result[key] = 0.0
+            else:
+                try:
+                    result[key] = float(val) if val is not None else None
+                except (TypeError, ValueError):
+                    result[key] = None
+        return result
+    except Exception:
+        logger.exception("vision_extractor: structured extraction failed for %s", image_path)
+        return {}

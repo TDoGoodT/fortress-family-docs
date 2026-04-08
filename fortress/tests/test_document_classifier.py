@@ -32,6 +32,8 @@ from src.services.document_classifier import (
     ("warranty certificate 2 years", "doc.pdf", "warranty"),
     ("עירייה תל אביב", "letter.pdf", "official_letter"),
     ("official government notice", "doc.pdf", "official_letter"),
+    ("תלוש שכר חודשי ברוטו נטו", "salary.pdf", "salary_slip"),
+    ("monthly payslip pay stub", "salary_slip.png", "salary_slip"),
 ])
 def test_keyword_rules(text, filename, expected_category):
     category, confidence = _classify_by_keywords(text, filename)

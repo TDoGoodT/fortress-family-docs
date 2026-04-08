@@ -23,6 +23,7 @@ from src.services.document_classifier import (
     REVIEW_CONFIDENCE_THRESHOLD,
 )
 from src.services.document_fact_extractor import extract_facts
+from src.services.document_fact_extractor import _extract_salary_slip_facts
 from src.services.document_summarizer import summarize_document
 from src.services.document_namer import generate_display_name
 from src.services.document_query_service import merge_tags, normalize_tag
@@ -229,6 +230,30 @@ def promote_facts_to_document(
     return promoted
 
 
+def _promote_salary_slip_fields(
+    doc: Document,
+    facts: list[dict[str, Any]],
+    confidence_threshold: float = 0.8,
+) -> dict[str, str]:
+    """Conservative promotion for salary slips: employer_name -> vendor only."""
+    promoted: dict[str, str] = {}
+    if doc.vendor:
+        return promoted
+    for fact in facts:
+        if fact.get("fact_type") != "salary_slip" or fact.get("fact_key") != "employer_name":
+            continue
+        confidence = float(fact.get("confidence", 0.0))
+        if confidence < confidence_threshold:
+            continue
+        value = str(fact.get("fact_value", "")).strip()
+        if not value:
+            continue
+        doc.vendor = value
+        promoted["vendor"] = value
+        break
+    return promoted
+
+
 async def process_document(
     db: Session,
     file_path: str,
@@ -364,7 +389,21 @@ async def process_document(
     fact_count = 0
     extracted_facts: list[dict] = []
     try:
-        extracted_facts = await extract_facts(raw_text, doc.doc_type, original_filename, text_quality=text_quality)
+        metadata_delta: dict[str, Any] = {}
+        if doc.doc_type == "salary_slip":
+            extracted_facts, metadata_delta = await _extract_salary_slip_facts(
+                raw_text=raw_text,
+                filename=original_filename,
+                image_path=storage_path,
+                text_quality=text_quality,
+            )
+            if metadata_delta:
+                doc.doc_metadata = {
+                    **(doc.doc_metadata or {}),
+                    **metadata_delta,
+                }
+        else:
+            extracted_facts = await extract_facts(raw_text, doc.doc_type, original_filename, text_quality=text_quality)
         for fact_data in extracted_facts:
             fact = DocumentFact(
                 document_id=doc.id,
@@ -386,7 +425,10 @@ async def process_document(
 
     # ── Step 3.5: Fact promotion ──────────────────────────────────────────
     try:
-        promoted = promote_facts_to_document(doc, extracted_facts)
+        if doc.doc_type == "salary_slip":
+            promoted = _promote_salary_slip_fields(doc, extracted_facts)
+        else:
+            promoted = promote_facts_to_document(doc, extracted_facts)
         if promoted:
             _log_step("fact_promotion", doc_id, original_filename, "success",
                       promoted_fields=",".join(promoted.keys()))
@@ -461,32 +503,44 @@ async def process_document(
 
     # ── Step 5: Review state assignment ──────────────────────────────────
     try:
-        signal_a = classification_confidence >= REVIEW_CONFIDENCE_THRESHOLD
-        # Signal B: text extraction expected and non-empty (skip check for spreadsheets)
-        if ext_lower in _SPREADSHEET_EXTENSIONS or ext_lower not in _EXTRACTABLE_EXTENSIONS:
-            signal_b = True  # not expected to have text
+        if doc.doc_type == "salary_slip":
+            structured = (doc.doc_metadata or {}).get("structured_payload", {})
+            confidence = float(structured.get("confidence", 0.0)) if isinstance(structured, dict) else 0.0
+            has_net = bool(structured.get("net_salary")) if isinstance(structured, dict) else False
+            has_gross = bool(structured.get("gross_salary")) if isinstance(structured, dict) else False
+            if confidence < 0.6 or not has_net or not has_gross:
+                doc.review_state = "needs_review"
+            else:
+                doc.review_state = "auto_verified"
+            _log_step("review_state", doc_id, original_filename, doc.review_state)
+            steps_ok.append("review_state")
         else:
-            signal_b = bool(raw_text and raw_text.strip())
-        signal_c = fact_count >= 1 or bool(doc.ai_summary)
+            signal_a = classification_confidence >= REVIEW_CONFIDENCE_THRESHOLD
+            # Signal B: text extraction expected and non-empty (skip check for spreadsheets)
+            if ext_lower in _SPREADSHEET_EXTENSIONS or ext_lower not in _EXTRACTABLE_EXTENSIONS:
+                signal_b = True  # not expected to have text
+            else:
+                signal_b = bool(raw_text and raw_text.strip())
+            signal_c = fact_count >= 1 or bool(doc.ai_summary)
 
-        if signal_a and signal_b and signal_c:
-            doc.review_state = "auto_verified"
-        else:
-            doc.review_state = "needs_review"
-            failed_signals = []
-            if not signal_a:
-                failed_signals.append(f"classification_confidence={classification_confidence:.2f}<{REVIEW_CONFIDENCE_THRESHOLD}")
-            if not signal_b:
-                failed_signals.append("text_extraction_empty")
-            if not signal_c:
-                failed_signals.append("no_facts_and_no_summary")
-            logger.warning(
-                "[PIPELINE] step=review_state doc_id=%s filename=%s status=needs_review signals=%s",
-                doc_id, original_filename, ",".join(failed_signals),
-            )
+            if signal_a and signal_b and signal_c:
+                doc.review_state = "auto_verified"
+            else:
+                doc.review_state = "needs_review"
+                failed_signals = []
+                if not signal_a:
+                    failed_signals.append(f"classification_confidence={classification_confidence:.2f}<{REVIEW_CONFIDENCE_THRESHOLD}")
+                if not signal_b:
+                    failed_signals.append("text_extraction_empty")
+                if not signal_c:
+                    failed_signals.append("no_facts_and_no_summary")
+                logger.warning(
+                    "[PIPELINE] step=review_state doc_id=%s filename=%s status=needs_review signals=%s",
+                    doc_id, original_filename, ",".join(failed_signals),
+                )
 
-        _log_step("review_state", doc_id, original_filename, doc.review_state)
-        steps_ok.append("review_state")
+            _log_step("review_state", doc_id, original_filename, doc.review_state)
+            steps_ok.append("review_state")
     except Exception as exc:
         _log_step("review_state", doc_id, original_filename, "failed",
                   error=f"{type(exc).__name__}: {exc}")

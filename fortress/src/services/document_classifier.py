@@ -14,6 +14,7 @@ SUPPORTED_CATEGORIES: list[str] = [
     "contract",
     "invoice",
     "receipt",
+    "salary_slip",
     "bank_statement",
     "credit_card_statement",
     "insurance",
@@ -47,6 +48,7 @@ REVIEW_CONFIDENCE_THRESHOLD: float = 0.5
 _KEYWORD_RULES: list[tuple[str, list[str]]] = [
     ("invoice", ["invoice", "חשבונית", "tax invoice", "vat invoice"]),
     ("receipt", ["receipt", "קבלה", "קבלה על תשלום"]),
+    ("salary_slip", ["תלוש שכר", "תלוש משכורת", "ברוטו", "נטו", "מס הכנסה", "salary slip", "payslip", "pay stub"]),
     ("contract", ["contract", "חוזה", "הסכם", "agreement", "עסקה"]),
     ("bank_statement", ["bank statement", "דף חשבון", "account statement", "תנועות בחשבון"]),
     ("credit_card_statement", ["credit card", "כרטיס אשראי", "card statement", "חיובי כרטיס"]),
