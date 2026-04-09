@@ -28,6 +28,3 @@ registry.register(RecurringSkill())
 registry.register(MorningSkill())
 registry.register(MemorySkill())
 registry.register(FactSkill())
-
-from src.skills.dev_skill import DevSkill
-registry.register(DevSkill())       # Admin-only: codebase intelligence + feature planning

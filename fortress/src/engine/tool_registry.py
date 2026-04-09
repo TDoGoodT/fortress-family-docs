@@ -49,11 +49,6 @@ _TOOL_MAP: dict[str, tuple[str, str]] = {
     "bedrock_cost":  ("system", "bedrock_cost"),
     # Knowledge ingestion
     "save_text": ("document", "save_text"),
-    # Dev (admin-only)
-    "dev_index":           ("dev", "index"),
-    "dev_query":           ("dev", "query"),
-    "dev_plan":            ("dev", "plan"),
-    "dev_generate_prompt": ("dev", "generate_prompt"),
 }
 
 
@@ -423,63 +418,6 @@ _TOOL_SCHEMAS: list[ToolSchema] = [
                         "title": {"type": "string", "description": "כותרת למסמך (אופציונלי)"},
                     },
                     "required": ["text"],
-                }
-            },
-        }
-    },
-    # ── Dev (admin-only) ───────────────────────────────────────────────
-    {
-        "toolSpec": {
-            "name": "dev_index",
-            "description": "בניית אינדקס של קוד המקור של פורטרס. חובה להשתמש בכלי הזה כשהמשתמש אומר 'אנדקס', 'index', 'תאנדקס', או 'תנתח את הקוד'. מנהל בלבד. העבר את התוצאה המלאה למשתמש.",
-            "inputSchema": {"json": {"type": "object", "properties": {}}},
-        }
-    },
-    {
-        "toolSpec": {
-            "name": "dev_query",
-            "description": "שאילתה על מבנה הקוד — skills, services, models, tools. מנהל בלבד. העבר את התוצאה המלאה למשתמש.",
-            "inputSchema": {
-                "json": {
-                    "type": "object",
-                    "properties": {
-                        "question": {"type": "string", "description": "שאלה על מבנה הקוד"},
-                    },
-                    "required": ["question"],
-                }
-            },
-        }
-    },
-    {
-        "toolSpec": {
-            "name": "dev_plan",
-            "description": "תכנון פיצ׳ר חדש על בסיס ניתוח הקוד הקיים. מנהל בלבד.",
-            "inputSchema": {
-                "json": {
-                    "type": "object",
-                    "properties": {
-                        "feature_request": {"type": "string", "description": "תיאור הפיצ׳ר הרצוי"},
-                    },
-                    "required": ["feature_request"],
-                }
-            },
-        }
-    },
-    # ── Dev generate_prompt ────────────────────────────────────────────
-    {
-        "toolSpec": {
-            "name": "dev_generate_prompt",
-            "description": "יצירת פרומפט לסוכן קוד מתוך תכנית פיצ׳ר שמורה. מנהל בלבד. העבר את התוצאה למשתמש.",
-            "inputSchema": {
-                "json": {
-                    "type": "object",
-                    "properties": {
-                        "plan_filename": {
-                            "type": "string",
-                            "description": "שם קובץ התכנית ב-fortress/data/plans/",
-                        },
-                    },
-                    "required": ["plan_filename"],
                 }
             },
         }

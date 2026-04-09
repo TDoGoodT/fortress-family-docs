@@ -251,16 +251,7 @@ async def handle_incoming_message(
             clear_task_tracking(db, member.id)
             logger.info("message_handler: inactivity_downgrade member=%s", member.name)
 
-        # --- Browse interceptor: handle waterfall navigation before agent/regex ---
-        from src.services.browsing_state import is_browsing, handle_browse_input, clear_browsing_state
-        if is_browsing(db, member.id):
-            browse_result = handle_browse_input(db, member.id, message_text)
-            if browse_result is not None:
-                _save_conversation(db, member.id, message_text, browse_result, "document.browse")
-                return _sanitize_response(browse_result)
-            # Unrelated message — clear browsing state, fall through to normal processing
-            clear_browsing_state(db, member.id)
-
+        # --- Normal message processing ---
         if _should_prefer_structured_path(message_text):
             response, intent = await _run_regex_path(db, member, message_text, pii_stripped)
             logger.info(
