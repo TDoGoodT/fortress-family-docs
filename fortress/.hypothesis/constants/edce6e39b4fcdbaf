@@ -1,0 +1,4 @@
+# file: /Users/fortress-ai/fortress-family/fortress/src/models/schema.py
+# hypothesis_version: 6.141.1
+
+["'ILS'", "'[]'", "'normal'", "'open'", "'pending'", "'{}'", '0', '0.0', '1.0', '7', 'AuditLog', 'BugReport', 'Conversation', 'ConversationState', 'Document', 'DocumentFact', 'FamilyMember', 'Memory', 'RecurringPattern', 'Task', 'Transaction', '[Task.assigned_to]', '[Task.created_by]', 'actor', 'all, delete-orphan', 'assigned_patterns', 'assigned_tasks', 'assignee', 'audit_log', 'audit_logs', 'bug_reports', 'canonical_facts', 'conversation_state', 'conversations', 'created_tasks', 'creator', 'document', 'document_facts', 'documents', 'documents.id', 'facts', 'false', 'family_member', 'family_members', 'family_members.id', 'gen_random_uuid()', 'memories', 'memory_exclusions', 'metadata', 'now()', 'permissions', 'recurring_pattern', 'recurring_patterns', 'reporter', 'resource_type', 'role', 'source_document', 'tasks', 'transactions', 'true', 'uploader']

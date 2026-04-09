@@ -1,0 +1,4 @@
+# file: /Users/fortress-ai/fortress-family/fortress/src/skills/fact_skill.py
+# hypothesis_version: 6.141.1
+
+[' i', '[\\wא-ת]+', '_original_message', 'ahud', 'ahud manor', 'basic_personal', 'birth_date', 'building_code', 'fact', 'household_access', 'i ', 'id_number', 'my id', 'query_birth', 'query_self_birth', 'raw_text', 'store_birth_date', 'store_or_query_id', 'stored', 'אין לך הרשאה לזה 🔒', 'אני', 'המיקום', 'לא הבנתי את הבקשה.', 'נולדתי', 'שלי', 'תז שלי']

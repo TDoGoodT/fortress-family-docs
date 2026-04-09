@@ -1,0 +1,4 @@
+# file: /Users/fortress-ai/fortress-family/fortress/src/routers/dashboard.py
+# hypothesis_version: 6.141.1
+
+[5.0, 200, '/dashboard', '/dashboard/data', '2.0.0', 'X-Api-Key', 'app_start_time', 'bedrock', 'bedrock_model', 'bugs_reported', 'connected', 'conversations', 'created_at', 'dashboard', 'database', 'description', 'disconnected', 'errors', 'family_members', 'health', 'id', 'intent', 'is_active', 'member_name', 'message_in', 'message_out', 'name', 'not available', 'not loaded', 'ollama', 'ollama_model', 'open', 'open_bugs', 'open_items', 'open_tasks', 'phone', 'priority', 'recent_conversations', 'reporter_name', 'role', 'status', 'system', 'tasks_created', 'today', 'uptime_seconds', 'version', 'waha']

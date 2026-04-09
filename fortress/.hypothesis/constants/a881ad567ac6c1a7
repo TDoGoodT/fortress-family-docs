@@ -1,0 +1,4 @@
+# file: /Users/fortress-ai/fortress-family/fortress/src/services/document_namer.py
+# hypothesis_version: 6.141.1
+
+['bank_statement', 'contract', 'insurance', 'invoice', 'micro', 'official_letter', 'other', 'receipt', 'recipe', 'warranty', 'אוגוסט', 'אוקטובר', 'אחריות', 'אפריל', 'ביטוח', 'דף חשבון', 'דצמבר', 'חוזה', 'חשבונית', 'יולי', 'יוני', 'ינואר', 'כרטיס אשראי', 'מאי', 'מכתב רשמי', 'מסמך', 'מרץ', 'מתכון', 'נובמבר', 'ספטמבר', 'פברואר', 'קבלה']

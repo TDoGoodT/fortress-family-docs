@@ -1,0 +1,4 @@
+# file: /Users/fortress-ai/fortress-family/fortress/src/skills/deploy_skill.py
+# hypothesis_version: 6.141.1
+
+[45.0, 403, 429, 'Content-Type', '^פורטרס תתחדש$', '^פורטרס תתחדש\\s*ALL$', '^פורטרס תתחדש\\s*APP$', '^פורטרס תתחדש\\s*DB$', 'action', 'application/json', 'async', 'deploy', 'deploy_all', 'deploy_all_started', 'deploy_app', 'deploy_app_started', 'deploy_db', 'deploy_db_started', 'deploy_failed', 'deploy_rate_limited', 'deploy_restarted', 'deploy_started', 'deploy_status', 'errors', 'output', 'partial', 'restart', 'sender', 'status', 'token', 'אימות נכשל', 'אין מידע']

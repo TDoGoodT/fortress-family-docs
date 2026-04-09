@@ -1,0 +1,4 @@
+# file: /Users/fortress-ai/fortress-family/fortress/src/services/vision_extractor.py
+# hypothesis_version: 6.141.1
+
+[1024, 1600, 4096, '.bmp', '.heic', '.jpeg', '.jpg', '.png', '.tiff', '/', 'JPEG', 'P', 'RGB', 'RGBA', 'bytes', 'content', 'format', 'haiku', 'image', 'image/bmp', 'image/jpeg', 'image/png', 'image/tiff', 'rb', 'role', 'source', 'text', 'user', 'utf-8']

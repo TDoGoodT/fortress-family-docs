@@ -1,0 +1,4 @@
+# file: /Users/fortress-ai/fortress-family/fortress/src/services/scheduler.py
+# hypothesis_version: 6.141.1
+
+['due_date', 'id', 'last_run', 'phone', 'reminder_new_task', 'scheduler_summary', 'title']

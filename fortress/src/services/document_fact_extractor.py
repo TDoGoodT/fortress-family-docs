@@ -53,6 +53,7 @@ _CURRENCY_MAP = {
 
 # Fact keys relevant per document category
 _CATEGORY_FACT_KEYS: dict[str, list[str]] = {
+    "electricity_bill": ["source_date", "counterparty", "amount", "currency", "document_reference", "period_start", "period_end"],
     "invoice": ["source_date", "counterparty", "amount", "currency", "document_reference"],
     "receipt": ["source_date", "counterparty", "amount", "currency"],
     "contract": ["source_date", "counterparty", "contract_end_date", "document_reference"],
@@ -255,6 +256,7 @@ _FACT_KEY_DESCRIPTIONS: dict[str, str] = {
 
 # ── Schema prompt examples per category ──────────────────────────────────
 _CATEGORY_EXAMPLES: dict[str, str] = {
+    "electricity_bill": '[{"fact_key": "source_date", "fact_value": "2026-03-01", "confidence": 0.92, "source_excerpt": "תאריך עריכת החשבון: 01/03/2026"}, {"fact_key": "counterparty", "fact_value": "אלקטרה פאוור", "confidence": 0.9, "source_excerpt": "מספר צרכן אלקטרה פאוור"}, {"fact_key": "amount", "fact_value": "208.37", "confidence": 0.88, "source_excerpt": "סכום ב-₪ 208.37"}, {"fact_key": "document_reference", "fact_value": "55940425", "confidence": 0.93, "source_excerpt": "חשבונית מס/קבלה (מקור) 55940425"}]',
     "invoice": '[{"fact_key": "source_date", "fact_value": "2024-03-15", "confidence": 0.9, "source_excerpt": "Invoice Date: 15/03/2024"}, {"fact_key": "counterparty", "fact_value": "Bezeq", "confidence": 0.85, "source_excerpt": "From: Bezeq International"}, {"fact_key": "amount", "fact_value": "1234.56", "confidence": 0.9, "source_excerpt": "Total: ₪1,234.56"}]',
     "receipt": '[{"fact_key": "source_date", "fact_value": "2024-01-10", "confidence": 0.9, "source_excerpt": "Date: 10/01/2024"}, {"fact_key": "counterparty", "fact_value": "Super-Pharm", "confidence": 0.85, "source_excerpt": "Super-Pharm Ltd"}, {"fact_key": "amount", "fact_value": "89.90", "confidence": 0.9, "source_excerpt": "Total: ₪89.90"}]',
     "contract": '[{"fact_key": "source_date", "fact_value": "2024-06-01", "confidence": 0.9, "source_excerpt": "Dated: 01/06/2024"}, {"fact_key": "counterparty", "fact_value": "Partner Communications", "confidence": 0.85, "source_excerpt": "Between: Partner Communications"}]',

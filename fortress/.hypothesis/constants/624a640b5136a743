@@ -1,0 +1,4 @@
+# file: /Users/fortress-ai/fortress-family/fortress/src/utils/phone.py
+# hypothesis_version: 6.141.1
+
+['+', '0', '972', '@', '\\D']

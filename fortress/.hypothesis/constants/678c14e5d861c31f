@@ -1,0 +1,4 @@
+# file: /Users/fortress-ai/fortress-family/fortress/src/main.py
+# hypothesis_version: 6.141.1
+
+[8000, '/static', '0.0.0.0', '2.0.0', 'Fortress', 'Scheduled run failed', '__main__', 'daily_recurring', 'src.main:app', 'src/static', 'static']

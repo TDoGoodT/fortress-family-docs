@@ -1,0 +1,4 @@
+# file: /Users/fortress-ai/fortress-family/fortress/src/services/document_fact_extractor.py
+# hypothesis_version: 6.141.1
+
+[0.5, 0.6, 0.7, 0.75, 0.8, 2000, 4000, '$', ',', 'EUR', 'ILS', 'NIS', 'USD', '\\[.*\\]', 'amount', 'bank_statement', 'confidence', 'contract', 'contract_end_date', 'counterparty', 'currency', 'document_reference', 'fact_key', 'fact_type', 'fact_value', 'ingredients', 'instructions', 'insurance', 'invoice', 'lite', 'official_letter', 'other', 'period_end', 'period_start', 'policy_number', 'prep_time', 'receipt', 'recipe', 'recipe_name', 'servings', 'source_date', 'source_excerpt', 'unknown', 'warranty', 'ש"ח', 'שקל', '₪', '€']

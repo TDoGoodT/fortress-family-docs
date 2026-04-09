@@ -1,0 +1,4 @@
+# file: /Users/fortress-ai/fortress-family/fortress/src/skills/chat_skill.py
+# hypothesis_version: 6.141.1
+
+['ask_question', 'chat', 'error_fallback', 'greet', 'greeting', 'haiku', 'hour', 'lite', 'needs_llm', 'unknown', 'שיחה חופשית וברכות']

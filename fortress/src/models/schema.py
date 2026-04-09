@@ -63,6 +63,7 @@ class FamilyMember(Base):
     bug_reports: Mapped[list["BugReport"]] = relationship(back_populates="reporter")
     conversation_state: Mapped[Optional["ConversationState"]] = relationship(back_populates="family_member", uselist=False)
     salary_slips: Mapped[list["SalarySlip"]] = relationship(back_populates="family_member")
+    utility_bills: Mapped[list["UtilityBill"]] = relationship(back_populates="family_member")
 
 
 class Permission(Base):
@@ -120,6 +121,11 @@ class Document(Base):
     tasks: Mapped[list["Task"]] = relationship(back_populates="source_document")
     facts: Mapped[list["DocumentFact"]] = relationship(back_populates="document", cascade="all, delete-orphan")
     salary_slip: Mapped[Optional["SalarySlip"]] = relationship(
+        back_populates="document",
+        cascade="all, delete-orphan",
+        uselist=False,
+    )
+    utility_bill: Mapped[Optional["UtilityBill"]] = relationship(
         back_populates="document",
         cascade="all, delete-orphan",
         uselist=False,
@@ -210,6 +216,47 @@ class SalarySlip(Base):
     # Relationships
     document: Mapped["Document"] = relationship(back_populates="salary_slip")
     family_member: Mapped[Optional["FamilyMember"]] = relationship(back_populates="salary_slips")
+
+
+class UtilityBill(Base):
+    """Canonical typed utility-bill row derived from a raw document."""
+    __tablename__ = "utility_bills"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    document_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("documents.id"), nullable=False, unique=True
+    )
+    family_member_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("family_members.id"), nullable=True
+    )
+    provider_slug: Mapped[str] = mapped_column(Text, nullable=False)
+    provider_name: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    service_type: Mapped[str] = mapped_column(Text, nullable=False)
+    account_number: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    bill_number: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    issue_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    period_start: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    period_end: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    amount_due: Mapped[Optional[Decimal]] = mapped_column(Numeric, nullable=True)
+    currency: Mapped[Optional[str]] = mapped_column(Text, server_default=text("'ILS'"))
+    extraction_confidence: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric, server_default=text("0.0")
+    )
+    review_state: Mapped[Optional[str]] = mapped_column(Text, server_default=text("'pending'"))
+    review_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    source_channel: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    raw_payload: Mapped[Optional[dict]] = mapped_column(JSONB, server_default=text("'{}'"))
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=text("now()")
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=text("now()")
+    )
+
+    document: Mapped["Document"] = relationship(back_populates="utility_bill")
+    family_member: Mapped[Optional["FamilyMember"]] = relationship(back_populates="utility_bills")
 
 
 class Transaction(Base):

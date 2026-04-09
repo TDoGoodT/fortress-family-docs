@@ -1,0 +1,4 @@
+# file: /Users/fortress-ai/fortress-family/fortress/src/services/documents.py
+# hypothesis_version: 6.141.1
+
+[0.0, 0.5, ',', '-', '.', '.doc', '.docx', '.heic', '.jpeg', '.jpg', '.pdf', '.png', '.txt', '.xls', '.xlsx', '19', '20', 'auto_verified', 'classification', 'complete', 'confidence', 'contract', 'counterparty', 'display_name', 'empty_result', 'extraction_method', 'fact_extraction', 'fact_key', 'fact_type', 'fact_value', 'failed', 'invoice', 'needs_review', 'none', 'other', 'partial', 'payment', 'pending', 'policy', 'quality_band', 'recipe', 'recipe_name', 'review_state', 'skipped', 'source_date', 'source_excerpt', 'spreadsheet', 'success', 'summary', 'tagging', 'text_extraction', 'text_message', 'text_quality_score', 'utf-8', 'w']

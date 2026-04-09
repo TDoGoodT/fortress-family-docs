@@ -1,0 +1,4 @@
+# file: /Users/fortress-ai/fortress-family/fortress/src/skills/system_skill.py
+# hypothesis_version: 6.141.1
+
+['^(עזרה|help|פקודות)$', 'cancel', 'cancelled', 'confirm', 'error_fallback', 'help', 'pending_action', 'system', '📋 פקודות זמינות:\n']

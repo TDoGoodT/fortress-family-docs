@@ -1,0 +1,4 @@
+# file: /Users/fortress-ai/fortress-family/fortress/src/engine/command_parser.py
+# hypothesis_version: 6.141.1
+
+[120, 'cancel', 'confirm', 'document', 'media_file_path', 'save', 'system']

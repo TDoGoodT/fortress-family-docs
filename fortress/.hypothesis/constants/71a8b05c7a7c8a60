@@ -1,0 +1,4 @@
+# file: /Users/fortress-ai/fortress-family/fortress/src/services/bedrock_client.py
+# hypothesis_version: 6.141.1
+
+[10.0, 30.0, 200, 1024, '%Y%m%d', '%Y%m%dT%H%M%SZ', ',', '-_.~', '/', '/-_.~', ':', 'AWS4', 'AWS4-HMAC-SHA256', 'Authorization', 'Content-Type', 'POST', 'Request timed out', 'X-Amz-Content-Sha256', 'X-Amz-Date', 'X-Amz-Security-Token', 'api_key', 'ascii', 'aws4_request', 'aws_sigv4', 'backslashreplace', 'bedrock', 'content', 'end_turn', 'haiku', 'hi', 'inferenceConfig', 'input', 'lite', 'maxTokens', 'message', 'messages', 'micro', 'name', 'output', 'role', 'sonnet', 'stopReason', 'system', 'text', 'toolConfig', 'toolUse', 'toolUseId', 'tools', 'user', 'utf-8']

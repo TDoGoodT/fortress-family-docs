@@ -1,0 +1,4 @@
+# file: /Users/fortress-ai/fortress-family/fortress/src/services/message_handler.py
+# hypothesis_version: 6.141.1
+
+[100, 120, 200, '[', '_original_message', '_pii_stripped', 'agent.chat', 'cant_understand', 'chat', 'chat.llm', 'error', 'error_fallback', 'fact', 'inactive_member', 'media.unknown', 'strict.unknown', 'system', 'task', 'unknown_member', 'unknown_sender', '{']

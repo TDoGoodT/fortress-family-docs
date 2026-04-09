@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch, call
 
 import pytest
 
-from src.models.schema import Document, DocumentFact, SalarySlip
+from src.models.schema import Document, DocumentFact, SalarySlip, UtilityBill
 
 
 def _make_db_mock(doc_id=None):
@@ -476,3 +476,89 @@ async def test_salary_slip_review_state_needs_review_for_missing_critical_fields
         await process_document(db, tmp_pdf, uuid.uuid4(), "whatsapp")
         assert captured_doc["doc"].review_state == "needs_review"
         assert captured_salary_slip["row"].review_reason == "missing_net_salary"
+
+
+@pytest.mark.asyncio
+async def test_electricity_bill_pipeline_persists_canonical_utility_row(tmp_pdf):
+    raw_text = """
+    בן צור שגב
+    חשבון לתקופה: 01/03/2026 01/02/2026
+    מספר צרכן אלקטרה פאוור: 377035968
+    חשבונית מס/קבלה (מקור) 55940425
+    תאריך עריכת החשבון: 01/03/2026
+    חיוב ₪ צריכה מאלקטרה פאוור
+    """
+    with patch("src.services.documents.extract_text_v2", new_callable=AsyncMock, return_value=(raw_text, 1.0, "ocr_preprocessed")), \
+         patch("src.services.documents.classify_document", new_callable=AsyncMock, return_value=("electricity_bill", 0.8)), \
+         patch("src.services.documents._find_duplicate", return_value=None), \
+         patch("src.services.documents.extract_facts", new_callable=AsyncMock, return_value=[
+             {"fact_type": "electricity_bill", "fact_key": "amount", "fact_value": "208.37", "confidence": 0.88, "source_excerpt": "סכום ב-₪ 208.37"},
+             {"fact_type": "electricity_bill", "fact_key": "currency", "fact_value": "ILS", "confidence": 0.88, "source_excerpt": "₪"},
+         ]), \
+         patch("src.services.documents.summarize_document", new_callable=AsyncMock, return_value="חשבון חשמל לחודש מרץ 2026"), \
+         patch("src.services.documents.os.makedirs"), \
+         patch("src.services.documents.shutil.copy2"):
+        db = MagicMock()
+        captured_doc = {}
+        captured_utility_bill = {}
+
+        def add_side_effect(obj):
+            if isinstance(obj, Document):
+                obj.id = uuid.uuid4()
+                captured_doc["doc"] = obj
+            elif isinstance(obj, UtilityBill):
+                captured_utility_bill["row"] = obj
+
+        db.add.side_effect = add_side_effect
+        db.refresh.side_effect = lambda obj: None
+        db.query.return_value.filter.return_value.first.return_value = None
+
+        from src.services.documents import process_document
+        await process_document(db, tmp_pdf, uuid.uuid4(), "whatsapp")
+
+        doc = captured_doc["doc"]
+        utility_bill = captured_utility_bill["row"]
+        assert doc.vendor == "אלקטרה פאוור"
+        assert doc.doc_metadata["canonical_record_type"] == "utility_bill"
+        assert doc.doc_metadata["canonical_provider_slug"] == "electra_power"
+        assert doc.doc_metadata["canonical_routing_key"] == "utility_bill:electricity:electra_power"
+        assert utility_bill.provider_slug == "electra_power"
+        assert utility_bill.service_type == "electricity"
+        assert utility_bill.account_number == "377035968"
+        assert utility_bill.bill_number == "55940425"
+
+
+@pytest.mark.asyncio
+async def test_electricity_bill_pipeline_uses_resolver_before_classifier(tmp_pdf):
+    raw_text = """
+    עם חשמל ירוק של
+    מספר צרכן אלקטרה פאוור: 377035963
+    חיוב ₪ צריכה מאלקטרה פאוור
+    חשבונית מס/קבלה (מקור) 55863951
+    """
+    with patch("src.services.documents.extract_text_v2", new_callable=AsyncMock, return_value=(raw_text, 1.0, "ocr_preprocessed")), \
+         patch("src.services.documents.classify_document", new_callable=AsyncMock, side_effect=AssertionError("classifier should not be called")), \
+         patch("src.services.documents._find_duplicate", return_value=None), \
+         patch("src.services.documents.extract_facts", new_callable=AsyncMock, return_value=[]), \
+         patch("src.services.documents.summarize_document", new_callable=AsyncMock, return_value="חשבון חשמל"), \
+         patch("src.services.documents.os.makedirs"), \
+         patch("src.services.documents.shutil.copy2"):
+        db = MagicMock()
+        captured_doc = {}
+
+        def add_side_effect(obj):
+            if isinstance(obj, Document):
+                obj.id = uuid.uuid4()
+                captured_doc["doc"] = obj
+
+        db.add.side_effect = add_side_effect
+        db.refresh.side_effect = lambda obj: None
+        db.query.return_value.filter.return_value.first.return_value = None
+
+        from src.services.documents import process_document
+        await process_document(db, tmp_pdf, uuid.uuid4(), "whatsapp")
+
+        doc = captured_doc["doc"]
+        assert doc.doc_type == "electricity_bill"
+        assert doc.doc_metadata["routing_source"] == "resolver"
+        assert doc.doc_metadata["canonical_routing_key"] == "utility_bill:electricity:electra_power"
