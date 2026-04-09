@@ -46,10 +46,17 @@ services:
       SYSTEM_PHONE: ${SYSTEM_PHONE:-}
       DEPLOY_LISTENER_URL: ${DEPLOY_LISTENER_URL:-http://host.docker.internal:9111}
       DEPLOY_SECRET: ${DEPLOY_SECRET:-fortress-deploy-key}
+      # Google Document AI
+      GOOGLE_DOCAI_PROJECT_ID: ${GOOGLE_DOCAI_PROJECT_ID:-}
+      GOOGLE_DOCAI_LOCATION: ${GOOGLE_DOCAI_LOCATION:-us}
+      GOOGLE_DOCAI_PROCESSOR_ID: ${GOOGLE_DOCAI_PROCESSOR_ID:-}
+      GOOGLE_DOCAI_FORM_PROCESSOR_ID: ${GOOGLE_DOCAI_FORM_PROCESSOR_ID:-}
+      GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-}
     ports:
       - "8000:8000"  # Dashboard: http://localhost:8000/dashboard
     volumes:
       - ${STORAGE_PATH:-./storage}:/data/documents:cached
+      - ${GOOGLE_CREDENTIALS_PATH:-/dev/null}:/app/google-credentials.json:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
