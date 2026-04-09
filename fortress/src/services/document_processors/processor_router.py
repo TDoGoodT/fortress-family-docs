@@ -26,9 +26,18 @@ _GOOGLE_PREFERRED_DOC_TYPES = {
     "receipt",
     "bank_statement",
     "credit_card_statement",
+    "electricity_bill",
 }
 
 _IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".heic"}
+
+# Filename patterns that hint at structured documents (checked case-insensitive)
+_GOOGLE_PREFERRED_FILENAME_PATTERNS = [
+    "payslip", "pay_slip", "salary", "תלוש",
+    "invoice", "חשבונית",
+    "receipt", "קבלה",
+    "bank_statement", "דף_חשבון",
+]
 
 # Minimum confidence to accept a result without trying next processor
 _CONFIDENCE_THRESHOLD = 0.4
@@ -60,6 +69,7 @@ def route_processor(
 
     Priority logic:
       - Structured docs (salary_slip, invoice, etc.) → google_docai first
+      - Filename hints (PaySlip, invoice, etc.) → google_docai first
       - Hebrew images → google_docai first
       - Digital PDFs → tesseract first (free + fast)
       - Everything else → tesseract → bedrock_vision → google_docai
@@ -67,20 +77,21 @@ def route_processor(
     _, ext = os.path.splitext(file_path)
     ext = ext.lower()
     is_image = ext in _IMAGE_EXTENSIONS
+    filename_lower = os.path.basename(file_path).lower()
 
     if doc_type in _GOOGLE_PREFERRED_DOC_TYPES:
-        # Google is significantly better for structured Hebrew documents
+        return ["google_docai", "bedrock_vision", "tesseract"]
+
+    # Filename hints — catch salary slips etc. before classification runs
+    if any(pattern in filename_lower for pattern in _GOOGLE_PREFERRED_FILENAME_PATTERNS):
         return ["google_docai", "bedrock_vision", "tesseract"]
 
     if is_image:
-        # Images with potential Hebrew — Google OCR is strongest
         return ["google_docai", "bedrock_vision", "tesseract"]
 
     if ext == ".pdf":
-        # Digital PDFs — try free local first, escalate if needed
         return ["tesseract", "google_docai", "bedrock_vision"]
 
-    # DOCX and other text formats — local extraction is fine
     return ["tesseract", "bedrock_vision", "google_docai"]
 
 

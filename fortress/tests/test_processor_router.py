@@ -35,6 +35,15 @@ class TestRouteProcessor:
         order = route_processor("contract", "contract.pdf")
         assert order[0] == "tesseract"
 
+    def test_payslip_filename_prefers_google(self):
+        """Filename hint should route to Google even when doc_type is 'other'."""
+        order = route_processor("other", "PaySlip2025-06.pdf.pdf")
+        assert order[0] == "google_docai"
+
+    def test_invoice_filename_prefers_google(self):
+        order = route_processor("other", "חשבונית_מרץ.pdf")
+        assert order[0] == "google_docai"
+
     def test_docx_prefers_tesseract(self):
         order = route_processor("other", "document.docx")
         assert order[0] == "tesseract"
