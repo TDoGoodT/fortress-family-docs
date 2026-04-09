@@ -54,6 +54,7 @@ _CURRENCY_MAP = {
 # Fact keys relevant per document category
 _CATEGORY_FACT_KEYS: dict[str, list[str]] = {
     "electricity_bill": ["source_date", "counterparty", "amount", "currency", "document_reference", "period_start", "period_end"],
+    "water_bill": ["source_date", "counterparty", "amount", "currency", "document_reference", "period_start", "period_end"],
     "invoice": ["source_date", "counterparty", "amount", "currency", "document_reference"],
     "receipt": ["source_date", "counterparty", "amount", "currency"],
     "contract": ["source_date", "counterparty", "contract_end_date", "document_reference"],

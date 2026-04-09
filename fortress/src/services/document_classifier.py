@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 SUPPORTED_CATEGORIES: list[str] = [
     "contract",
     "electricity_bill",
+    "water_bill",
     "invoice",
     "receipt",
     "salary_slip",
@@ -55,6 +56,16 @@ _KEYWORD_RULES: list[tuple[str, list[str]]] = [
             "מספר צרכן אלקטרה",
             "צריכה מאלקטרה",
             "עם חשמל ירוק",
+        ],
+    ),
+    (
+        "water_bill",
+        [
+            "מי רעננה",
+            "שירותי מים וביוב",
+            "כמות המים לחיוב",
+            "צריכת מים",
+            "מד מים",
         ],
     ),
     ("invoice", ["invoice", "חשבונית", "tax invoice", "vat invoice"]),

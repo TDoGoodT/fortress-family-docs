@@ -339,7 +339,7 @@ def _upsert_utility_bill(
     classification_confidence: float,
 ) -> UtilityBill | None:
     payload = _build_utility_bill_payload(raw_text, doc, extracted_facts, classification_confidence)
-    if not payload["provider_slug"] or payload["service_type"] != "electricity":
+    if not payload["provider_slug"] or not payload["service_type"]:
         return None
 
     utility_bill = (
@@ -395,6 +395,8 @@ def _upsert_utility_bill(
         "period_end": payload["period_end"].isoformat() if payload["period_end"] else None,
         "amount_due": str(payload["amount_due"]) if payload["amount_due"] is not None else None,
         "currency": payload["currency"],
+        # Include all resolver metadata for service-specific fields
+        **(doc.doc_metadata or {}).get("resolver_metadata", {}),
     }
 
     if payload["provider_name"]:
@@ -984,7 +986,7 @@ async def process_document(
 
     # ── Step 5.2: canonical utility-bill row ────────────────────────────
     try:
-        if doc.doc_type == "electricity_bill":
+        if doc.doc_type in ("electricity_bill", "water_bill"):
             utility_bill = _upsert_utility_bill(
                 db=db,
                 doc=doc,

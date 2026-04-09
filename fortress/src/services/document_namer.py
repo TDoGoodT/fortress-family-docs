@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 DOC_TYPE_LABEL_MAP: dict[str, str] = {
     "contract": "חוזה",
     "electricity_bill": "חשבון חשמל",
+    "water_bill": "חשבון מים",
     "invoice": "חשבונית",
     "receipt": "קבלה",
     "bank_statement": "דף חשבון",
