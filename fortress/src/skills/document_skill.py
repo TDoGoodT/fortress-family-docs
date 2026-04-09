@@ -229,6 +229,17 @@ class DocumentSkill(BaseSkill):
             # Track last saved document in conversation state for follow-up queries
             update_state(db, member.id, entity_type="document", entity_id=doc.id, intent="document.save")
 
+            # Check if this was a duplicate
+            if getattr(doc, "_is_duplicate", False):
+                dn = getattr(doc, "display_name", None) or doc.original_filename or "מסמך"
+                return Result(
+                    success=True,
+                    message=f"המסמך הזה כבר קיים במערכת 📋 {dn}",
+                    entity_type="document",
+                    entity_id=doc.id,
+                    action="duplicate",
+                )
+
             return Result(
                 success=True,
                 message=_build_document_saved_message(doc),

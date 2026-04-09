@@ -656,6 +656,7 @@ async def process_document(
         if existing:
             dn = getattr(existing, "display_name", None) or existing.original_filename or "מסמך"
             logger.info("[PIPELINE] duplicate detected: file_hash=%s existing_doc_id=%s", file_hash, existing.id)
+            existing._is_duplicate = True  # transient flag for caller
             return existing
 
     # ── Step 0: File copy + DB record ────────────────────────────────────
