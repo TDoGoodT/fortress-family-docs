@@ -21,11 +21,24 @@
 
 ## 🔄 IN PROGRESS
 
-### Waterfall Document Browsing UX
-- [ ] When user asks "what documents do I have?" → show table categories (תלושי שכר: 15, חשבונות חשמל: 2, etc.)
-- [ ] User picks a category → show months/periods available
-- [ ] User picks a month → show specific document details
-- [ ] Same pattern for invoices: month → vendor type → specific invoice
+### Large Document Pipeline (contracts, insurance policies)
+- Branch: `feature/large-document-pipeline`
+- [ ] Test current pipeline with a real contract/insurance policy via WhatsApp
+- [ ] Identify what data is extracted vs what's missing for multi-page docs
+- [ ] Design chunking strategy for large documents (Google DocAI handles up to 15 pages per request)
+- [ ] Build structured extraction for contracts: parties, dates, obligations, renewal terms, penalties
+- [ ] Build structured extraction for insurance: policy number, coverage, premium, deductible, expiry
+- [ ] Create canonical tables or extend existing ones for these doc types
+- [ ] Test and validate data quality
+
+### Waterfall Document Browsing UX (partially done)
+- Branch: merged to main
+- [x] Category view with counts — working
+- [x] Period drill-down — implemented
+- [x] Detail view — implemented
+- [x] Browse interceptor in message_handler — deployed
+- [ ] Fix: agent loop sometimes intercepts browse navigation (text replies like "כן" bypass browse handler)
+- [ ] Polish: improve text matching for category names (partial match, typo tolerance)
 
 ---
 
