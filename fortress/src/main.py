@@ -14,6 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from src.config import LOG_LEVEL, SCHEDULER_HOUR
 from src.database import SessionLocal, test_connection
 from src.routers import dashboard, health, scheduler, whatsapp
+from src.routers.api_v1 import router as api_v1_router
 from src.services.scheduler import run_daily_schedule
 
 APP_START_TIME: float = time.time()
@@ -68,6 +69,7 @@ app.include_router(health.router)
 app.include_router(whatsapp.router)
 app.include_router(scheduler.router)
 app.include_router(dashboard.router)
+app.include_router(api_v1_router)
 
 app.mount("/static", StaticFiles(directory="src/static"), name="static")
 
