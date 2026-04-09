@@ -38,7 +38,7 @@ def test_document_save_media_returns_ingested_status() -> None:
         result = skill._save(MagicMock(), member, {"media_file_path": "/tmp/test.pdf"})
 
     assert result.success is True
-    assert result.message == "received\ningested"
+    assert result.message == "התקבל\nנקלט"
     assert result.action == "saved"
 
 
@@ -54,7 +54,7 @@ def test_document_save_media_returns_duplicate_status() -> None:
 
     assert result.success is True
     assert result.action == "duplicate"
-    assert result.message == "received\nduplicate\nDocument already exists in the library"
+    assert result.message == "התקבל\nכבר קיים\nהמסמך כבר קיים בספרייה"
 
 
 def test_document_save_media_returns_failed_status_on_error() -> None:
@@ -68,7 +68,7 @@ def test_document_save_media_returns_failed_status_on_error() -> None:
 
     assert result.success is False
     assert result.action == "failed"
-    assert result.message == "received\nfailed\nPipeline error: ValueError"
+    assert result.message == "התקבל\nנכשל\nשגיאת קליטה: ValueError"
 
 
 def test_process_document_with_retry_retries_once_for_integrity_error() -> None:

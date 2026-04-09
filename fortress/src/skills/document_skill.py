@@ -54,8 +54,14 @@ def _build_document_saved_message(doc: Document) -> str:
 
 
 def _format_ingest_status(status: str, message: str | None = None) -> str:
-    """Return a short, user-facing ingestion status block."""
-    lines = ["received", status]
+    """Return a short, user-facing ingestion status block in Hebrew."""
+    status_he = {
+        "received": "התקבל",
+        "ingested": "נקלט",
+        "duplicate": "כבר קיים",
+        "failed": "נכשל",
+    }
+    lines = ["התקבל", status_he.get(status, status)]
     if message:
         lines.append(message)
     return "\n".join(lines)
@@ -257,7 +263,7 @@ class DocumentSkill(BaseSkill):
             logger.warning("DocumentSkill._save: no file_path in params=%s", list(params.keys()))
             return Result(
                 success=False,
-                message=_format_ingest_status("failed", "Media download failed"),
+                message=_format_ingest_status("failed", "הורדת הקובץ נכשלה"),
                 action="failed",
             )
 
@@ -277,7 +283,7 @@ class DocumentSkill(BaseSkill):
             if getattr(doc, "_is_duplicate", False):
                 return Result(
                     success=True,
-                    message=_format_ingest_status("duplicate", "Document already exists in the library"),
+                    message=_format_ingest_status("duplicate", "המסמך כבר קיים בספרייה"),
                     entity_type="document",
                     entity_id=doc.id,
                     action="duplicate",
@@ -297,7 +303,7 @@ class DocumentSkill(BaseSkill):
             )
             return Result(
                 success=False,
-                message=_format_ingest_status("failed", f"Pipeline error: {type(exc).__name__}"),
+                message=_format_ingest_status("failed", f"שגיאת קליטה: {type(exc).__name__}"),
                 action="failed",
             )
 
