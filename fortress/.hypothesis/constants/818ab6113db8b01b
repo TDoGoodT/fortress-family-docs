@@ -1,0 +1,4 @@
+# file: /Users/fortress-ai/fortress-family/fortress/src/services/whatsapp_client.py
+# hypothesis_version: 6.141.1
+
+[15.0, 200, 201, 'X-Api-Key', 'chatId', 'default', 'reply_to', 'session', 'text']

@@ -1,0 +1,4 @@
+# file: /Users/fortress-ai/fortress-family/fortress/src/routers/health.py
+# hypothesis_version: 6.141.1
+
+['/health', '2.0.0', 'bedrock', 'bedrock_model', 'connected', 'database', 'disconnected', 'fortress', 'not available', 'not loaded', 'ok', 'ollama', 'ollama_model', 'service', 'status', 'version']

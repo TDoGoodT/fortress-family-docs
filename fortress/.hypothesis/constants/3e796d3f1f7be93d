@@ -1,0 +1,4 @@
+# file: /Users/fortress-ai/fortress-family/fortress/src/services/recurring.py
+# hypothesis_version: 6.141.1
+
+['daily', 'monthly', 'recurring_pattern', 'task_id', 'task_title', 'weekly', 'yearly']

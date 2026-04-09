@@ -1,0 +1,4 @@
+# file: /Users/fortress-ai/fortress-family/fortress/src/services/fact_service.py
+# hypothesis_version: 6.141.1
+
+['basic_personal', 'birth_date', 'building_code', 'chen', 'code', 'date', 'financial', 'financial_', 'gender', 'health', 'health_', 'household_access', 'i', 'id', 'id_number', 'location', 'me', 'my', 'my wife', 'myself', 'name', 'segev', 'spouse', 'wife', 'אני', 'אשתי', 'בן הזוג שלי', 'בת הזוג שלי', 'חן', 'נולדתי', 'עצמי', 'שגב', 'שלי']

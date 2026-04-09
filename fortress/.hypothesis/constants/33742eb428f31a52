@@ -1,0 +1,4 @@
+# file: /Users/fortress-ai/fortress-family/fortress/src/utils/media.py
+# hypothesis_version: 6.141.1
+
+[30.0, 200, '/', '/api/', 'X-Api-Key', 'content-type', 'default', 'file', 'wb']

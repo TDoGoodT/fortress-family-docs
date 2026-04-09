@@ -1,0 +1,4 @@
+# file: /Users/fortress-ai/fortress-family/fortress/src/routers/whatsapp.py
+# hypothesis_version: 6.141.1
+
+[401, '/webhook/whatsapp', 'Response: %s', 'Unauthorized', 'X-Api-Key', '_data', '_serialized', 'attachment', 'author', 'body', 'caption', 'contentText', 'conversation', 'detail', 'echo', 'error', 'event', 'filename', 'from', 'fromMe', 'hasMedia', 'id', 'ignored', 'key', 'media', 'message', 'mimetype', 'missing sender', 'non-message event', 'non-text message', 'participant', 'participantPn', 'payload', 'processed', 'rate_limited', 'reason', 'remoteJid', 'remoteJidAlt', 'selectedDisplayText', 'status', 'text', 'type', 'unknown', 'url']

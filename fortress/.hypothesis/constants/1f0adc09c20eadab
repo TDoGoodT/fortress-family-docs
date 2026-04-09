@@ -1,0 +1,4 @@
+# file: /Users/fortress-ai/fortress-family/fortress/src/skills/task_skill.py
+# hypothesis_version: 6.141.1
+
+[',', ', ', '\\s+', '^tasks$', '^משימות$', 'archived', 'assignee_name', 'bulk_delete_confirm', 'bulk_deleted', 'changes', 'complete', 'completed', 'confirm_delete', 'create', 'created', 'delete', 'delete_all', 'delete_many', 'deleted', 'done', 'error_fallback', 'high', 'index', 'indices_csv', 'list', 'low', 'need_list_first', 'normal', 'open', 'read', 'reassign', 'task', 'task.create', 'task.delete', 'task.delete_all', 'task.delete_many', 'task_completed', 'task_deleted', 'task_id', 'task_ids', 'task_list_empty', 'task_list_order', 'task_not_found', 'task_similar_exists', 'task_updated', 'tasks', 'title', 'title_query', 'update', 'updated', 'urgent', 'write', 'גבוה', 'דחוף', 'ל', 'נמוך', 'רגיל', 'של ']

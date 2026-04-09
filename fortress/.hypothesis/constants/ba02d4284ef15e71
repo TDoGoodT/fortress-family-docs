@@ -1,0 +1,4 @@
+# file: /Users/fortress-ai/fortress-family/fortress/src/services/pii_guard.py
+# hypothesis_version: 6.141.1
+
+[', ', '0[2-9]\\d{7,8}', '[אימייל]', '[חשבון בנק]', '[טלפון]', '[כרטיס]', '[ת.ז.]', '\\b\\d{9}\\b', '\\d{2,3}[-/]\\d{6,9}', 'bank_account', 'credit_card', 'email', 'israeli_id', 'phone']

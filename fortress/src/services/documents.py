@@ -15,7 +15,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from src.config import STORAGE_PATH, DOCUMENT_VISION_FALLBACK_ENABLED
-from src.models.schema import Document, DocumentFact, SalarySlip
+from src.models.schema import Document, DocumentFact, SalarySlip, UtilityBill
 from src.services.text_extractor import extract_text, extract_text_v2
 from src.services.image_preprocessor import get_quality_band
 from src.services.document_processors.processor_router import process_with_best
@@ -24,6 +24,7 @@ from src.services.document_classifier import (
     classify_document,
     REVIEW_CONFIDENCE_THRESHOLD,
 )
+from src.services.document_resolver import resolve_document
 from src.services.document_fact_extractor import extract_facts
 from src.services.document_fact_extractor import _extract_salary_slip_facts
 from src.services.document_summarizer import summarize_document
@@ -35,8 +36,6 @@ logger = logging.getLogger(__name__)
 # File types where text extraction is expected (not spreadsheets or unsupported)
 _EXTRACTABLE_EXTENSIONS = {".pdf", ".doc", ".docx", ".jpg", ".jpeg", ".png", ".heic"}
 _SPREADSHEET_EXTENSIONS = {".xls", ".xlsx"}
-
-
 def _log_step(step: str, doc_id, filename: str, status: str, **extra) -> None:
     """Emit a structured pipeline log entry."""
     parts = [f"[PIPELINE] step={step} doc_id={doc_id} filename={filename} status={status}"]
@@ -200,6 +199,181 @@ def _build_salary_slip_review_reason(structured: dict[str, Any]) -> str | None:
     if not structured.get("net_salary"):
         reasons.append("missing_net_salary")
     return ",".join(reasons) if reasons else None
+
+
+def _extract_first_group(patterns: list[str], text: str) -> str | None:
+    for pattern in patterns:
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            value = next((group for group in match.groups() if group), "")
+            value = str(value).strip()
+            if value:
+                return value
+    return None
+
+
+def _build_utility_bill_payload(
+    raw_text: str,
+    doc: Document,
+    extracted_facts: list[dict[str, Any]],
+    classification_confidence: float,
+) -> dict[str, Any]:
+    normalized_text = raw_text or ""
+    resolver_metadata = (doc.doc_metadata or {}).get("resolver_metadata", {})
+    if not isinstance(resolver_metadata, dict):
+        resolver_metadata = {}
+    provider_slug = str(resolver_metadata.get("provider_slug") or "").strip()
+    provider_name = str(resolver_metadata.get("provider_name") or "").strip()
+    service_type = str(resolver_metadata.get("service_type") or "").strip()
+    provider_confidence = float(classification_confidence or 0.0)
+
+    account_number = str(resolver_metadata.get("issuer_account_number") or "").strip() or _extract_first_group(
+        [
+            r"מספר\s+צרכן\s+אלקטרה(?:\s+פאוור)?\s*[:：]?\s*([0-9]{5,})",
+            r"consumer\s+number\s*[:：]?\s*([0-9]{5,})",
+        ],
+        normalized_text,
+    )
+    bill_number = str(resolver_metadata.get("issuer_bill_number") or "").strip() or _extract_first_group(
+        [
+            r"חשבונית\s+מס/?קבלה\s*\(?.{0,20}?\)?\s*([0-9]{5,})",
+            r"חשבונית\s+מס/?קבלה.*?([0-9]{5,})",
+            r"\b([0-9]{5,})\b",
+        ],
+        normalized_text,
+    )
+    issue_date = _parse_date(
+        str(resolver_metadata.get("issuer_issue_date") or "").strip() or _extract_first_group(
+            [
+                r"תאריך\s+עריכת\s+הח(?:ש|ע)בון\s*[:：]?\s*([0-9]{2}[./][0-9]{2}[./][0-9]{4})",
+                r"issue\s+date\s*[:：]?\s*([0-9]{2}[./][0-9]{2}[./][0-9]{4})",
+            ],
+            normalized_text,
+        ) or ""
+    )
+
+    period_match = re.search(
+        r"([0-9]{2}[./][0-9]{2}[./][0-9]{4})\s+([0-9]{2}[./][0-9]{2}[./][0-9]{4})",
+        normalized_text,
+    )
+    period_end = _parse_date(str(resolver_metadata.get("issuer_period_end") or "").strip()) or (
+        _parse_date(period_match.group(1)) if period_match else None
+    )
+    period_start = _parse_date(str(resolver_metadata.get("issuer_period_start") or "").strip()) or (
+        _parse_date(period_match.group(2)) if period_match else None
+    )
+
+    fact_map = {
+        fact.get("fact_key"): fact.get("fact_value")
+        for fact in extracted_facts
+        if fact.get("fact_key") and fact.get("fact_value") not in (None, "")
+    }
+    amount_value = fact_map.get("amount")
+    amount_due = _parse_amount(str(amount_value)) if amount_value is not None else doc.amount
+    currency = fact_map.get("currency") or doc.currency or "ILS"
+
+    extraction_confidence = max(
+        provider_confidence,
+        float(classification_confidence or 0.0),
+    )
+    review_reasons: list[str] = []
+    if not provider_slug:
+        review_reasons.append("unknown_provider")
+    if not account_number:
+        review_reasons.append("missing_account_number")
+    if not bill_number:
+        review_reasons.append("missing_bill_number")
+
+    return {
+        "provider_slug": provider_slug,
+        "provider_name": provider_name,
+        "service_type": service_type,
+        "account_number": account_number,
+        "bill_number": bill_number,
+        "issue_date": issue_date,
+        "period_start": period_start,
+        "period_end": period_end,
+        "amount_due": amount_due,
+        "currency": currency,
+        "extraction_confidence": extraction_confidence,
+        "review_reason": ",".join(review_reasons) if review_reasons else None,
+        "canonical_record_ready": bool(provider_slug and service_type),
+    }
+
+
+def _upsert_utility_bill(
+    db: Session,
+    doc: Document,
+    uploaded_by: UUID,
+    source: str,
+    raw_text: str,
+    extracted_facts: list[dict[str, Any]],
+    classification_confidence: float,
+) -> UtilityBill | None:
+    payload = _build_utility_bill_payload(raw_text, doc, extracted_facts, classification_confidence)
+    if not payload["provider_slug"] or payload["service_type"] != "electricity":
+        return None
+
+    utility_bill = (
+        db.query(UtilityBill)
+        .filter(UtilityBill.document_id == doc.id)
+        .first()
+    )
+    if utility_bill is None:
+        utility_bill = UtilityBill(
+            document_id=doc.id,
+            provider_slug=payload["provider_slug"],
+            service_type=payload["service_type"],
+        )
+        db.add(utility_bill)
+
+    utility_bill.family_member_id = uploaded_by
+    utility_bill.provider_slug = payload["provider_slug"]
+    utility_bill.provider_name = payload["provider_name"]
+    utility_bill.service_type = payload["service_type"]
+    utility_bill.account_number = payload["account_number"]
+    utility_bill.bill_number = payload["bill_number"]
+    utility_bill.issue_date = payload["issue_date"]
+    utility_bill.period_start = payload["period_start"]
+    utility_bill.period_end = payload["period_end"]
+    utility_bill.amount_due = payload["amount_due"]
+    utility_bill.currency = payload["currency"]
+    utility_bill.extraction_confidence = _parse_amount(str(payload["extraction_confidence"])) or Decimal("0.0")
+    utility_bill.review_state = doc.review_state
+    utility_bill.review_reason = payload["review_reason"]
+    utility_bill.source_channel = source
+    utility_bill.raw_payload = {
+        "provider_slug": payload["provider_slug"],
+        "provider_name": payload["provider_name"],
+        "service_type": payload["service_type"],
+        "account_number": payload["account_number"],
+        "bill_number": payload["bill_number"],
+        "issue_date": payload["issue_date"].isoformat() if payload["issue_date"] else None,
+        "period_start": payload["period_start"].isoformat() if payload["period_start"] else None,
+        "period_end": payload["period_end"].isoformat() if payload["period_end"] else None,
+        "amount_due": str(payload["amount_due"]) if payload["amount_due"] is not None else None,
+        "currency": payload["currency"],
+    }
+
+    if payload["provider_name"]:
+        doc.vendor = payload["provider_name"]
+    if payload["issue_date"] and doc.doc_date is None:
+        doc.doc_date = payload["issue_date"]
+    if payload["amount_due"] is not None and doc.amount is None:
+        doc.amount = payload["amount_due"]
+    if payload["currency"] and not doc.currency:
+        doc.currency = payload["currency"]
+
+    doc.doc_metadata = {
+        **(doc.doc_metadata or {}),
+        "source_channel": source,
+        "canonical_record_type": "utility_bill",
+        "canonical_provider_slug": payload["provider_slug"],
+        "canonical_service_type": payload["service_type"],
+        "canonical_routing_key": (doc.doc_metadata or {}).get("canonical_routing_key"),
+        "canonical_record_ready": payload["canonical_record_ready"],
+    }
+    return utility_bill
 
 
 def _upsert_salary_slip(
@@ -513,7 +687,19 @@ async def process_document(
     # ── Step 2: Classification ────────────────────────────────────────────
     classification_confidence = 0.0
     try:
-        category, confidence = await classify_document(raw_text, original_filename)
+        resolver_match = resolve_document(raw_text, original_filename)
+        if resolver_match is not None:
+            category, confidence = resolver_match.doc_type, resolver_match.confidence
+            doc.doc_metadata = {
+                **(doc.doc_metadata or {}),
+                "resolver_metadata": resolver_match.metadata,
+                "canonical_record_type": resolver_match.canonical_record_type,
+                "canonical_routing_key": resolver_match.canonical_routing_key,
+                "canonical_record_ready": False,
+                "routing_source": "resolver",
+            }
+        else:
+            category, confidence = await classify_document(raw_text, original_filename)
         doc.doc_type = category
         doc.confidence = confidence
         classification_confidence = confidence
@@ -712,6 +898,43 @@ async def process_document(
         _log_step("salary_slip_persist", doc_id, original_filename, "failed",
                   error=f"{type(exc).__name__}: {exc}")
         steps_failed.append("salary_slip_persist")
+
+    # ── Step 5.2: canonical utility-bill row ────────────────────────────
+    try:
+        if doc.doc_type == "electricity_bill":
+            utility_bill = _upsert_utility_bill(
+                db=db,
+                doc=doc,
+                uploaded_by=uploaded_by,
+                source=source,
+                raw_text=raw_text,
+                extracted_facts=extracted_facts,
+                classification_confidence=classification_confidence,
+            )
+            if utility_bill is not None:
+                _log_step(
+                    "utility_bill_persist",
+                    doc_id,
+                    original_filename,
+                    "success",
+                    provider=utility_bill.provider_slug,
+                    service=utility_bill.service_type,
+                    account=utility_bill.account_number or "",
+                )
+                steps_ok.append("utility_bill_persist")
+            else:
+                _log_step(
+                    "utility_bill_persist",
+                    doc_id,
+                    original_filename,
+                    "skipped",
+                    reason="provider_not_resolved",
+                )
+                steps_ok.append("utility_bill_persist")
+    except Exception as exc:
+        _log_step("utility_bill_persist", doc_id, original_filename, "failed",
+                  error=f"{type(exc).__name__}: {exc}")
+        steps_failed.append("utility_bill_persist")
 
     # ── Step 5.5: deterministic auto-tagging ────────────────────────────
     try:

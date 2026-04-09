@@ -1,0 +1,4 @@
+# file: /Users/fortress-ai/fortress-family/fortress/src/skills/recurring_skill.py
+# hypothesis_version: 6.141.1
+
+[',', 'confirm_delete', 'create', 'created', 'daily', 'delete', 'deleted', 'error_fallback', 'index', 'list', 'monthly', 'need_list_first', 'pattern_id', 'pattern_list_order', 'read', 'recurring', 'recurring.delete', 'recurring_created', 'recurring_deleted', 'recurring_list_empty', 'recurring_not_found', 'recurring_pattern', 'tasks', 'title', 'weekly', 'write', 'yearly', 'ב[־\\-](\\d{1,2})', 'חודשי', 'יומי', 'שבועי', 'שנתי']

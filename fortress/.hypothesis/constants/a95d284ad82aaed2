@@ -1,0 +1,4 @@
+# file: /Users/fortress-ai/fortress-family/fortress/src/engine/executor.py
+# hypothesis_version: 6.141.1
+
+[200, '.', '[PII removed]', '_original_message', '_pii_stripped', 'cancel', 'confirm', 'data', 'detected_intent', 'error_fallback', 'original_message', 'pii_stripped', 'success', 'type', 'verification_failed']

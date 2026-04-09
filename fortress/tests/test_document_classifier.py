@@ -16,6 +16,8 @@ from src.services.document_classifier import (
 # ---------------------------------------------------------------------------
 
 @pytest.mark.parametrize("text,filename,expected_category", [
+    ("חשבון לתקופה מספר צרכן אלקטרה פאוור 377035968", "55940425.pdf", "electricity_bill"),
+    ("Electra Power monthly bill", "electra_bill.pdf", "electricity_bill"),
     ("חשבונית מס 12345 סכום 500 ש\"ח", "invoice.pdf", "invoice"),
     ("invoice total $200", "doc.pdf", "invoice"),
     ("קבלה על תשלום", "receipt.pdf", "receipt"),

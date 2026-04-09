@@ -1,0 +1,4 @@
+# file: /Users/fortress-ai/fortress-family/fortress/src/services/memory_service.py
+# hypothesis_version: 6.141.1
+
+[1.0, 200, 365, 'BedrockClient', 'category', 'confidence', 'content', 'context', 'conversation', 'fact', 'fetch', 'goal', 'habit', 'info', 'keyword', 'long', 'medium', 'memory', 'memory_type', 'note', 'permanent', 'preference', 'regex', 'reminder', 'short', 'task']

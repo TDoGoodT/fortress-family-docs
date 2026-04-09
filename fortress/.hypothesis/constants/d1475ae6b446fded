@@ -1,0 +1,4 @@
+# file: /Users/fortress-ai/fortress-family/fortress/src/services/intent_detector.py
+# hypothesis_version: 6.141.1
+
+['delete_documents', 'document_query', 'documents', 'tasks', 'unknown', 'מחק(?:י|ו)?\\s+מסמכים', 'נקה מסמכים']

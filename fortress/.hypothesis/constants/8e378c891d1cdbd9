@@ -1,0 +1,4 @@
+# file: /Users/fortress-ai/fortress-family/fortress/src/skills/memory_skill.py
+# hypothesis_version: 6.141.1
+
+['^(זכרונות|memories)$', 'error_fallback', 'info_stored', 'list', 'memories', 'memory', 'memory_excluded', 'memory_list_empty', 'memory_list_header', 'stored']

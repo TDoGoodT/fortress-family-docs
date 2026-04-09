@@ -1,0 +1,4 @@
+# file: /Users/fortress-ai/fortress-family/fortress/src/skills/bug_skill.py
+# hypothesis_version: 6.141.1
+
+['bug', 'bug_list_empty', 'bug_report', 'bug_reported', 'description', 'error_fallback', 'list', 'open', 'read', 'report', 'reported', 'tasks', 'write', 'דיווח ומעקב באגים']

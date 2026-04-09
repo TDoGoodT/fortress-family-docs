@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 # Shared constants — reused across classifier, fact extractor, query service, and tests
 SUPPORTED_CATEGORIES: list[str] = [
     "contract",
+    "electricity_bill",
     "invoice",
     "receipt",
     "salary_slip",
@@ -46,6 +47,16 @@ REVIEW_CONFIDENCE_THRESHOLD: float = 0.5
 
 # Keyword rules: (category, [patterns]) — checked against filename + raw_text (lowercased)
 _KEYWORD_RULES: list[tuple[str, list[str]]] = [
+    (
+        "electricity_bill",
+        [
+            "אלקטרה פאוור",
+            "electra power",
+            "מספר צרכן אלקטרה",
+            "צריכה מאלקטרה",
+            "עם חשמל ירוק",
+        ],
+    ),
     ("invoice", ["invoice", "חשבונית", "tax invoice", "vat invoice"]),
     ("receipt", ["receipt", "קבלה", "קבלה על תשלום"]),
     ("salary_slip", ["תלוש שכר", "תלוש משכורת", "ברוטו", "נטו", "מס הכנסה", "salary slip", "payslip", "pay stub"]),

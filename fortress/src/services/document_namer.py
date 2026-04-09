@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 # Hebrew labels for each supported document category
 DOC_TYPE_LABEL_MAP: dict[str, str] = {
     "contract": "חוזה",
+    "electricity_bill": "חשבון חשמל",
     "invoice": "חשבונית",
     "receipt": "קבלה",
     "bank_statement": "דף חשבון",
