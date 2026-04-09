@@ -15,7 +15,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from src.config import STORAGE_PATH, DOCUMENT_VISION_FALLBACK_ENABLED
-from src.models.schema import Document, DocumentFact, SalarySlip, UtilityBill, Contract, InsurancePolicy
+from src.models.schema import Document, DocumentFact, SalarySlip, UtilityBill, Contract, InsurancePolicy, FamilyMember
 from src.services.text_extractor import extract_text, extract_text_v2
 from src.services.image_preprocessor import get_quality_band
 from src.services.document_processors.processor_router import process_with_best
@@ -809,8 +809,33 @@ async def process_document(
     processor_result: ProcessorResult | None = None
     try:
         if ext_lower not in _SPREADSHEET_EXTENSIONS:
+            # Build password candidates for encrypted PDFs
+            pdf_passwords: list[str] | None = None
+            if ext_lower == ".pdf":
+                from src.services.document_processors.pdf_decryptor import build_password_candidates
+                try:
+                    family_phones = [
+                        m.phone for m in
+                        db.query(FamilyMember).filter(FamilyMember.is_active == True).all()
+                    ]
+                except Exception:
+                    family_phones = []
+                uploader_phone = None
+                try:
+                    uploader = db.query(FamilyMember).filter(FamilyMember.id == uploaded_by).first()
+                    if uploader:
+                        uploader_phone = uploader.phone
+                except Exception:
+                    pass
+                pdf_passwords = build_password_candidates(
+                    uploader_phone=uploader_phone,
+                    family_phones=family_phones,
+                )
+
             # Try new processor system first (Google DocAI → Bedrock Vision → Tesseract)
-            processor_result = await process_with_best(storage_path, doc_type="other")
+            processor_result = await process_with_best(
+                storage_path, doc_type="other", pdf_passwords=pdf_passwords,
+            )
             if processor_result and processor_result.has_text:
                 raw_text = processor_result.raw_text
                 text_quality = processor_result.confidence

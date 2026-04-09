@@ -104,23 +104,70 @@ async def process_with_best(
     file_path: str,
     doc_type: str = "other",
     min_confidence: float = _CONFIDENCE_THRESHOLD,
+    pdf_passwords: list[str] | None = None,
 ) -> ProcessorResult:
     """Process document with the best available processor.
 
     Tries processors in priority order. Accepts the first result that
     meets the confidence threshold, or returns the best result seen.
+
+    If the PDF is encrypted and pdf_passwords are provided, attempts
+    decryption before processing.
     """
+    _, ext = os.path.splitext(file_path)
+    actual_file_path = file_path
+    decrypted_tmp_path: str | None = None
+
+    # Handle encrypted PDFs
+    if ext.lower() == ".pdf" and pdf_passwords:
+        from src.services.document_processors.pdf_decryptor import is_pdf_encrypted, try_decrypt_pdf
+        if is_pdf_encrypted(file_path):
+            decrypted_bytes, used_password = try_decrypt_pdf(file_path, pdf_passwords)
+            if decrypted_bytes is not None:
+                import tempfile
+                tmp = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False)
+                tmp.write(decrypted_bytes)
+                tmp.close()
+                decrypted_tmp_path = tmp.name
+                actual_file_path = decrypted_tmp_path
+                logger.info(
+                    "processor_router: decrypted %s, processing decrypted copy",
+                    os.path.basename(file_path),
+                )
+            else:
+                logger.warning(
+                    "processor_router: PDF %s is encrypted and all passwords failed",
+                    os.path.basename(file_path),
+                )
+
+    try:
+        result = await _process_file(actual_file_path, file_path, doc_type, min_confidence)
+    finally:
+        # Clean up temp decrypted file
+        if decrypted_tmp_path and os.path.exists(decrypted_tmp_path):
+            os.unlink(decrypted_tmp_path)
+
+    return result
+
+
+async def _process_file(
+    actual_file_path: str,
+    original_file_path: str,
+    doc_type: str,
+    min_confidence: float,
+) -> ProcessorResult:
+    """Internal: process a file (possibly decrypted) with the best processor."""
     processors = _get_processors()
     if not processors:
         logger.error("processor_router: no processors available")
         return ProcessorResult(processor_name="none", extraction_method="no_processors")
 
-    priority = route_processor(doc_type, file_path)
+    priority = route_processor(doc_type, actual_file_path)
     available_priority = [name for name in priority if name in processors]
 
     if not available_priority:
         logger.warning("processor_router: no available processors for doc_type=%s file=%s",
-                        doc_type, os.path.basename(file_path))
+                        doc_type, os.path.basename(original_file_path))
         return ProcessorResult(processor_name="none", extraction_method="no_available_processors")
 
     best_result: ProcessorResult | None = None
@@ -128,17 +175,17 @@ async def process_with_best(
     for proc_name in available_priority:
         proc = processors[proc_name]
         logger.info("processor_router: trying %s for %s (doc_type=%s)",
-                     proc_name, os.path.basename(file_path), doc_type)
+                     proc_name, os.path.basename(original_file_path), doc_type)
         try:
-            result = await proc.process(file_path)
+            result = await proc.process(actual_file_path)
         except Exception as exc:
             logger.warning("processor_router: %s failed for %s: %s: %s",
-                           proc_name, os.path.basename(file_path), type(exc).__name__, exc)
+                           proc_name, os.path.basename(original_file_path), type(exc).__name__, exc)
             continue
 
         if not result.has_text:
             logger.info("processor_router: %s returned no text for %s",
-                         proc_name, os.path.basename(file_path))
+                         proc_name, os.path.basename(original_file_path))
             continue
 
         # Track best result seen
@@ -148,7 +195,7 @@ async def process_with_best(
         # Accept if confidence is good enough
         if result.confidence >= min_confidence:
             logger.info("processor_router: accepted %s confidence=%.2f for %s",
-                         proc_name, result.confidence, os.path.basename(file_path))
+                         proc_name, result.confidence, os.path.basename(original_file_path))
             return result
 
         logger.info("processor_router: %s confidence=%.2f below threshold=%.2f, trying next",
@@ -157,7 +204,7 @@ async def process_with_best(
     if best_result:
         logger.info("processor_router: returning best-effort %s confidence=%.2f for %s",
                      best_result.processor_name, best_result.confidence,
-                     os.path.basename(file_path))
+                     os.path.basename(original_file_path))
         return best_result
 
     return ProcessorResult(processor_name="fallthrough", extraction_method="all_failed")
