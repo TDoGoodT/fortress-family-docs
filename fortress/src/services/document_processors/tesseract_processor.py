@@ -104,7 +104,7 @@ class TesseractProcessor(BaseProcessor):
             from src.services.image_preprocessor import preprocess_for_ocr
             import tempfile
 
-            images = convert_from_path(file_path, dpi=300, first_page=1, last_page=10)
+            images = convert_from_path(file_path, dpi=300)
             ocr_pages: list[str] = []
             for img in images:
                 with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
