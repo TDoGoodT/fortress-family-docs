@@ -70,6 +70,12 @@ DOCUMENT_VISION_FALLBACK_ENABLED: bool = os.getenv(
     "DOCUMENT_VISION_FALLBACK_ENABLED", "true"
 ).lower() == "true"
 
+# Google Document AI — high-accuracy OCR for Hebrew documents
+GOOGLE_DOCAI_PROJECT_ID: str = os.getenv("GOOGLE_DOCAI_PROJECT_ID", "")
+GOOGLE_DOCAI_LOCATION: str = os.getenv("GOOGLE_DOCAI_LOCATION", "us")
+GOOGLE_DOCAI_PROCESSOR_ID: str = os.getenv("GOOGLE_DOCAI_PROCESSOR_ID", "")
+GOOGLE_DOCAI_FORM_PROCESSOR_ID: str = os.getenv("GOOGLE_DOCAI_FORM_PROCESSOR_ID", "")
+
 # Coding Agent Integration (Phase C)
 CODEX_CLI_PATH: str = os.getenv("CODEX_CLI_PATH", "codex")
 CODEX_TIMEOUT_SECONDS: int = int(os.getenv("CODEX_TIMEOUT_SECONDS", "300"))

@@ -18,6 +18,8 @@ from src.config import STORAGE_PATH, DOCUMENT_VISION_FALLBACK_ENABLED
 from src.models.schema import Document, DocumentFact, SalarySlip
 from src.services.text_extractor import extract_text, extract_text_v2
 from src.services.image_preprocessor import get_quality_band
+from src.services.document_processors.processor_router import process_with_best
+from src.services.document_processors.base_processor import ProcessorResult
 from src.services.document_classifier import (
     classify_document,
     REVIEW_CONFIDENCE_THRESHOLD,
@@ -446,27 +448,58 @@ async def process_document(
     raw_text = ""
     text_quality = 0.0
     extraction_method = "none"
+    processor_result: ProcessorResult | None = None
     try:
         if ext_lower not in _SPREADSHEET_EXTENSIONS:
-            raw_text, text_quality, extraction_method = await extract_text_v2(storage_path)
-            if raw_text:
+            # Try new processor system first (Google DocAI → Bedrock Vision → Tesseract)
+            processor_result = await process_with_best(storage_path, doc_type="other")
+            if processor_result and processor_result.has_text:
+                raw_text = processor_result.raw_text
+                text_quality = processor_result.confidence
+                extraction_method = processor_result.extraction_method
                 doc.raw_text = raw_text
                 _log_step("text_extraction", doc_id, original_filename, "success",
                           chars=len(raw_text), method=extraction_method,
-                          quality=f"{text_quality:.2f}")
+                          quality=f"{text_quality:.2f}",
+                          processor=processor_result.processor_name,
+                          pages=processor_result.page_count,
+                          lang=processor_result.language_detected or "unknown",
+                          tables=len(processor_result.tables))
+                # Log extracted tables for debugging
+                if processor_result.tables:
+                    for t_idx, table in enumerate(processor_result.tables):
+                        logger.info("[PIPELINE] doc_id=%s table_%d rows=%d: %s",
+                                    doc_id, t_idx, len(table),
+                                    str(table[:3])[:500])  # first 3 rows, truncated
+                # Log first 500 chars of extracted text for debugging
+                logger.info("[PIPELINE] doc_id=%s text_preview: %s",
+                            doc_id, raw_text[:500].replace("\n", " | "))
                 steps_ok.append("text_extraction")
             else:
-                _log_step("text_extraction", doc_id, original_filename, "skipped",
-                          reason="empty_result")
-                steps_ok.append("text_extraction")
+                # Fallback to legacy extract_text_v2
+                logger.info("[PIPELINE] doc_id=%s processor_router returned no text, falling back to extract_text_v2",
+                            doc_id)
+                raw_text, text_quality, extraction_method = await extract_text_v2(storage_path)
+                if raw_text:
+                    doc.raw_text = raw_text
+                    _log_step("text_extraction", doc_id, original_filename, "success",
+                              chars=len(raw_text), method=extraction_method,
+                              quality=f"{text_quality:.2f}")
+                    steps_ok.append("text_extraction")
+                else:
+                    _log_step("text_extraction", doc_id, original_filename, "skipped",
+                              reason="empty_result")
+                    steps_ok.append("text_extraction")
 
             # Merge quality metadata into doc_metadata
             doc.doc_metadata = {
                 **(doc.doc_metadata or {}),
                 "text_quality_score": text_quality,
                 "extraction_method": extraction_method,
-                "quality_band": get_quality_band(text_quality),
+                "quality_band": get_quality_band(text_quality) if extraction_method != "google_docai" else "GOOD",
                 "vision_fallback_enabled": DOCUMENT_VISION_FALLBACK_ENABLED,
+                "processor_name": processor_result.processor_name if processor_result else "legacy",
+                "processor_tables_count": len(processor_result.tables) if processor_result else 0,
             }
         else:
             _log_step("text_extraction", doc_id, original_filename, "skipped",
