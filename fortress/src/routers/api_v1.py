@@ -9,7 +9,7 @@ import logging
 from typing import Any, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, File, UploadFile
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -214,3 +214,81 @@ def list_insurance_policies(
         return get_insurance_policies(db, agent_role, active_only=active_only, insurance_type=insurance_type, limit=limit)
     except PermissionDenied as exc:
         _handle_permission_error(exc)
+
+
+# ── Document Ingestion ───────────────────────────────────────────────────
+
+@router.post("/ingest")
+async def ingest_document(
+    file: UploadFile = File(...),
+    source: str = Query("api", description="Ingestion source channel"),
+    uploaded_by_phone: Optional[str] = Query(None, description="Phone number of the uploader"),
+    db: Session = Depends(get_db),
+    agent: tuple[str, str] = Depends(_require_agent_headers),
+) -> dict[str, Any]:
+    """Submit a document for processing through the full pipeline.
+
+    The file is saved to storage, then processed through:
+    OCR → Classification → Fact Extraction → Canonical Table Persist.
+
+    Returns the processed document metadata.
+    """
+    agent_id, agent_role = agent
+
+    # Only librarian and orchestrator can ingest
+    from src.api.permissions import check_access, AccessLevel
+    if not check_access(agent_role, "documents", AccessLevel.WRITE):
+        raise HTTPException(
+            status_code=403,
+            detail=f"Agent '{agent_role}' lacks 'write' access to 'documents'",
+        )
+
+    import os
+    import tempfile
+    from src.services.documents import process_document
+    from src.models.schema import FamilyMember
+
+    # Resolve uploader — default to first admin if no phone provided
+    uploader = None
+    if uploaded_by_phone:
+        from src.utils.phone import normalize_phone
+        phone = normalize_phone(uploaded_by_phone)
+        uploader = db.query(FamilyMember).filter(FamilyMember.phone == phone).first()
+    if uploader is None:
+        uploader = db.query(FamilyMember).filter(FamilyMember.is_admin == True).first()
+    if uploader is None:
+        raise HTTPException(status_code=400, detail="No valid uploader found")
+
+    # Save uploaded file to temp location
+    suffix = os.path.splitext(file.filename or "document")[1] or ".pdf"
+    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+        content = await file.read()
+        tmp.write(content)
+        tmp_path = tmp.name
+
+    try:
+        doc = await process_document(db, tmp_path, uploader.id, source)
+
+        # Check for duplicate
+        if hasattr(doc, "_is_duplicate") and doc._is_duplicate:
+            return {
+                "status": "duplicate",
+                "document_id": str(doc.id),
+                "display_name": doc.display_name,
+                "message": "Document already exists in the library",
+            }
+
+        return {
+            "status": "processed",
+            "document_id": str(doc.id),
+            "doc_type": doc.doc_type,
+            "display_name": doc.display_name,
+            "review_state": doc.review_state,
+            "facts_count": len(doc.facts) if doc.facts else 0,
+        }
+    except Exception as exc:
+        logger.error("ingest: pipeline failed: %s: %s", type(exc).__name__, exc)
+        raise HTTPException(status_code=500, detail=f"Pipeline error: {type(exc).__name__}")
+    finally:
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
