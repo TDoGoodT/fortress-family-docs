@@ -42,6 +42,15 @@ def execute(db: Session, member: FamilyMember, command: Command) -> Result:
     pii_stripped = command.params.get("_pii_stripped", False)
 
     try:
+        # 0. Browse interceptor — handle numeric/back input during active browsing
+        from src.services.browsing_state import is_browsing, handle_browse_input, clear_browsing_state
+        if is_browsing(db, member.id):
+            browse_result = handle_browse_input(db, member.id, original_message)
+            if browse_result is not None:
+                return Result(success=True, message=browse_result)
+            # Unrelated message — clear browsing state, continue normal dispatch
+            clear_browsing_state(db, member.id)
+
         # 1. Look up skill
         skill = registry.get(command.skill)
         if skill is None:

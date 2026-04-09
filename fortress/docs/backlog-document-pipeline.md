@@ -31,12 +31,6 @@
 
 ## 📋 NEXT UP
 
-### Agent Data Access Layer (next chat session)
-- [ ] Define agent permissions — which agents can access which tables
-- [ ] Agents query structured tables (salary_slips, utility_bills), NOT raw documents
-- [ ] Prevent hallucinations by grounding agent responses in real data
-- [ ] Design tool schemas for agent data access (get_salary_summary, get_utility_bills, etc.)
-
 ### Bulk Upload
 - [ ] Build bulk upload endpoint/script for batch document ingestion
 - [ ] Collect real documents (salary slips, bills, contracts, receipts)
@@ -48,6 +42,12 @@
 - [ ] Auto-detect document attachments (PDF, images)
 - [ ] Route through the same pipeline (Google DocAI → resolver → canonical tables)
 - [ ] Notification to user when new documents are processed
+
+### Agent Data Access Layer (next chat session)
+- [ ] Define agent permissions — which agents can access which tables
+- [ ] Agents query structured tables (salary_slips, utility_bills), NOT raw documents
+- [ ] Prevent hallucinations by grounding agent responses in real data
+- [ ] Design tool schemas for agent data access (get_salary_summary, get_utility_bills, etc.)
 
 ### Smart Coalitions (End Goal)
 - [ ] Intelligent agents that use structured data to help manage household

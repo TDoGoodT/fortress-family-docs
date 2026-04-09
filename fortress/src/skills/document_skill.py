@@ -316,22 +316,23 @@ class DocumentSkill(BaseSkill):
             return Result(success=False, message=TEMPLATES["error_fallback"])
 
     def _list(self, db: Session, member: FamilyMember, params: dict) -> Result:
+        """Waterfall browse — show document categories with counts."""
         denied = check_perm(db, member, "documents", "read")
         if denied:
             return denied
 
-        doc_list = (
-            db.query(Document)
-            .filter(Document.uploaded_by == member.id)
-            .order_by(Document.created_at.desc())
-            .limit(20)
-            .all()
-        )
+        from src.services.document_browse_queries import get_categories
+        from src.services.browse_formatter import format_category_view
+        from src.services.browsing_state import BrowsingState, set_browsing_state
 
-        if not doc_list:
+        categories = get_categories(db, member.id)
+        if not categories:
             return Result(success=True, message=TEMPLATES["document_list_empty"])
 
-        return Result(success=True, message=format_document_list(doc_list))
+        items = [{"key": c.doc_type, "label": c.label} for c in categories]
+        set_browsing_state(db, member.id, BrowsingState(level="categories", items=items))
+
+        return Result(success=True, message=format_category_view(categories))
 
     def _search(self, db: Session, member: FamilyMember, params: dict) -> Result:
         denied = check_perm(db, member, "documents", "read")
