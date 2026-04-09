@@ -31,9 +31,9 @@ class TestRouteProcessor:
         order = route_processor("other", "photo.jpg")
         assert order[0] == "google_docai"
 
-    def test_digital_pdf_prefers_tesseract(self):
+    def test_digital_pdf_prefers_google(self):
         order = route_processor("contract", "contract.pdf")
-        assert order[0] == "tesseract"
+        assert order[0] == "google_docai"
 
     def test_payslip_filename_prefers_google(self):
         """Filename hint should route to Google even when doc_type is 'other'."""

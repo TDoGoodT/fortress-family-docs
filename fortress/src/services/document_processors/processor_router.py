@@ -90,7 +90,8 @@ def route_processor(
         return ["google_docai", "bedrock_vision", "tesseract"]
 
     if ext == ".pdf":
-        return ["tesseract", "google_docai", "bedrock_vision"]
+        # Digital PDFs — try Google first for better Hebrew, fall back to tesseract
+        return ["google_docai", "tesseract", "bedrock_vision"]
 
     return ["tesseract", "bedrock_vision", "google_docai"]
 
