@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+import threading
 from typing import Union
 
 from sqlalchemy.orm import Session
@@ -50,6 +51,75 @@ def _build_document_saved_message(doc: Document) -> str:
     if getattr(doc, "review_state", None) == "needs_review":
         parts.append("מסומן לבדיקה")
     return "\n".join(parts)
+
+
+def _format_ingest_status(status: str, message: str | None = None) -> str:
+    """Return a short, user-facing ingestion status block."""
+    lines = ["received", status]
+    if message:
+        lines.append(message)
+    return "\n".join(lines)
+
+
+def _is_retryable_ingest_error(exc: Exception) -> bool:
+    """Retry once for known transient/storage race errors."""
+    name = type(exc).__name__
+    if name == "IntegrityError":
+        return True
+    if name in {"OperationalError", "DBAPIError", "TimeoutError"}:
+        return True
+    text = str(exc).lower()
+    transient_markers = ("deadlock", "timeout", "database is locked", "connection reset")
+    return any(marker in text for marker in transient_markers)
+
+
+def _run_process_document_in_thread(db: Session, file_path: str, member_id, timeout_sec: int = 120):
+    """Run async process_document from sync skill context via a fresh loop in a thread."""
+    result_holder: list = []
+    exc_holder: list = []
+
+    def run_in_thread():
+        import asyncio as _asyncio
+
+        new_loop = _asyncio.new_event_loop()
+        _asyncio.set_event_loop(new_loop)
+        try:
+            doc = new_loop.run_until_complete(
+                documents.process_document(db, file_path, member_id, "whatsapp")
+            )
+            result_holder.append(doc)
+        except Exception as e:
+            exc_holder.append(e)
+        finally:
+            new_loop.close()
+
+    t = threading.Thread(target=run_in_thread, daemon=True)
+    t.start()
+    t.join(timeout=timeout_sec)
+
+    if exc_holder:
+        raise exc_holder[0]
+    if not result_holder:
+        raise TimeoutError(f"process_document timed out after {timeout_sec}s")
+    return result_holder[0]
+
+
+def _process_document_with_retry(db: Session, file_path: str, member_id):
+    """Run ingestion with a single retry for retryable errors."""
+    last_exc = None
+    for attempt in range(2):
+        try:
+            return _run_process_document_in_thread(db, file_path, member_id)
+        except Exception as exc:
+            last_exc = exc
+            if attempt == 0 and _is_retryable_ingest_error(exc):
+                logger.warning(
+                    "DocumentSkill._save retrying ingest once after %s",
+                    type(exc).__name__,
+                )
+                continue
+            raise
+    raise last_exc  # pragma: no cover
 
 
 class DocumentSkill(BaseSkill):
@@ -185,40 +255,14 @@ class DocumentSkill(BaseSkill):
 
         if not file_path:
             logger.warning("DocumentSkill._save: no file_path in params=%s", list(params.keys()))
-            return Result(success=False, message=TEMPLATES["error_fallback"])
+            return Result(
+                success=False,
+                message=_format_ingest_status("failed", "Media download failed"),
+                action="failed",
+            )
 
         try:
-            # process_document is async. We need to run it from a sync context.
-            # Strategy: always run in a fresh thread with its own event loop.
-            # This avoids conflicts with any running event loop (FastAPI, pytest-asyncio).
-            import threading
-
-            result_holder: list = []
-            exc_holder: list = []
-
-            def run_in_thread():
-                import asyncio as _asyncio
-                new_loop = _asyncio.new_event_loop()
-                _asyncio.set_event_loop(new_loop)
-                try:
-                    doc = new_loop.run_until_complete(
-                        documents.process_document(db, file_path, member.id, "whatsapp")
-                    )
-                    result_holder.append(doc)
-                except Exception as e:
-                    exc_holder.append(e)
-                finally:
-                    new_loop.close()
-
-            t = threading.Thread(target=run_in_thread, daemon=True)
-            t.start()
-            t.join(timeout=120)
-
-            if exc_holder:
-                raise exc_holder[0]
-            if not result_holder:
-                raise RuntimeError("process_document timed out after 120s")
-            doc = result_holder[0]
+            doc = _process_document_with_retry(db, file_path, member.id)
             logger.info(
                 "DocumentSkill._save success: member_id=%s doc_id=%s filename=%s",
                 member.id,
@@ -231,10 +275,9 @@ class DocumentSkill(BaseSkill):
 
             # Check if this was a duplicate
             if getattr(doc, "_is_duplicate", False):
-                dn = getattr(doc, "display_name", None) or doc.original_filename or "מסמך"
                 return Result(
                     success=True,
-                    message=f"המסמך הזה כבר קיים במערכת 📋 {dn}",
+                    message=_format_ingest_status("duplicate", "Document already exists in the library"),
                     entity_type="document",
                     entity_id=doc.id,
                     action="duplicate",
@@ -242,7 +285,7 @@ class DocumentSkill(BaseSkill):
 
             return Result(
                 success=True,
-                message=_build_document_saved_message(doc),
+                message=_format_ingest_status("ingested"),
                 entity_type="document",
                 entity_id=doc.id,
                 action="saved",
@@ -252,7 +295,11 @@ class DocumentSkill(BaseSkill):
                 "DocumentSkill._save: failed file_path=%s error=%s: %s",
                 file_path, type(exc).__name__, exc,
             )
-            return Result(success=False, message=TEMPLATES["error_fallback"])
+            return Result(
+                success=False,
+                message=_format_ingest_status("failed", f"Pipeline error: {type(exc).__name__}"),
+                action="failed",
+            )
 
     def _save_text(self, db: Session, member: FamilyMember, params: dict) -> Result:
         """Save pasted text as a document through the enrichment pipeline."""
