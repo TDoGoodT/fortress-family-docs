@@ -298,6 +298,34 @@ def _build_utility_bill_payload(
         "extraction_confidence": extraction_confidence,
         "review_reason": ",".join(review_reasons) if review_reasons else None,
         "canonical_record_ready": bool(provider_slug and service_type),
+        # Extended fields for agent context
+        "total_with_vat": _parse_amount(_extract_first_group(
+            [r"סה\"כ\s+כולל\s+מע\"מ.*?([0-9,]+\.[0-9]{2})"], normalized_text) or ""),
+        "vat_amount": _parse_amount(_extract_first_group(
+            [r"סה\"כ\s+מע\"מ\s*([0-9,]+\.[0-9]{2})"], normalized_text) or ""),
+        "consumption_kwh": _parse_amount(_extract_first_group(
+            [r"סה\"כ\s+צריכה.*?([0-9,]+)\s*(?:בקוט|קוט)", r"סה\"כ\s+צריכה\s*\n\s*.*?\n\s*([0-9,]+)"], normalized_text) or ""),
+        "payment_due_date": _parse_date(_extract_first_group(
+            [r"מועד\s+התשלום\s+בתאריך\s+([0-9]{2}/[0-9]{2}/[0-9]{4})"], normalized_text) or ""),
+        "payment_method": _extract_first_group(
+            [r"יחויב\s+ב(כרטיס\s+אשראי\s+שמסתיים\s+בספרות\s+[0-9]+)"], normalized_text),
+        "meter_number": _extract_first_group(
+            [r"קריאות\s+מונה\s+מספר[:\s]*\n?.*?([0-9]{8,})"], normalized_text),
+        "tariff_plan": _extract_first_group(
+            [r"מסלול\s+התחשבנות[:\s]*\n?\s*(.+?)(?:\n|$)"], normalized_text),
+        "contract_number": _extract_first_group(
+            [r"מספר\s+חשבון\s+חוזה\s*\n?\s*([0-9]+)"], normalized_text),
+        "fixed_charges": _parse_amount(_extract_first_group(
+            [r"סה\"כ\s+תשלומים\s+קבועים.*?([0-9,]+\.[0-9]{2})"], normalized_text) or ""),
+        "kva_charge": _parse_amount(fact_map.get("amount") if False else _extract_first_group(
+            [r"תשלום\s+בגין\s+הספק.*?([0-9,]+\.[0-9]{2})"], normalized_text) or ""),
+        "savings_this_bill": _parse_amount(_extract_first_group(
+            [r"בחשבון\s+זה\s+חסכת\s+([0-9,]+\.[0-9]{2})"], normalized_text) or ""),
+        "savings_cumulative": _parse_amount(_extract_first_group(
+            [r"ועד\s+היום\s+([0-9,]+\.[0-9]{2})"], normalized_text) or ""),
+        "service_address": _extract_first_group(
+            [r"לכבוד\s*\n\s*.*?\n\s*(.+?)\n\s*(?:רעננה|תל אביב|ירושלים|חיפה|באר שבע|נתניה|הרצליה|ראשון|פתח|חולון|בת ים|אשדוד|אשקלון|כפר)"],
+            normalized_text),
     }
 
 
@@ -342,6 +370,20 @@ def _upsert_utility_bill(
     utility_bill.review_state = doc.review_state
     utility_bill.review_reason = payload["review_reason"]
     utility_bill.source_channel = source
+    # Extended fields
+    utility_bill.total_with_vat = payload.get("total_with_vat")
+    utility_bill.vat_amount = payload.get("vat_amount")
+    utility_bill.consumption_kwh = payload.get("consumption_kwh")
+    utility_bill.payment_due_date = payload.get("payment_due_date")
+    utility_bill.payment_method = payload.get("payment_method")
+    utility_bill.meter_number = payload.get("meter_number")
+    utility_bill.tariff_plan = payload.get("tariff_plan")
+    utility_bill.contract_number = payload.get("contract_number")
+    utility_bill.fixed_charges = payload.get("fixed_charges")
+    utility_bill.kva_charge = payload.get("kva_charge")
+    utility_bill.savings_this_bill = payload.get("savings_this_bill")
+    utility_bill.savings_cumulative = payload.get("savings_cumulative")
+    utility_bill.service_address = payload.get("service_address")
     utility_bill.raw_payload = {
         "provider_slug": payload["provider_slug"],
         "provider_name": payload["provider_name"],
@@ -427,6 +469,46 @@ def _upsert_salary_slip(
     salary_slip.review_reason = review_reason
     salary_slip.source_channel = source
     salary_slip.raw_payload = structured
+
+    # Extended fields — extracted from raw text for agent context
+    raw_text = doc.raw_text or ""
+    salary_slip.employee_id = _extract_first_group(
+        [r"מספר\s+זהות\s*\n?\s*([0-9]{5,9})", r"ת\.?ז\.?\s*[:：]?\s*([0-9]{5,9})"], raw_text)
+    salary_slip.employer_id = _extract_first_group(
+        [r"חברה\s*[:：]?\s*([0-9]{5,9})"], raw_text)
+    salary_slip.tax_file_number = _extract_first_group(
+        [r"תיק\s+ניכויים\s*[:：]?\s*([0-9]{5,12})"], raw_text)
+    salary_slip.department = _extract_first_group(
+        [r"מחלקה\s*[:：]?\s*([0-9]+)"], raw_text)
+    salary_slip.job_start_date = _parse_date(_extract_first_group(
+        [r"התחלת\s+עבודה\s*\n?\s*([0-9]{2}/[0-9]{2}/[0-9]{4})"], raw_text) or "")
+    salary_slip.job_percentage = _parse_amount(_extract_first_group(
+        [r"אחוז\s+משרה\s*\n?\s*([0-9]+(?:\.[0-9]+)?)%?"], raw_text) or "")
+    salary_slip.bank_account = _extract_first_group(
+        [r"מספר\s+חשבון\s*\n?\s*.*?\n?\s*.*?\n?\s*([0-9]{6,12})"], raw_text)
+    salary_slip.bank_branch = _extract_first_group(
+        [r"סניף\s*\n?\s*.*?\n?\s*([0-9]{1,4})\s*\n"], raw_text)
+    salary_slip.bank_code = _extract_first_group(
+        [r"בנק\s*\n?\s*.*?\n?\s*.*?\n?\s*([0-9]{1,3})\s*\n"], raw_text)
+    salary_slip.tax_bracket_percent = _parse_amount(_extract_first_group(
+        [r"אחוז\s+מס\s+שולי\s*\n?\s*([0-9]+)%?"], raw_text) or "")
+    salary_slip.tax_credit_points = _parse_amount(_extract_first_group(
+        [r"נקודות\s+זיכוי\s*\n?\s*([0-9]+(?:\.[0-9]+)?)"], raw_text) or "")
+    salary_slip.gross_for_tax = _parse_amount(_extract_first_group(
+        [r"ברוטו\s+למס\s+הכנסה\s+([0-9,]+)"], raw_text) or "")
+    salary_slip.gross_for_national_insurance = _parse_amount(_extract_first_group(
+        [r"ברוטו\s+לב\.?\s*לאומי\s+([0-9,]+)"], raw_text) or "")
+    salary_slip.marital_status = _extract_first_group(
+        [r"מצב\s+משפחתי\s*\n?\s*.*?\n?\s*(נשוי|רווק|גרוש|אלמן)"], raw_text)
+    salary_slip.health_fund = _extract_first_group(
+        [r"קופת[\s-]*חולים\s*\n?\s*.*?\n?\s*(מכבי|כללית|מאוחדת|לאומית)"], raw_text)
+    salary_slip.pension_fund_name = _extract_first_group(
+        [r"(הפניקס|מגדל|הראל|מנורה|כלל|אלטשולר|מיטב)\s*(?:פנסיה|ביטוח)"], raw_text)
+    salary_slip.education_fund_name = _extract_first_group(
+        [r"(אנליסט|הפניקס|מגדל|הראל|מנורה|כלל|אלטשולר|מיטב)\s*(?:השתלמות|קרן\s+השתלמות)"], raw_text)
+    salary_slip.employee_address = _extract_first_group(
+        [r"(?:בן\s+צור\s+שגב|" + re.escape(salary_slip.employee_name or "NOMATCH") + r")\s+[0-9]+\s*.*?\n\s*(.+?)\n\s*(?:כפר|רעננה|תל אביב|ירושלים|חיפה|נתניה|הרצליה|ראשון|פתח|חולון|אשדוד)"],
+        raw_text) if salary_slip.employee_name else None
 
     doc.doc_metadata = {
         **(doc.doc_metadata or {}),
