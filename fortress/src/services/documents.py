@@ -15,7 +15,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from src.config import STORAGE_PATH, DOCUMENT_VISION_FALLBACK_ENABLED
-from src.models.schema import Document, DocumentFact, SalarySlip, UtilityBill
+from src.models.schema import Document, DocumentFact, SalarySlip, UtilityBill, Contract, InsurancePolicy
 from src.services.text_extractor import extract_text, extract_text_v2
 from src.services.image_preprocessor import get_quality_band
 from src.services.document_processors.processor_router import process_with_best
@@ -525,6 +525,105 @@ def _upsert_salary_slip(
     return salary_slip
 
 
+def _upsert_contract(
+    db: Session,
+    doc: Document,
+    uploaded_by: UUID,
+    source: str,
+    extracted_facts: list[dict[str, Any]],
+    classification_confidence: float,
+) -> Contract | None:
+    """Create or update a canonical contract row from extracted facts."""
+    fact_map = {
+        f.get("fact_key"): f.get("fact_value")
+        for f in extracted_facts
+        if f.get("fact_key") and f.get("fact_value") not in (None, "")
+    }
+    if not fact_map:
+        return None
+
+    contract = db.query(Contract).filter(Contract.document_id == doc.id).first()
+    if contract is None:
+        contract = Contract(document_id=doc.id)
+        db.add(contract)
+
+    contract.uploaded_by = uploaded_by
+    contract.source = source
+    contract.contract_type = fact_map.get("contract_type")
+    contract.counterparty = fact_map.get("counterparty") or doc.vendor
+    contract.parties = fact_map.get("parties")
+    contract.contract_date = _parse_date(fact_map.get("source_date") or "")
+    contract.start_date = _parse_date(fact_map.get("period_start") or "")
+    contract.end_date = _parse_date(fact_map.get("contract_end_date") or fact_map.get("period_end") or "")
+    contract.amount = _parse_amount(fact_map.get("amount") or "")
+    contract.currency = fact_map.get("currency") or doc.currency or "ILS"
+    contract.obligations = fact_map.get("obligations")
+    contract.renewal_terms = fact_map.get("renewal_terms")
+    contract.penalty_clause = fact_map.get("penalty_clause")
+    contract.termination_clause = fact_map.get("termination_clause")
+    contract.governing_law = fact_map.get("governing_law")
+    contract.document_reference = fact_map.get("document_reference")
+    contract.confidence = Decimal(str(classification_confidence))
+    contract.review_state = doc.review_state
+    contract.raw_payload = fact_map
+
+    doc.doc_metadata = {
+        **(doc.doc_metadata or {}),
+        "canonical_record_type": "contract",
+        "canonical_record_ready": True,
+    }
+    return contract
+
+
+def _upsert_insurance_policy(
+    db: Session,
+    doc: Document,
+    uploaded_by: UUID,
+    source: str,
+    extracted_facts: list[dict[str, Any]],
+    classification_confidence: float,
+) -> InsurancePolicy | None:
+    """Create or update a canonical insurance policy row from extracted facts."""
+    fact_map = {
+        f.get("fact_key"): f.get("fact_value")
+        for f in extracted_facts
+        if f.get("fact_key") and f.get("fact_value") not in (None, "")
+    }
+    if not fact_map:
+        return None
+
+    policy = db.query(InsurancePolicy).filter(InsurancePolicy.document_id == doc.id).first()
+    if policy is None:
+        policy = InsurancePolicy(document_id=doc.id)
+        db.add(policy)
+
+    policy.uploaded_by = uploaded_by
+    policy.source = source
+    policy.insurance_type = fact_map.get("insurance_type")
+    policy.insurer = fact_map.get("counterparty") or doc.vendor
+    policy.policy_number = fact_map.get("policy_number")
+    policy.insured_name = fact_map.get("insured_name")
+    policy.beneficiary = fact_map.get("beneficiary")
+    policy.coverage_description = fact_map.get("coverage_description")
+    policy.coverage_limit = _parse_amount(fact_map.get("coverage_limit") or "")
+    policy.premium_amount = _parse_amount(fact_map.get("premium_amount") or "")
+    policy.premium_currency = fact_map.get("currency") or doc.currency or "ILS"
+    policy.deductible_amount = _parse_amount(fact_map.get("deductible_amount") or "")
+    policy.policy_date = _parse_date(fact_map.get("source_date") or "")
+    policy.start_date = _parse_date(fact_map.get("period_start") or "")
+    policy.end_date = _parse_date(fact_map.get("period_end") or "")
+    policy.confidence = Decimal(str(classification_confidence))
+    policy.review_state = doc.review_state
+    policy.raw_payload = fact_map
+
+    doc.doc_metadata = {
+        **(doc.doc_metadata or {}),
+        "canonical_record_type": "insurance_policy",
+        "canonical_record_ready": True,
+    }
+    return policy
+
+
 def promote_facts_to_document(
     doc: Document,
     facts: list[dict[str, Any]],
@@ -1020,6 +1119,76 @@ async def process_document(
         _log_step("utility_bill_persist", doc_id, original_filename, "failed",
                   error=f"{type(exc).__name__}: {exc}")
         steps_failed.append("utility_bill_persist")
+
+    # ── Step 5.3: canonical contract row ────────────────────────────────
+    try:
+        if doc.doc_type == "contract":
+            contract = _upsert_contract(
+                db=db,
+                doc=doc,
+                uploaded_by=uploaded_by,
+                source=source,
+                extracted_facts=extracted_facts,
+                classification_confidence=classification_confidence,
+            )
+            if contract is not None:
+                _log_step(
+                    "contract_persist",
+                    doc_id,
+                    original_filename,
+                    "success",
+                    contract_type=contract.contract_type or "",
+                    counterparty=contract.counterparty or "",
+                )
+                steps_ok.append("contract_persist")
+            else:
+                _log_step(
+                    "contract_persist",
+                    doc_id,
+                    original_filename,
+                    "skipped",
+                    reason="no_facts_extracted",
+                )
+                steps_ok.append("contract_persist")
+    except Exception as exc:
+        _log_step("contract_persist", doc_id, original_filename, "failed",
+                  error=f"{type(exc).__name__}: {exc}")
+        steps_failed.append("contract_persist")
+
+    # ── Step 5.4: canonical insurance policy row ────────────────────────
+    try:
+        if doc.doc_type == "insurance":
+            policy = _upsert_insurance_policy(
+                db=db,
+                doc=doc,
+                uploaded_by=uploaded_by,
+                source=source,
+                extracted_facts=extracted_facts,
+                classification_confidence=classification_confidence,
+            )
+            if policy is not None:
+                _log_step(
+                    "insurance_persist",
+                    doc_id,
+                    original_filename,
+                    "success",
+                    insurance_type=policy.insurance_type or "",
+                    insurer=policy.insurer or "",
+                )
+                steps_ok.append("insurance_persist")
+            else:
+                _log_step(
+                    "insurance_persist",
+                    doc_id,
+                    original_filename,
+                    "skipped",
+                    reason="no_facts_extracted",
+                )
+                steps_ok.append("insurance_persist")
+    except Exception as exc:
+        _log_step("insurance_persist", doc_id, original_filename, "failed",
+                  error=f"{type(exc).__name__}: {exc}")
+        steps_failed.append("insurance_persist")
 
     # ── Step 5.5: deterministic auto-tagging ────────────────────────────
     try:

@@ -23,12 +23,12 @@
 
 ### Large Document Pipeline (contracts, insurance policies)
 - Branch: `feature/large-document-pipeline`
-- [ ] Test current pipeline with a real contract/insurance policy via WhatsApp
-- [ ] Identify what data is extracted vs what's missing for multi-page docs
-- [ ] Design chunking strategy for large documents (Google DocAI handles up to 15 pages per request)
-- [ ] Build structured extraction for contracts: parties, dates, obligations, renewal terms, penalties
-- [ ] Build structured extraction for insurance: policy number, coverage, premium, deductible, expiry
-- [ ] Create canonical tables or extend existing ones for these doc types
+- [x] Test current pipeline with a real contract/insurance policy via WhatsApp
+- [x] Identify what data is extracted vs what's missing for multi-page docs
+- [x] Design chunking strategy for large documents (Google DocAI handles up to 15 pages per request)
+- [x] Build structured extraction for contracts: parties, dates, obligations, renewal terms, penalties
+- [x] Build structured extraction for insurance: policy number, coverage, premium, deductible, expiry
+- [x] Create canonical tables or extend existing ones for these doc types
 - [ ] Test and validate data quality
 
 ### Waterfall Document Browsing UX (partially done)
@@ -85,6 +85,8 @@ WhatsApp/Email/Upload → Media Download → Google DocAI OCR → Resolver (fing
 |-------|--------------|------------|
 | salary_slips | — | gross, net, deductions, tax, pension, employer, 18 extended fields |
 | utility_bills | electricity, water, (future: gas, internet, arnona) | provider, amount, consumption, period, meter, 13 extended fields |
+| contracts | rental, employment, service, purchase | parties, dates, obligations, renewal, penalties, governing law |
+| insurance_policies | health, car, home, life, travel | policy number, coverage, premium, deductible, insured, beneficiary |
 | documents | all | raw_text, doc_type, facts, summary, display_name |
 | document_facts | all | fact_key, fact_value, confidence, source_excerpt |
 

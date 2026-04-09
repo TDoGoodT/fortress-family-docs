@@ -130,6 +130,16 @@ class Document(Base):
         cascade="all, delete-orphan",
         uselist=False,
     )
+    contract: Mapped[Optional["Contract"]] = relationship(
+        back_populates="document",
+        cascade="all, delete-orphan",
+        uselist=False,
+    )
+    insurance_policy: Mapped[Optional["InsurancePolicy"]] = relationship(
+        back_populates="document",
+        cascade="all, delete-orphan",
+        uselist=False,
+    )
 
     # Logical-to-physical property aliases (service/API layer names → physical columns)
     @property
@@ -284,6 +294,75 @@ class UtilityBill(Base):
 
     document: Mapped["Document"] = relationship(back_populates="utility_bill")
     family_member: Mapped[Optional["FamilyMember"]] = relationship(back_populates="utility_bills")
+
+
+class Contract(Base):
+    """Canonical typed contract row derived from a raw document."""
+    __tablename__ = "contracts"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    document_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("documents.id"), nullable=False, unique=True
+    )
+    uploaded_by: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("family_members.id"), nullable=False
+    )
+    source: Mapped[Optional[str]] = mapped_column(Text, server_default=text("'whatsapp'"))
+    contract_type: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    counterparty: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    parties: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    contract_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    start_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    end_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    amount: Mapped[Optional[Decimal]] = mapped_column(Numeric, nullable=True)
+    currency: Mapped[Optional[str]] = mapped_column(Text, server_default=text("'ILS'"))
+    obligations: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    renewal_terms: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    penalty_clause: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    termination_clause: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    governing_law: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    document_reference: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    confidence: Mapped[Optional[Decimal]] = mapped_column(Numeric, server_default=text("0.0"))
+    review_state: Mapped[Optional[str]] = mapped_column(Text, server_default=text("'pending'"))
+    raw_payload: Mapped[Optional[dict]] = mapped_column(JSONB, server_default=text("'{}'"))
+
+    document: Mapped["Document"] = relationship(back_populates="contract")
+
+
+class InsurancePolicy(Base):
+    """Canonical typed insurance policy row derived from a raw document."""
+    __tablename__ = "insurance_policies"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    document_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("documents.id"), nullable=False, unique=True
+    )
+    uploaded_by: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("family_members.id"), nullable=False
+    )
+    source: Mapped[Optional[str]] = mapped_column(Text, server_default=text("'whatsapp'"))
+    insurance_type: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    insurer: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    policy_number: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    insured_name: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    beneficiary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    coverage_description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    coverage_limit: Mapped[Optional[Decimal]] = mapped_column(Numeric, nullable=True)
+    premium_amount: Mapped[Optional[Decimal]] = mapped_column(Numeric, nullable=True)
+    premium_currency: Mapped[Optional[str]] = mapped_column(Text, server_default=text("'ILS'"))
+    deductible_amount: Mapped[Optional[Decimal]] = mapped_column(Numeric, nullable=True)
+    policy_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    start_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    end_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    confidence: Mapped[Optional[Decimal]] = mapped_column(Numeric, server_default=text("0.0"))
+    review_state: Mapped[Optional[str]] = mapped_column(Text, server_default=text("'pending'"))
+    raw_payload: Mapped[Optional[dict]] = mapped_column(JSONB, server_default=text("'{}'"))
+
+    document: Mapped["Document"] = relationship(back_populates="insurance_policy")
 
 
 class Transaction(Base):

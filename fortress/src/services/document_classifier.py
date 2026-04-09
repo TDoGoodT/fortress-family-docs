@@ -41,6 +41,22 @@ ALLOWED_FACT_KEYS: list[str] = [
     "instructions",
     "servings",
     "prep_time",
+    # Contract-specific
+    "contract_type",
+    "parties",
+    "obligations",
+    "renewal_terms",
+    "penalty_clause",
+    "governing_law",
+    "termination_clause",
+    # Insurance-specific
+    "insurance_type",
+    "coverage_description",
+    "premium_amount",
+    "deductible_amount",
+    "insured_name",
+    "beneficiary",
+    "coverage_limit",
 ]
 
 MAX_SOURCE_EXCERPT_LENGTH: int = 250

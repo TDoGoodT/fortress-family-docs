@@ -27,6 +27,8 @@ _GOOGLE_PREFERRED_DOC_TYPES = {
     "bank_statement",
     "credit_card_statement",
     "electricity_bill",
+    "contract",
+    "insurance",
 }
 
 _IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".heic"}
@@ -37,6 +39,8 @@ _GOOGLE_PREFERRED_FILENAME_PATTERNS = [
     "invoice", "חשבונית",
     "receipt", "קבלה",
     "bank_statement", "דף_חשבון",
+    "contract", "חוזה", "הסכם",
+    "insurance", "ביטוח", "פוליסה", "policy",
 ]
 
 # Minimum confidence to accept a result without trying next processor

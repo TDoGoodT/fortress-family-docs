@@ -57,10 +57,19 @@ _CATEGORY_FACT_KEYS: dict[str, list[str]] = {
     "water_bill": ["source_date", "counterparty", "amount", "currency", "document_reference", "period_start", "period_end"],
     "invoice": ["source_date", "counterparty", "amount", "currency", "document_reference"],
     "receipt": ["source_date", "counterparty", "amount", "currency"],
-    "contract": ["source_date", "counterparty", "contract_end_date", "document_reference"],
+    "contract": [
+        "source_date", "counterparty", "contract_end_date", "document_reference",
+        "contract_type", "parties", "obligations", "renewal_terms",
+        "penalty_clause", "governing_law", "termination_clause",
+        "amount", "currency", "period_start", "period_end",
+    ],
     "bank_statement": ["source_date", "counterparty", "period_start", "period_end"],
     "credit_card_statement": ["source_date", "counterparty", "amount", "currency", "period_start", "period_end"],
-    "insurance": ["source_date", "counterparty", "policy_number", "period_start", "period_end"],
+    "insurance": [
+        "source_date", "counterparty", "policy_number", "period_start", "period_end",
+        "insurance_type", "coverage_description", "premium_amount", "deductible_amount",
+        "insured_name", "beneficiary", "coverage_limit", "amount", "currency",
+    ],
     "warranty": ["source_date", "counterparty", "period_end"],
     "official_letter": ["source_date", "counterparty", "document_reference"],
     "other": ["source_date", "counterparty", "amount", "currency"],
@@ -253,6 +262,22 @@ _FACT_KEY_DESCRIPTIONS: dict[str, str] = {
     "period_end": "End date of a covered period (for statements, policies, warranties)",
     "policy_number": "Insurance policy number or identifier",
     "contract_end_date": "Expiration or end date of a contract",
+    # Contract-specific
+    "contract_type": "Type of contract (rental, employment, service, purchase, etc.)",
+    "parties": "All named parties to the contract, comma-separated",
+    "obligations": "Key obligations or deliverables described in the contract",
+    "renewal_terms": "Auto-renewal or renewal conditions (e.g. 'auto-renews annually')",
+    "penalty_clause": "Penalties for breach or early termination",
+    "governing_law": "Jurisdiction or governing law (e.g. 'Israeli law')",
+    "termination_clause": "Conditions under which the contract can be terminated",
+    # Insurance-specific
+    "insurance_type": "Type of insurance (health, car, home, life, travel, etc.)",
+    "coverage_description": "What the policy covers — summary of covered events/items",
+    "premium_amount": "The periodic premium payment amount",
+    "deductible_amount": "The deductible (self-participation) amount",
+    "insured_name": "Name of the insured person or entity",
+    "beneficiary": "Named beneficiary of the policy",
+    "coverage_limit": "Maximum coverage amount or limit",
 }
 
 # ── Schema prompt examples per category ──────────────────────────────────
@@ -260,8 +285,9 @@ _CATEGORY_EXAMPLES: dict[str, str] = {
     "electricity_bill": '[{"fact_key": "source_date", "fact_value": "2026-03-01", "confidence": 0.92, "source_excerpt": "תאריך עריכת החשבון: 01/03/2026"}, {"fact_key": "counterparty", "fact_value": "אלקטרה פאוור", "confidence": 0.9, "source_excerpt": "מספר צרכן אלקטרה פאוור"}, {"fact_key": "amount", "fact_value": "208.37", "confidence": 0.88, "source_excerpt": "סכום ב-₪ 208.37"}, {"fact_key": "document_reference", "fact_value": "55940425", "confidence": 0.93, "source_excerpt": "חשבונית מס/קבלה (מקור) 55940425"}]',
     "invoice": '[{"fact_key": "source_date", "fact_value": "2024-03-15", "confidence": 0.9, "source_excerpt": "Invoice Date: 15/03/2024"}, {"fact_key": "counterparty", "fact_value": "Bezeq", "confidence": 0.85, "source_excerpt": "From: Bezeq International"}, {"fact_key": "amount", "fact_value": "1234.56", "confidence": 0.9, "source_excerpt": "Total: ₪1,234.56"}]',
     "receipt": '[{"fact_key": "source_date", "fact_value": "2024-01-10", "confidence": 0.9, "source_excerpt": "Date: 10/01/2024"}, {"fact_key": "counterparty", "fact_value": "Super-Pharm", "confidence": 0.85, "source_excerpt": "Super-Pharm Ltd"}, {"fact_key": "amount", "fact_value": "89.90", "confidence": 0.9, "source_excerpt": "Total: ₪89.90"}]',
-    "contract": '[{"fact_key": "source_date", "fact_value": "2024-06-01", "confidence": 0.9, "source_excerpt": "Dated: 01/06/2024"}, {"fact_key": "counterparty", "fact_value": "Partner Communications", "confidence": 0.85, "source_excerpt": "Between: Partner Communications"}]',
+    "contract": '[{"fact_key": "source_date", "fact_value": "2024-06-01", "confidence": 0.9, "source_excerpt": "Dated: 01/06/2024"}, {"fact_key": "counterparty", "fact_value": "Partner Communications", "confidence": 0.85, "source_excerpt": "Between: Partner Communications"}, {"fact_key": "contract_type", "fact_value": "service", "confidence": 0.8, "source_excerpt": "הסכם למתן שירותי תקשורת"}, {"fact_key": "parties", "fact_value": "Partner Communications, ישראל ישראלי", "confidence": 0.85, "source_excerpt": "בין: פרטנר תקשורת לבין: ישראל ישראלי"}, {"fact_key": "contract_end_date", "fact_value": "2026-06-01", "confidence": 0.8, "source_excerpt": "תוקף ההסכם: 24 חודשים"}]',
     "bank_statement": '[{"fact_key": "source_date", "fact_value": "2024-02-28", "confidence": 0.9, "source_excerpt": "Statement Date: 28/02/2024"}, {"fact_key": "counterparty", "fact_value": "Bank Leumi", "confidence": 0.85, "source_excerpt": "Bank Leumi Le-Israel"}]',
+    "insurance": '[{"fact_key": "source_date", "fact_value": "2025-01-15", "confidence": 0.9, "source_excerpt": "תאריך הפקה: 15/01/2025"}, {"fact_key": "counterparty", "fact_value": "הראל ביטוח", "confidence": 0.9, "source_excerpt": "הראל חברה לביטוח"}, {"fact_key": "policy_number", "fact_value": "POL-2025-78432", "confidence": 0.95, "source_excerpt": "מספר פוליסה: POL-2025-78432"}, {"fact_key": "insurance_type", "fact_value": "home", "confidence": 0.85, "source_excerpt": "ביטוח דירה ותכולה"}, {"fact_key": "premium_amount", "fact_value": "2400", "confidence": 0.8, "source_excerpt": "פרמיה שנתית: ₪2,400"}, {"fact_key": "deductible_amount", "fact_value": "500", "confidence": 0.8, "source_excerpt": "השתתפות עצמית: ₪500"}]',
 }
 
 
@@ -302,6 +328,124 @@ def _build_schema_prompt(
         f"Document text:\n{truncated_text}"
     )
     return prompt
+
+
+# ── Large document chunking ──────────────────────────────────────────────
+# Documents over this character count get chunked extraction
+_LARGE_DOC_THRESHOLD = 4000
+_CHUNK_SIZE = 3000
+_CHUNK_OVERLAP = 300
+
+
+def _chunk_text(text: str, chunk_size: int = _CHUNK_SIZE, overlap: int = _CHUNK_OVERLAP) -> list[str]:
+    """Split text into overlapping chunks for multi-pass extraction."""
+    if len(text) <= chunk_size:
+        return [text]
+    chunks: list[str] = []
+    start = 0
+    while start < len(text):
+        end = start + chunk_size
+        chunk = text[start:end]
+        chunks.append(chunk)
+        start = end - overlap
+    return chunks
+
+
+async def _extract_from_chunk(
+    chunk: str,
+    chunk_idx: int,
+    total_chunks: int,
+    doc_type: str,
+    target_keys: list[str],
+    filename: str,
+) -> list[dict[str, Any]]:
+    """Extract facts from a single chunk of a large document."""
+    key_descriptions = "\n".join(
+        f"  - {k}: {_FACT_KEY_DESCRIPTIONS.get(k, k)}"
+        for k in target_keys
+    )
+    example = _CATEGORY_EXAMPLES.get(doc_type, _CATEGORY_EXAMPLES.get("invoice", "[]"))
+
+    prompt = (
+        f"You are extracting structured facts from part {chunk_idx + 1}/{total_chunks} "
+        f"of a {doc_type} document.\n"
+        f"Filename: {filename}\n\n"
+        f"Target fact keys to extract:\n{key_descriptions}\n\n"
+        f"Respond with a JSON array only. Each item must have exactly these fields:\n"
+        f'  {{"fact_key": "<key>", "fact_value": "<value>", '
+        f'"confidence": <0.0-1.0>, "source_excerpt": "<short quote from text>"}}\n\n'
+        f"Rules:\n"
+        f"- Only include facts you can actually find in THIS chunk of text\n"
+        f"- Only use these allowed keys: {', '.join(target_keys)}\n"
+        f"- confidence should reflect how certain you are (0.0 = guess, 1.0 = exact match)\n"
+        f"- source_excerpt should be a short quote from the document supporting the fact\n"
+        f"- Return [] if no relevant facts are found in this chunk\n\n"
+        f"Example output:\n{example}\n\n"
+        f"Document text (chunk {chunk_idx + 1}/{total_chunks}):\n{chunk}"
+    )
+    system = "You are a document fact extractor. Respond only with a valid JSON array."
+    raw = await llm_generate(prompt, system, "haiku")
+    if not raw:
+        return []
+    match = re.search(r'\[.*\]', raw, re.DOTALL)
+    if not match:
+        return []
+    try:
+        return json.loads(match.group())
+    except (json.JSONDecodeError, ValueError):
+        return []
+
+
+def _merge_chunk_facts(
+    all_items: list[dict[str, Any]],
+    doc_type: str,
+    allowed_keys: set[str],
+) -> list[dict[str, Any]]:
+    """Merge facts from multiple chunks, keeping highest-confidence per key.
+
+    For keys that can have multiple values (obligations, parties, coverage_description),
+    we concatenate rather than deduplicate.
+    """
+    _MULTI_VALUE_KEYS = {
+        "obligations", "parties", "coverage_description",
+        "penalty_clause", "renewal_terms", "termination_clause",
+    }
+    best_by_key: dict[str, dict[str, Any]] = {}
+    multi_values: dict[str, list[str]] = {}
+
+    for item in all_items:
+        key = item.get("fact_key", "")
+        value = str(item.get("fact_value", "")).strip()
+        if key not in allowed_keys or not value:
+            continue
+        confidence = float(item.get("confidence", 0.5))
+        excerpt = _truncate_excerpt(str(item.get("source_excerpt", "")))
+
+        if key in _MULTI_VALUE_KEYS:
+            if key not in multi_values:
+                multi_values[key] = []
+                best_by_key[key] = {
+                    "fact_type": doc_type,
+                    "fact_key": key,
+                    "fact_value": value,
+                    "confidence": confidence,
+                    "source_excerpt": excerpt,
+                }
+            if value not in multi_values[key]:
+                multi_values[key].append(value)
+                best_by_key[key]["fact_value"] = "; ".join(multi_values[key])
+                best_by_key[key]["confidence"] = max(best_by_key[key]["confidence"], confidence)
+        else:
+            if key not in best_by_key or confidence > best_by_key[key]["confidence"]:
+                best_by_key[key] = {
+                    "fact_type": doc_type,
+                    "fact_key": key,
+                    "fact_value": value,
+                    "confidence": confidence,
+                    "source_excerpt": excerpt,
+                }
+
+    return list(best_by_key.values())
 
 
 async def extract_facts(
@@ -366,31 +510,55 @@ async def extract_facts(
         remaining_keys = [k for k in target_keys if k not in extracted_keys]
 
         if remaining_keys:
+            is_large = len(raw_text) > _LARGE_DOC_THRESHOLD
             try:
-                prompt = _build_schema_prompt(raw_text, doc_type, remaining_keys, filename)
-                system = "You are a document fact extractor. Respond only with a valid JSON array."
-                raw = await llm_generate(prompt, system, "haiku")
+                if is_large:
+                    # Chunked extraction for large documents (contracts, insurance, etc.)
+                    chunks = _chunk_text(raw_text)
+                    logger.info(
+                        "fact_extractor: large_doc doc=%s chars=%d chunks=%d doc_type=%s",
+                        filename, len(raw_text), len(chunks), doc_type,
+                    )
+                    all_items: list[dict[str, Any]] = []
+                    for idx, chunk in enumerate(chunks):
+                        chunk_items = await _extract_from_chunk(
+                            chunk, idx, len(chunks), doc_type, remaining_keys, filename,
+                        )
+                        all_items.extend(chunk_items)
+                    merged = _merge_chunk_facts(all_items, doc_type, set(ALLOWED_FACT_KEYS))
+                    for fact in merged:
+                        if fact["fact_key"] not in extracted_keys:
+                            facts.append(fact)
+                            extracted_keys.add(fact["fact_key"])
+                    logger.info(
+                        "fact_extractor: chunked_merge doc=%s chunks=%d raw_items=%d merged=%d",
+                        filename, len(chunks), len(all_items), len(merged),
+                    )
+                else:
+                    prompt = _build_schema_prompt(raw_text, doc_type, remaining_keys, filename)
+                    system = "You are a document fact extractor. Respond only with a valid JSON array."
+                    raw = await llm_generate(prompt, system, "haiku")
 
-                if raw:
-                    # Extract JSON array from response
-                    match = re.search(r'\[.*\]', raw, re.DOTALL)
-                    if match:
-                        items = json.loads(match.group())
-                        for item in items:
-                            key = item.get("fact_key", "")
-                            value = str(item.get("fact_value", "")).strip()
-                            if key not in ALLOWED_FACT_KEYS or not value:
-                                continue
-                            if key in extracted_keys:
-                                continue
-                            facts.append({
-                                "fact_type": doc_type,
-                                "fact_key": key,
-                                "fact_value": value,
-                                "confidence": float(item.get("confidence", 0.5)),
-                                "source_excerpt": _truncate_excerpt(str(item.get("source_excerpt", ""))),
-                            })
-                            extracted_keys.add(key)
+                    if raw:
+                        # Extract JSON array from response
+                        match = re.search(r'\[.*\]', raw, re.DOTALL)
+                        if match:
+                            items = json.loads(match.group())
+                            for item in items:
+                                key = item.get("fact_key", "")
+                                value = str(item.get("fact_value", "")).strip()
+                                if key not in ALLOWED_FACT_KEYS or not value:
+                                    continue
+                                if key in extracted_keys:
+                                    continue
+                                facts.append({
+                                    "fact_type": doc_type,
+                                    "fact_key": key,
+                                    "fact_value": value,
+                                    "confidence": float(item.get("confidence", 0.5)),
+                                    "source_excerpt": _truncate_excerpt(str(item.get("source_excerpt", ""))),
+                                })
+                                extracted_keys.add(key)
                 logger.info("fact_extractor: model_tier=haiku doc=%s doc_type=%s", filename, doc_type)
             except Exception as exc:
                 logger.warning("fact_extractor: phase2 failed doc=%s error=%s: %s", filename, type(exc).__name__, exc)
