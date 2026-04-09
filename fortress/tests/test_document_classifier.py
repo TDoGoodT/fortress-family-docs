@@ -40,7 +40,7 @@ from src.services.document_classifier import (
 def test_keyword_rules(text, filename, expected_category):
     category, confidence = _classify_by_keywords(text, filename)
     assert category == expected_category
-    assert confidence == 0.8
+    assert confidence >= 0.8
 
 
 def test_unknown_text_defaults_to_other():
@@ -115,7 +115,7 @@ async def test_xls_with_keyword_in_filename():
         category, confidence = await classify_document("", "invoice_march.xls")
     mock_llm.assert_not_called()
     assert category == "invoice"
-    assert confidence == 0.8
+    assert confidence >= 0.8
 
 
 # ---------------------------------------------------------------------------
@@ -129,7 +129,7 @@ async def test_high_confidence_phase1_skips_llm():
         category, confidence = await classify_document("חשבונית מס 12345", "invoice.pdf")
     mock_llm.assert_not_called()
     assert category == "invoice"
-    assert confidence == 0.8
+    assert confidence >= 0.8
 
 
 # ---------------------------------------------------------------------------

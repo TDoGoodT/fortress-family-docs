@@ -100,11 +100,25 @@ _SPREADSHEET_EXTENSIONS = {".xls", ".xlsx"}
 
 
 def _classify_by_keywords(text: str, filename: str) -> tuple[str, float]:
-    """Phase 1: deterministic keyword matching. Returns (category, confidence)."""
+    """Phase 1: deterministic keyword matching. Returns (category, confidence).
+
+    Filename matches get higher confidence (0.9) than text-body matches (0.8)
+    to prevent misclassification when a document mentions another category
+    in passing (e.g. insurance policy mentioning credit card payment).
+    """
     import os
     _, ext = os.path.splitext(filename)
-    haystack = (filename + " " + text).lower()
+    filename_lower = filename.lower()
+    text_lower = text.lower()
 
+    # Pass 1: filename-only matching (higher confidence)
+    for category, keywords in _KEYWORD_RULES:
+        for kw in keywords:
+            if kw.lower() in filename_lower:
+                return category, 0.9
+
+    # Pass 2: text-body matching
+    haystack = (filename_lower + " " + text_lower)
     for category, keywords in _KEYWORD_RULES:
         for kw in keywords:
             if kw.lower() in haystack:
