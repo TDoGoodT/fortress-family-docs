@@ -6,45 +6,47 @@ Think of it as a **municipal library for your household** — documents come in 
 
 ## Architecture
 
+```mermaid
+flowchart TB
+    subgraph INGESTION["📥 Ingestion Layer"]
+        WA[WhatsApp]
+        EM[Email]
+        UP[Upload]
+        DL[Media Download]
+        DP["Document Pipeline\nOCR → Classify → Extract → Persist"]
+    end
+
+    subgraph LIBRARY["🗄️ Data Library — Postgres"]
+        direction LR
+        T1[(documents)]
+        T2[(salary_slips)]
+        T3[(contracts)]
+        T4[(insurance_policies)]
+        T5[(utility_bills)]
+        T6[(facts)]
+        T7[(tasks)]
+        T8[(memories)]
+    end
+
+    subgraph API["🔌 Data Access API — REST"]
+        A1["POST /api/v1/query"]
+        A2["POST /api/v1/ingest"]
+        A3["GET /api/v1/documents"]
+        A4["GET /api/v1/facts"]
+    end
+
+    subgraph AGENTS["🤖 Agent Layer — Hermes"]
+        direction LR
+        AG1[Orchestrator]
+        AG2[Librarian]
+        AG3["Domain Specialists\nFinance · Insurance"]
+    end
+
+    WA & EM & UP --> DL --> DP --> LIBRARY
+    LIBRARY --> API
+    API --> AGENTS
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                        INGESTION LAYER                          │
-│  WhatsApp ─┐                                                    │
-│  Email ────┤──→ Media Download ──→ Document Pipeline ──→ DB     │
-│  Upload ───┘    (decrypt if needed)  (OCR → Classify →          │
-│                                       Extract → Persist)        │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                      DATA LIBRARY (Postgres)                    │
-│                                                                 │
-│  ┌──────────┐ ┌──────────────┐ ┌───────────┐ ┌───────────────┐ │
-│  │ documents│ │ salary_slips │ │ contracts │ │   insurance   │ │
-│  │          │ │              │ │           │ │   _policies   │ │
-│  └──────────┘ └──────────────┘ └───────────┘ └───────────────┘ │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                     DATA ACCESS API (REST)                      │
-│                                                                 │
-│  POST /api/v1/query     — structured data queries               │
-│  POST /api/v1/ingest    — submit document for processing        │
-│  GET  /api/v1/documents — list/search documents                 │
-│  GET  /api/v1/facts     — search extracted facts                │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                      AGENT LAYER (Hermes)                       │
-│                                                                 │
-│  ┌─────────────┐  ┌──────────────┐  ┌───────────────────────┐  │
-│  │ Orchestrator│  │   Librarian  │  │  Domain Specialists   │  │
-│  │   Agent     │  │    Agent     │  │  (Finance, Insurance) │  │
-│  └─────────────┘  └──────────────┘  └───────────────────────┘  │
-└─────────────────────────────────────────────────────────────────┘
-```
+
 
 ## Key Principle
 

@@ -201,20 +201,27 @@ The Skills Engine is the core message processing pipeline. It handles 90% of mes
 
 ### Message Flow
 
-```
-1. WhatsApp → WAHA → webhook → message_handler
-2. message_handler → auth (phone lookup)
-3. CommandParser → regex match → Command
-4. Executor → Skill.execute → DB operation → verify
-5. Response → personality template → WhatsApp
+```mermaid
+flowchart LR
+    WA[WhatsApp] --> WAHA[WAHA] --> WH[webhook\nmessage_handler]
+    WH --> AUTH[auth\nphone lookup]
+    AUTH --> CP[CommandParser\nregex match]
+    CP -->|match| EX[Executor\nSkill.execute]
+    EX --> DB[(DB operation)]
+    DB --> VF[verify]
+    VF --> PT[personality\ntemplate]
+    PT --> WA2[WhatsApp]
 ```
 
 ### LLM Fallback (only when no regex match)
 
+```mermaid
+flowchart LR
+    CP[CommandParser] -->|no match\nreturns None| CS[ChatSkill.respond]
+    CS --> LLM[LLM]
+    LLM --> WA[WhatsApp]
 ```
-1. CommandParser returns None
-2. ChatSkill.respond → LLM → response
-```
+
 
 ## Available Skills
 
