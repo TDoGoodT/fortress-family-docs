@@ -8,15 +8,15 @@ Think of it as a **municipal library for your household** — documents come in 
 
 ```mermaid
 flowchart TB
-    subgraph INGESTION["📥 Ingestion Layer"]
+    subgraph INGESTION["Ingestion Layer"]
         WA[WhatsApp]
         EM[Email]
         UP[Upload]
         DL[Media Download]
-        DP["Document Pipeline\nOCR → Classify → Extract → Persist"]
+        DP["Document Pipeline — OCR / Classify / Extract / Persist"]
     end
 
-    subgraph LIBRARY["🗄️ Data Library — Postgres"]
+    subgraph LIBRARY["Data Library — Postgres"]
         direction LR
         T1[(documents)]
         T2[(salary_slips)]
@@ -28,18 +28,18 @@ flowchart TB
         T8[(memories)]
     end
 
-    subgraph API["🔌 Data Access API — REST"]
+    subgraph API["Data Access API — REST"]
         A1["POST /api/v1/query"]
         A2["POST /api/v1/ingest"]
         A3["GET /api/v1/documents"]
         A4["GET /api/v1/facts"]
     end
 
-    subgraph AGENTS["🤖 Agent Layer — Hermes"]
+    subgraph AGENTS["Agent Layer — Hermes"]
         direction LR
         AG1[Orchestrator]
         AG2[Librarian]
-        AG3["Domain Specialists\nFinance · Insurance"]
+        AG3["Domain Specialists — Finance & Insurance"]
     end
 
     WA & EM & UP --> DL --> DP --> LIBRARY

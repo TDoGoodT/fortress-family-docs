@@ -203,13 +203,13 @@ The Skills Engine is the core message processing pipeline. It handles 90% of mes
 
 ```mermaid
 flowchart LR
-    WA[WhatsApp] --> WAHA[WAHA] --> WH[webhook\nmessage_handler]
-    WH --> AUTH[auth\nphone lookup]
-    AUTH --> CP[CommandParser\nregex match]
-    CP -->|match| EX[Executor\nSkill.execute]
+    WA[WhatsApp] --> WAHA[WAHA] --> WH[webhook / message_handler]
+    WH --> AUTH[auth / phone lookup]
+    AUTH --> CP[CommandParser / regex match]
+    CP -->|match| EX[Executor / Skill.execute]
     EX --> DB[(DB operation)]
     DB --> VF[verify]
-    VF --> PT[personality\ntemplate]
+    VF --> PT[personality template]
     PT --> WA2[WhatsApp]
 ```
 
